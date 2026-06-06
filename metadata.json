@@ -1,0 +1,6 @@
+{
+  "name": "Netgain Studio",
+  "description": "A comprehensive dual-role-protected operations portal featuring document compilers with Gemini build process integration, live persistent service catalogs, finance registers, and team permission audits.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

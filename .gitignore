@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build files
+build/
+dist/
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+
+# Environment variables
+.env*
+!.env.example
+
+# OS files
+.DS_Store
+
+# Vercel
+.vercel/
+
+# TypeScript
+*.tsbuildinfo

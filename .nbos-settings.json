@@ -1,0 +1,39 @@
+{
+  "company": {
+    "name": "Netgain Studio",
+    "address": "Hyderabad, Telangana, India",
+    "gst": "",
+    "pan": "",
+    "email": "mail.netgain@gmail.com",
+    "website": "netgain.studio",
+    "phone": "9347102347 | 9392469669"
+  },
+  "founder": {
+    "name": "Devon Shah",
+    "designation": "Founder & CEO",
+    "email": "devon@netgain.studio",
+    "phone": "9876543210"
+  },
+  "bank": {
+    "accountName": "Netgain Studio",
+    "accountNumber": "",
+    "ifsc": "",
+    "bank": "HDFC Bank",
+    "upiId": ""
+  },
+  "comm": {
+    "smtpHost": "",
+    "smtpPort": "587",
+    "smtpUser": "",
+    "smtpPass": "",
+    "waToken": "",
+    "smsProvider": "MSG91"
+  },
+  "ai": {
+    "claudeKey": "",
+    "openaiKey": "",
+    "geminiKey": "",
+    "defaultProvider": "claude"
+  },
+  "updatedAt": "2026-06-06T11:04:40.312Z"
+}

@@ -1,0 +1,581 @@
+'use client'
+import { useState, useEffect } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Search, Plus, Download, Trash2, Pencil, Loader2, Receipt, Send, History } from 'lucide-react'
+import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
+import { ShareDialog } from '@/components/ui/share-dialog'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+
+const SERVICES = [
+  { id: 's1',  name: 'E-Commerce Website',           price: 39999, category: 'Web Development',  model: 'fixed',   deliverables: ['Custom Design', 'Full Development', 'Mobile Responsive', 'Payment Gateway', 'Admin Dashboard'] },
+  { id: 's2',  name: 'Business Portfolio Website',   price: 14999, category: 'Web Development',  model: 'fixed',   deliverables: ['5 Core Pages', 'Contact Form', 'SEO-Ready', 'Mobile Responsive'] },
+  { id: 's3',  name: 'Social Media Management',      price: 8999,  category: 'Digital Marketing',model: 'monthly', deliverables: ['30 Posts/month', 'Story Designs', 'Monthly Report'] },
+  { id: 's4',  name: 'Meta Ads Management',          price: 12999, category: 'Paid Advertising', model: 'monthly', deliverables: ['Campaign Setup', 'Ad Creatives (4)', 'Weekly Reports'] },
+  { id: 's5',  name: 'Google Ads',                   price: 10999, category: 'Paid Advertising', model: 'monthly', deliverables: ['Search & Display', 'Keyword Bidding', 'Monthly Report'] },
+  { id: 's6',  name: 'Local SEO + Google Maps',      price: 7999,  category: 'SEO',              model: 'monthly', deliverables: ['Keyword Research', 'On-Page SEO', 'GMB Optimization'] },
+  { id: 's7',  name: 'WhatsApp Business Automation', price: 19999, category: 'Automation',       model: 'fixed',   deliverables: ['WABA Integration', 'Bot Flows (5)', 'Lead Capture'] },
+  { id: 's8',  name: 'Brand Identity Design',        price: 12999, category: 'Brand Design',     model: 'fixed',   deliverables: ['Logo Design (3 concepts)', 'Brand Guidelines', 'Social Media Kit'] },
+  { id: 's9',  name: 'Content Creation Package',     price: 6999,  category: 'Content',          model: 'monthly', deliverables: ['8 Reels/month', 'Scripting', 'Thumbnails'] },
+  { id: 's10', name: 'CRM Setup & Automation',       price: 24999, category: 'CRM & Analytics',  model: 'fixed',   deliverables: ['CRM Setup', 'Pipeline Config', 'Team Training'] },
+]
+
+const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue']
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue' }
+
+type Invoice = {
+  id: string; docId: string; client: string; contact: string; email: string; phone: string
+  businessType: string; gst: string; serviceIds: string[]; discountType: 'percentage' | 'fixed'; discountValue: number; gstPct: number
+  notes: string; amount: number; status: string; created: string; due: string
+  history: { date: string; action: string; canDownload?: boolean }[]
+}
+
+const INITIAL: Invoice[] = []
+
+function blankForm() {
+  return { client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', gst: '', selectedIds: [] as string[], discountType: 'percentage' as 'percentage'|'fixed', discountValue: 0, gstPct: 18, notes: '' }
+}
+
+export default function InvoicesPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [editInvoice, setEditInvoice] = useState<Invoice | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const { toast } = useToast()
+  const [generating, setGenerating] = useState(false)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
+  const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
+
+  const [form, setForm] = useState(blankForm())
+
+  useEffect(() => {
+    async function loadInvoices() {
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase.from('invoices').select('*').order('created', { ascending: false })
+          if (error) {
+            toast({ title: 'Error loading invoices', description: error.message, variant: 'destructive' })
+          } else if (data) {
+            const mapped = data.map((i: any) => ({
+              id: i.id,
+              docId: i.doc_id,
+              client: i.client,
+              contact: i.contact || '',
+              email: i.email || '',
+              phone: i.phone || '',
+              businessType: i.business_type || '',
+              gst: i.gst || '',
+              serviceIds: i.service_ids || [],
+              discountType: i.discount_type || 'percentage',
+              discountValue: Number(i.discount_value) || 0,
+              gstPct: Number(i.gst_pct) || 0,
+              notes: i.notes || '',
+              amount: Number(i.amount) || 0,
+              status: i.status || 'draft',
+              created: i.created,
+              due: i.due,
+              history: Array.isArray(i.history) ? i.history : []
+            }))
+            setInvoices(mapped)
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        }
+      } else {
+        setInvoices(INITIAL)
+      }
+      setLoading(false)
+    }
+    loadInvoices()
+  }, [])
+
+  const selSvcs = SERVICES.filter(s => form.selectedIds.includes(s.id))
+  const subtotal = selSvcs.reduce((a, s) => a + s.price, 0)
+  const discAmt = form.discountType === 'percentage' 
+    ? Math.round(subtotal * form.discountValue / 100) 
+    : form.discountValue
+  const afterDisc = Math.max(0, subtotal - discAmt)
+  const gstAmt = Math.round(afterDisc * form.gstPct / 100)
+  const grandTotal = afterDisc + gstAmt
+
+  const filtered = invoices.filter(inv => {
+    const matchSearch = inv.client.toLowerCase().includes(search.toLowerCase()) || inv.docId.toLowerCase().includes(search.toLowerCase())
+    const matchStatus = statusFilter === 'all' || inv.status === statusFilter
+    return matchSearch && matchStatus
+  })
+
+  function openEdit(inv: Invoice) {
+    setEditInvoice(inv)
+    setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes })
+  }
+
+  function toggleSvc(id: string) {
+    setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
+  }
+
+  async function buildAndDownloadPdf(inv: Invoice, svcIds: string[], discType: 'percentage'|'fixed', discVal: number, gst: number, docId: string) {
+    const svcs = SERVICES.filter(s => svcIds.includes(s.id))
+    const sub = svcs.reduce((a, s) => a + s.price, 0)
+    const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
+    const aft = Math.max(0, sub - dAmt)
+    const gAmt = Math.round(aft * gst / 100)
+    const tot = aft + gAmt
+
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    const due = new Date(Date.now() + 10 * 864e5).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+
+    const payload = {
+      docType: 'Invoice',
+      clientName: inv.contact || inv.client,
+      projectTitle: `Invoice — ${docId}`,
+      companyName: inv.client,
+      clientInfo: { business: inv.businessType, mobile: inv.phone, gst: inv.gst },
+      content: [
+        `## Invoice Details`,
+        `**Invoice Date:** ${today}  |  **Due Date:** ${due}`,
+        `**Invoice Ref:** ${docId}`,
+        `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
+        '',
+        '## Services Rendered',
+        ...svcs.flatMap((s, i) => [
+          `### ${i + 1}. ${s.name}`,
+          `Category: ${s.category}  |  ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
+          ...s.deliverables.map(d => `- ${d}`),
+          '',
+        ]),
+        '## Bank Details',
+        '- **Account Name:** Netgain Studio',
+        '- **Account No:** 92607430900 (Current)',
+        '- **Bank:** Kotak Mahindra Bank, Madhapur Branch',
+        '- **IFSC:** KKBK0007122',
+        '- **UPI:** 9347102347@kotak',
+        '',
+        inv.notes ? `## Notes\n${inv.notes}` : '',
+        '',
+        '## Payment Policy',
+        '- Payment is due within 10 days of invoice date.',
+        '- Late payments attract 2% per month penalty.',
+        '- Accepted: NEFT / IMPS / UPI / Cheque',
+      ].join('\n'),
+      items: svcs.map(s => ({ serviceName: s.name, finalPrice: s.price, price: s.price, quantity: 1, category: s.category, pricing_model: s.model, deliverables: s.deliverables })),
+      subtotal: sub,
+      discountTotal: dAmt,
+      grandTotal: tot,
+    }
+
+    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+    const blob = await res.blob()
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `Invoice_${docId}_${inv.client.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  }
+
+  async function handleDownload(inv: Invoice) {
+    setDownloadingId(inv.id)
+    try {
+      await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId)
+      toast({ title: `✅ ${inv.docId} downloaded` })
+    } catch (e: any) { toast({ title: 'Download failed', description: e.message, variant: 'destructive' }) }
+    finally { setDownloadingId(null) }
+  }
+
+  async function handleGenerate() {
+    if (!form.client) { toast({ title: 'Company name required', variant: 'destructive' }); return }
+    if (form.selectedIds.length === 0) { toast({ title: 'Select at least one service', variant: 'destructive' }); return }
+    setGenerating(true)
+    try {
+      const docId = generateDocId('NG-INV')
+      const targetId = String(Date.now())
+      const targetCreated = new Date().toISOString().slice(0,10)
+      const targetDue = new Date(Date.now()+10*864e5).toISOString().slice(0,10)
+      const targetHistory = [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }]
+
+      const newInv: Invoice = { 
+        id: targetId, 
+        docId, 
+        client: form.client, 
+        contact: form.contact, 
+        email: form.email, 
+        phone: form.phone, 
+        businessType: form.businessType, 
+        gst: form.gst, 
+        serviceIds: form.selectedIds, 
+        discountType: form.discountType, 
+        discountValue: form.discountValue, 
+        gstPct: form.gstPct, 
+        notes: form.notes, 
+        amount: grandTotal, 
+        status: 'draft', 
+        created: targetCreated, 
+        due: targetDue, 
+        history: targetHistory 
+      }
+
+      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId)
+
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase.from('invoices').insert([{
+          id: targetId,
+          doc_id: docId,
+          client: form.client,
+          contact: form.contact,
+          email: form.email,
+          phone: form.phone,
+          business_type: form.businessType,
+          gst: form.gst,
+          service_ids: form.selectedIds,
+          discount_type: form.discountType,
+          discount_value: form.discountValue,
+          gst_pct: form.gstPct,
+          notes: form.notes,
+          amount: grandTotal,
+          status: 'draft',
+          created: targetCreated,
+          due: targetDue,
+          history: targetHistory
+        }])
+        if (error) {
+          toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
+          setGenerating(false)
+          return
+        }
+      }
+
+      setInvoices([newInv, ...invoices])
+      setShowCreate(false); setForm(blankForm())
+      toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
+    } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
+    finally { setGenerating(false) }
+  }
+
+  async function handleSaveEdit() {
+    if (!editInvoice) return
+    setGenerating(true)
+    const targetHistory = [...editInvoice.history, { date: new Date().toISOString().split('T')[0], action: 'Document updated', canDownload: true }]
+    const updated: Invoice = { 
+      ...editInvoice, 
+      client: form.client, 
+      contact: form.contact, 
+      email: form.email, 
+      phone: form.phone, 
+      businessType: form.businessType, 
+      gst: form.gst, 
+      serviceIds: form.selectedIds, 
+      discountType: form.discountType, 
+      discountValue: form.discountValue, 
+      gstPct: form.gstPct,
+      notes: form.notes,
+      amount: grandTotal,
+      history: targetHistory
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('invoices').update({
+          client: form.client,
+          contact: form.contact,
+          email: form.email,
+          phone: form.phone,
+          business_type: form.businessType,
+          gst: form.gst,
+          service_ids: form.selectedIds,
+          discount_type: form.discountType,
+          discount_value: form.discountValue,
+          gst_pct: form.gstPct,
+          notes: form.notes,
+          amount: grandTotal,
+          history: targetHistory
+        }).eq('id', editInvoice.id)
+
+        if (error) {
+          toast({ title: 'Error saving edit to database', description: error.message, variant: 'destructive' })
+          setGenerating(false)
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        setGenerating(false)
+        return
+      }
+    }
+
+    setInvoices(invoices.map(i => i.id === editInvoice.id ? updated : i))
+    setEditInvoice(null); setForm(blankForm())
+    toast({ title: '✅ Invoice updated' })
+    setGenerating(false)
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('invoices').delete().eq('id', deleteId)
+        if (error) {
+          toast({ title: 'Error deleting invoice', description: error.message, variant: 'destructive' })
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        return
+      }
+    }
+    setInvoices(invoices.filter(i => i.id !== deleteId))
+    setDeleteId(null)
+    toast({ title: 'Invoice deleted' })
+  }
+
+  async function updateStatus(id: string, status: string) {
+    const targetInv = invoices.find(i => i.id === id)
+    if (!targetInv) return
+    const targetHistory = [...targetInv.history, { date: new Date().toISOString().split('T')[0], action: `Status changed to ${STATUS_LABELS[status]}` }]
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('invoices').update({
+          status,
+          history: targetHistory
+        }).eq('id', id)
+        if (error) {
+          toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        return
+      }
+    }
+
+    setInvoices(invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i))
+  }
+
+  const FormBody = () => (
+    <div className="space-y-6 py-2">
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Business Type</Label>
+            <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
+        <div className="space-y-2">
+          {SERVICES.map(svc => {
+            const sel = form.selectedIds.includes(svc.id)
+            return (
+              <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
+                    {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+                  </div>
+                  <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
+                </div>
+                <span className="text-sm font-bold text-gold ml-4 shrink-0">{formatCurrency(svc.price)}{svc.model === 'monthly' ? '/mo' : ''}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      {selSvcs.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="col-span-2 sm:col-span-1 space-y-1">
+              <Label>Discount Type</Label>
+              <div className="flex bg-muted/30 p-1 rounded-md border border-border">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+            <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+            {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
+            {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
+            <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
+          </div>
+        </div>
+      )}
+      <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+    </div>
+  )
+
+  const totals = { total: invoices.reduce((a, i) => a + i.amount, 0), paid: invoices.filter(i => i.status === 'paid').reduce((a, i) => a + i.amount, 0), pending: invoices.filter(i => i.status !== 'paid').reduce((a, i) => a + i.amount, 0), overdue: invoices.filter(i => i.status === 'overdue').reduce((a, i) => a + i.amount, 0) }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold tracking-tight">Invoices</h1><p className="text-muted-foreground text-sm mt-0.5">Create and manage tax invoices for clients.</p></div>
+        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm()); setShowCreate(true) }} className="gap-1.5"><Plus className="h-4 w-4" />New Invoice</Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[{ l: 'Total Billed', v: formatCurrency(totals.total) }, { l: 'Paid', v: formatCurrency(totals.paid), c: 'text-emerald-400' }, { l: 'Pending', v: formatCurrency(totals.pending) }, { l: 'Overdue', v: formatCurrency(totals.overdue), c: 'text-red-400' }].map(s => (
+          <Card key={s.l}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.l}</p><p className={`text-lg font-bold mt-1 ${s.c || ''}`}>{s.v}</p></CardContent></Card>
+        ))}
+      </div>
+
+      <div className="flex gap-3">
+        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search invoices..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All Status</SelectItem>{STATUS_OPTS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border">{['Invoice ID','Client','Services','Amount','Status','Due Date','Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody>
+              {filtered.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><Receipt className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No invoices found</p></td></tr>}
+              {filtered.map(inv => (
+                <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4"><span className="font-mono text-xs text-gold">{inv.docId}</span></td>
+                  <td className="py-3 px-4"><p className="font-medium">{inv.client}</p><p className="text-xs text-muted-foreground">{inv.contact}</p></td>
+                  <td className="py-3 px-4"><div className="flex gap-1 flex-wrap max-w-[180px]">{SERVICES.filter(s => inv.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px]">{s.name.slice(0,18)}</Badge>)}{inv.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{inv.serviceIds.length-2}</Badge>}</div></td>
+                  <td className="py-3 px-4 font-semibold text-gold whitespace-nowrap">{formatCurrency(inv.amount)}</td>
+                  <td className="py-3 px-4">
+                    <Select value={inv.status} onValueChange={v => updateStatus(inv.id, v)}>
+                      <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(inv.status)}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>{STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs">{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </td>
+                  <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{formatDate(inv.due)}</td>
+                  <td className="py-3 px-4">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(inv)}><History className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}>
+                        {downloadingId === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditInvoice(inv); setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes }) }}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: inv.id, title: `${inv.docId} - ${inv.client}` })}><Send className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(inv.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blankForm()) }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Create New Invoice</DialogTitle></DialogHeader>
+          <FormBody />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
+            <Button variant="gold" onClick={handleGenerate} disabled={generating || selSvcs.length === 0}>
+              {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : `Generate Invoice${grandTotal > 0 ? ` (${formatCurrency(grandTotal)})` : ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editInvoice} onOpenChange={v => { if (!v) { setEditInvoice(null); setForm(blankForm()) } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Invoice — {editInvoice?.docId}</DialogTitle></DialogHeader>
+          <FormBody />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditInvoice(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
+            <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Invoice?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="border-b border-white/10 pb-3">
+            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
+          </DialogHeader>
+          <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
+            {historyDoc?.history.slice().reverse().map((h, i) => (
+              <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${h.canDownload ? 'border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group' : 'border-transparent bg-muted/20 cursor-default'}`}
+                onClick={() => { if (h.canDownload && historyDoc) handleDownload(historyDoc) }}
+              >
+                <div className="flex-1 flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">{h.action}</p>
+                    <p className="text-xs text-muted-foreground">{h.date}</p>
+                  </div>
+                </div>
+                {h.canDownload && (
+                  <Button
+                    variant="ghost" size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
+                    disabled={downloadingId === historyDoc?.id}
+                    onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
+                    title="Download this version"
+                  >
+                    {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="border-t border-white/10 pt-3">
+            <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
+            <Button variant="gold" size="sm" onClick={() => historyDoc && handleDownload(historyDoc)} disabled={downloadingId === historyDoc?.id} className="gap-1.5">
+              {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Download Latest
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ShareDialog
+        open={!!shareDoc}
+        onOpenChange={(open) => !open && setShareDoc(null)}
+        title={shareDoc?.title || ''}
+        onSend={async (methods) => {
+          if (shareDoc) updateStatus(shareDoc.id, 'sent')
+        }}
+      />
+    </div>
+  )
+}
