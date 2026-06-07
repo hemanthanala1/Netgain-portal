@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, Wallet, Users, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+const COLORS = ['#34d399', '#f87171', '#60a5fa', '#fbbf24', '#a78bfa', '#f472b6']
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 export default function FinancePage() {
@@ -20,11 +21,12 @@ export default function FinancePage() {
   const [salaries, setSalaries] = useState<any[]>([])
   const [currentRevenue, setCurrentRevenue] = useState(0)
   const [chartData, setChartData] = useState<any[]>([])
+  const [categoryData, setCategoryData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showExpenseAdd, setShowExpenseAdd] = useState(false)
   const [showSalaryAdd, setShowSalaryAdd] = useState(false)
   
-  const [expenseForm, setExpenseForm] = useState({ title: '', category: 'Operations', amount: '', date: new Date().toISOString().slice(0,10), status: 'pending' })
+  const [expenseForm, setExpenseForm] = useState({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' })
   const [salaryForm, setSalaryForm] = useState({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' })
   
   const [deleteExpense, setDeleteExpense] = useState<string | null>(null)
@@ -98,6 +100,17 @@ export default function FinancePage() {
             })
           }
           setChartData(computedChartData)
+
+          // Category Breakdown Data
+          const catMap: Record<string, number> = {}
+          if (dbExpenses) {
+            dbExpenses.forEach((e: any) => {
+              const total = Number(e.amount) + Number(e.tax_amount || 0)
+              catMap[e.category] = (catMap[e.category] || 0) + total
+            })
+          }
+          const catChart = Object.entries(catMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+          setCategoryData(catChart)
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
@@ -112,13 +125,15 @@ export default function FinancePage() {
     loadFinanceData()
   }, [])
 
-  const totalExpenses = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0)
+  const totalExpenses = expenses.reduce((acc, curr) => acc + Number(curr.amount) + Number(curr.tax_amount || 0), 0)
   const totalSalaries = salaries.reduce((acc, curr) => acc + Number(curr.baseSalary) + Number(curr.bonus), 0)
   const netIncome = currentRevenue - totalExpenses - totalSalaries
+  const profitMargin = currentRevenue > 0 ? ((netIncome / currentRevenue) * 100).toFixed(1) : '0.0'
 
   const handleAddExpense = async () => {
     if (!expenseForm.title || !expenseForm.amount) return
     const expenseAmt = Number(expenseForm.amount)
+    const taxAmt = Number(expenseForm.taxAmount || 0)
     setSubmitting(true)
     try {
       if (editExpenseId) {
@@ -127,6 +142,7 @@ export default function FinancePage() {
             title: expenseForm.title,
             category: expenseForm.category,
             amount: expenseAmt,
+            tax_amount: taxAmt,
             date: expenseForm.date,
             status: expenseForm.status
           }).eq('id', editExpenseId)
@@ -135,7 +151,7 @@ export default function FinancePage() {
             return
           }
         }
-        setExpenses(expenses.map(e => e.id === editExpenseId ? { ...e, title: expenseForm.title, category: expenseForm.category, amount: expenseAmt, date: expenseForm.date, status: expenseForm.status } : e))
+        setExpenses(expenses.map(e => e.id === editExpenseId ? { ...e, title: expenseForm.title, category: expenseForm.category, amount: expenseAmt, tax_amount: taxAmt, date: expenseForm.date, status: expenseForm.status } : e))
         setEditExpenseId(null)
         toast({ title: 'Expense Updated' })
       } else {
@@ -145,6 +161,7 @@ export default function FinancePage() {
           title: expenseForm.title,
           category: expenseForm.category,
           amount: expenseAmt,
+          tax_amount: taxAmt,
           date: expenseForm.date,
           status: expenseForm.status
         }
@@ -159,7 +176,7 @@ export default function FinancePage() {
         toast({ title: 'Expense Added' })
       }
       setShowExpenseAdd(false)
-      setExpenseForm({ title: '', category: 'Operations', amount: '', date: new Date().toISOString().slice(0,10), status: 'pending' })
+      setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' })
     } catch (err: any) {
       toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
     } finally {
@@ -238,7 +255,7 @@ export default function FinancePage() {
           <p className="text-muted-foreground text-sm mt-0.5">Manage revenues, expenses, and payroll in one place.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" /> Add Expense</Button>
+          <Button variant="outline" size="sm" onClick={() => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" /> Add Expense</Button>
           <Button variant="gold" size="sm" onClick={() => { setEditSalaryId(null); setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' }); setShowSalaryAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" /> Process Payroll</Button>
         </div>
       </div>
@@ -282,7 +299,10 @@ export default function FinancePage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Net Income</p>
-                <p className="text-2xl font-bold mt-1 text-gold">{formatCurrency(netIncome)}</p>
+                <div className="flex items-end gap-2 mt-1">
+                  <p className="text-2xl font-bold text-gold">{formatCurrency(netIncome)}</p>
+                  <Badge variant="outline" className={`text-[10px] ${Number(profitMargin) >= 0 ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/10' : 'text-red-400 border-red-400/20 bg-red-400/10'}`}>{profitMargin}% margin</Badge>
+                </div>
               </div>
               <div className="p-2 bg-gold/20 rounded-lg text-gold"><Wallet className="h-4 w-4" /></div>
             </div>
@@ -332,7 +352,7 @@ export default function FinancePage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-foreground">-{formatCurrency(t.amount)}</p>
+                    <p className="text-sm font-bold text-foreground">-{formatCurrency(Number(t.amount) + Number(t.tax_amount || 0))}</p>
                     <p className="text-[10px] uppercase text-muted-foreground font-semibold">{t.status}</p>
                   </div>
                 </div>
@@ -342,7 +362,42 @@ export default function FinancePage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="expenses">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Expense Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {categoryData.length > 0 ? (
+              <div className="h-[250px] flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                      {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} formatter={(value: number) => formatCurrency(value)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">No expenses found.</div>
+            )}
+            <div className="space-y-2 mt-4">
+              {categoryData.map((c, i) => (
+                <div key={c.name} className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="text-muted-foreground">{c.name}</span>
+                  </div>
+                  <span className="font-semibold">{formatCurrency(c.value)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="expenses">
         <TabsList className="mb-4">
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="salaries">Payroll & Salaries</TabsTrigger>
@@ -363,9 +418,12 @@ export default function FinancePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <p className="font-bold text-red-400">-{formatCurrency(e.amount)}</p>
+                      <div className="text-right">
+                        <p className="font-bold text-red-400">-{formatCurrency(Number(e.amount) + Number(e.tax_amount || 0))}</p>
+                        {Number(e.tax_amount) > 0 && <p className="text-[10px] text-muted-foreground">Includes {formatCurrency(e.tax_amount)} tax</p>}
+                      </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setExpenseForm({ title: e.title, category: e.category, amount: String(e.amount), date: e.date, status: e.status }); setEditExpenseId(e.id); setShowExpenseAdd(true) }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setExpenseForm({ title: e.title, category: e.category, amount: String(e.amount), taxAmount: String(e.tax_amount || ''), date: e.date, status: e.status }); setEditExpenseId(e.id); setShowExpenseAdd(true) }}><Edit className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteExpense(e.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
@@ -407,6 +465,8 @@ export default function FinancePage() {
           </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
 
       {/* Dialogs for Adding/Editing */}
       <Dialog open={showExpenseAdd} onOpenChange={(open) => { if (!submitting) { setShowExpenseAdd(open); if(!open) setEditExpenseId(null) } }}>
@@ -417,8 +477,9 @@ export default function FinancePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Category</Label><Select value={expenseForm.category} onValueChange={v => setExpenseForm({...expenseForm, category: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Infrastructure', 'Operations', 'Marketing', 'Software', 'Other'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Amount (₹) *</Label><Input type="number" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} disabled={submitting} /></div>
+              <div className="space-y-1"><Label>Tax/GST (₹)</Label><Input type="number" value={expenseForm.taxAmount} onChange={e => setExpenseForm({...expenseForm, taxAmount: e.target.value})} disabled={submitting} /></div>
               <div className="space-y-1"><Label>Date</Label><Input type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} disabled={submitting} /></div>
-              <div className="space-y-1"><Label>Status</Label><Select value={expenseForm.status} onValueChange={v => setExpenseForm({...expenseForm, status: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent></Select></div>
+              <div className="col-span-2 space-y-1"><Label>Status</Label><Select value={expenseForm.status} onValueChange={v => setExpenseForm({...expenseForm, status: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent></Select></div>
             </div>
           </div>
           <DialogFooter>

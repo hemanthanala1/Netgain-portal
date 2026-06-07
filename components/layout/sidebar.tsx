@@ -141,9 +141,9 @@ export function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs font-semibold text-white whitespace-nowrap">
-                  {user?.name ? (user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')) : 'Devon S.'}
+                  {user?.name ? (user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')) : 'User'}
                 </p>
-                <p className="text-[10px] text-white/40 whitespace-nowrap">{user?.role || 'Founder'}</p>
+                <p className="text-[10px] text-white/40 whitespace-nowrap">{user?.role || 'Loading...'}</p>
               </div>
             </div>
           </Link>

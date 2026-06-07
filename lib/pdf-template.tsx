@@ -111,7 +111,17 @@ export interface PdfPayload {
   companyName?: string
   projectTitle?: string
   clientInfo?: { business?: string; industry?: string; mobile?: string; gst?: string }
-  companySettings?: { name?: string; email?: string; phone?: string; website?: string; gst?: string }
+  companySettings?: { name?: string; email?: string; phone?: string; website?: string; gst?: string; address?: string }
+  bankSettings?: { accountName?: string; accountNumber?: string; ifsc?: string; bank?: string; upiId?: string }
+  founderSettings?: { name?: string; designation?: string; email?: string; phone?: string }
+  docsSettings?: {
+    tagline?: string
+    quotationValidity?: string
+    paymentTermsOneTime?: string
+    paymentTermsMonthly?: string
+    gstRate?: string
+    extraTerms?: string
+  }
   items?: PdfItem[]
   subtotal?: number
   discountTotal?: number
@@ -135,14 +145,14 @@ const DOC_LABELS: Record<string, string> = {
 }
 
 // ── Header fixed component ────────────────────────────────────────────────
-function Header({ docType, docRef, company }: { docType: string; docRef: string; company: PdfPayload['companySettings'] }) {
+function Header({ docType, docRef, company, tagline }: { docType: string; docRef: string; company: PdfPayload['companySettings']; tagline: string }) {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   return (
     <View style={s.header} fixed>
       <View style={s.headerRow}>
         <View>
           <Text style={s.brandName}>{company?.name || 'NETGAIN'}</Text>
-          <Text style={s.brandTag}>Your Growth Partner, Powered by AI</Text>
+          <Text style={s.brandTag}>{tagline}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={s.docLabel}>{DOC_LABELS[docType] || 'DOCUMENT'}</Text>
@@ -156,18 +166,22 @@ function Header({ docType, docRef, company }: { docType: string; docRef: string;
 }
 
 // ── Footer fixed component ─────────────────────────────────────────────────
-function Footer({ company }: { company: PdfPayload['companySettings'] }) {
+function Footer({ company, tagline }: { company: PdfPayload['companySettings']; tagline: string }) {
   return (
     <View style={s.footer} fixed>
       <View style={s.footerLine} />
       <View style={s.footerRow}>
         <View>
           <Text style={s.footerBrand}>{company?.name || 'NETGAIN'}</Text>
-          <Text style={s.footerText}>Phone / WhatsApp: {company?.phone || '9347102347 | 9392469669'}</Text>
-          <Text style={s.footerText}>Email: {company?.email || 'mail.netgain@gmail.com'}{'   '}| {company?.website || 'netgain.studio'}</Text>
+          {company?.phone && <Text style={s.footerText}>Phone / WhatsApp: {company.phone}</Text>}
+          {(company?.email || company?.website) && (
+            <Text style={s.footerText}>
+              {company.email || ''}{company.email && company.website ? '   | ' : ''}{company.website || ''}
+            </Text>
+          )}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={s.footerText}>Your Growth Partner, Powered by AI</Text>
+          <Text style={s.footerText}>{tagline}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} style={s.footerText} />
         </View>
       </View>
@@ -203,14 +217,25 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
   const docRef = `NG-${Math.floor(Date.now() / 1000) % 1000000}`
   const co = data.companySettings || {}
   const ci = data.clientInfo || {}
+  const docs = data.docsSettings || {}
   const items = data.items || []
   const isFinancial = ['Quotation', 'Invoice', 'Agreement', 'SOW'].includes(data.docType)
+
+  const tagline = docs.tagline || 'Your Growth Partner, Powered by AI'
+  const validityDays = docs.quotationValidity || '14'
+  const ptOneTime = docs.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const ptMonthly = docs.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const gstRate = docs.gstRate || '18'
+  const gstAmount = Math.max(0, Math.round((data.grandTotal ?? 0) - ((data.subtotal ?? 0) - (data.discountTotal ?? 0))))
+  const extraTerms = docs.extraTerms
+    ? docs.extraTerms.split('\n').map(t => t.trim()).filter(Boolean)
+    : []
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <Header docType={data.docType} docRef={docRef} company={co} />
-        <Footer company={co} />
+        <Header docType={data.docType} docRef={docRef} company={co} tagline={tagline} />
+        <Footer company={co} tagline={tagline} />
 
         {/* ── Project Title ── */}
         <View style={s.spacer8} />
@@ -305,29 +330,92 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
           </>
         )}
 
-        {/* ── Investment Summary ── */}
+        {/* ── Investment Summary & Payment QR Code ── */}
         {isFinancial && (data.grandTotal ?? 0) > 0 && (
           <>
             <Text style={s.h2}>INVESTMENT SUMMARY</Text>
-            <View style={s.invCard}>
-              {(data.subtotal ?? 0) > 0 && (
-                <View style={s.invRow}>
-                  <Text style={s.invLabel}>Subtotal charges</Text>
-                  <Text style={s.invValue}>{INR(data.subtotal!)}</Text>
+            {data.docType === 'Invoice' && data.bankSettings?.upiId ? (
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                {/* Investment Card (Left) */}
+                <View style={[s.invCard, { flex: 1, marginBottom: 0 }]}>
+                  {(data.subtotal ?? 0) > 0 && (
+                    <View style={s.invRow}>
+                      <Text style={s.invLabel}>Subtotal charges</Text>
+                      <Text style={s.invValue}>{INR(data.subtotal!)}</Text>
+                    </View>
+                  )}
+                  {(data.discountTotal ?? 0) > 0 && (
+                    <View style={s.invRow}>
+                      <Text style={s.invLabel}>Calculated discount</Text>
+                      <Text style={[s.invValue, { color: '#34d399' }]}>−{INR(data.discountTotal!)}</Text>
+                    </View>
+                  )}
+                  {gstAmount > 0 && (
+                    <View style={s.invRow}>
+                      <Text style={s.invLabel}>GST ({gstRate}%)</Text>
+                      <Text style={s.invValue}>+{INR(gstAmount)}</Text>
+                    </View>
+                  )}
+                  <View style={s.invDivider} />
+                  <View style={s.invRow}>
+                    <Text style={s.invTotalLabel}>Total (payable now)</Text>
+                    <Text style={s.invTotalValue}>{INR(data.grandTotal!)}</Text>
+                  </View>
                 </View>
-              )}
-              {(data.discountTotal ?? 0) > 0 && (
-                <View style={s.invRow}>
-                  <Text style={s.invLabel}>Calculated discount</Text>
-                  <Text style={[s.invValue, { color: '#34d399' }]}>−{INR(data.discountTotal!)}</Text>
+
+                {/* UPI QR Code (Right) */}
+                <View style={{
+                  backgroundColor: C.card,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 2,
+                  width: 160,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {(() => {
+                    const upiId = data.bankSettings?.upiId || ''
+                    const recipientName = data.bankSettings?.accountName || co.name || 'Netgain Studio'
+                    const amount = data.grandTotal!
+                    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(recipientName)}&am=${amount}&cu=INR`
+                    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiUri)}`
+                    return (
+                      <>
+                        <Image src={qrCodeUrl} style={{ width: 80, height: 80, marginBottom: 6 }} />
+                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7, color: C.gold }}>SCAN & PAY VIA UPI</Text>
+                        <Text style={{ fontFamily: 'Helvetica', fontSize: 6, color: C.slate, marginTop: 2 }}>{upiId}</Text>
+                      </>
+                    )
+                  })()}
                 </View>
-              )}
-              <View style={s.invDivider} />
-              <View style={s.invRow}>
-                <Text style={s.invTotalLabel}>Total (payable now)</Text>
-                <Text style={s.invTotalValue}>INR {data.grandTotal!.toLocaleString('en-IN')}</Text>
               </View>
-            </View>
+            ) : (
+              <View style={s.invCard}>
+                {(data.subtotal ?? 0) > 0 && (
+                  <View style={s.invRow}>
+                    <Text style={s.invLabel}>Subtotal charges</Text>
+                    <Text style={s.invValue}>{INR(data.subtotal!)}</Text>
+                  </View>
+                )}
+                {(data.discountTotal ?? 0) > 0 && (
+                  <View style={s.invRow}>
+                    <Text style={s.invLabel}>Calculated discount</Text>
+                    <Text style={[s.invValue, { color: '#34d399' }]}>−{INR(data.discountTotal!)}</Text>
+                  </View>
+                )}
+                {gstAmount > 0 && (
+                  <View style={s.invRow}>
+                    <Text style={s.invLabel}>GST ({gstRate}%)</Text>
+                    <Text style={s.invValue}>+{INR(gstAmount)}</Text>
+                  </View>
+                )}
+                <View style={s.invDivider} />
+                <View style={s.invRow}>
+                  <Text style={s.invTotalLabel}>Total (payable now)</Text>
+                  <Text style={s.invTotalValue}>{INR(data.grandTotal!)}</Text>
+                </View>
+              </View>
+            )}
 
             {/* Payment schedule breakdown */}
             {items.length > 0 && data.docType === 'Quotation' && (() => {
@@ -369,18 +457,19 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
               )
             })()}
 
-            {/* Terms */}
+            {/* Terms & Conditions — driven by docsSettings */}
             <Text style={s.h2}>TERMS & CONDITIONS</Text>
             {[
-              'Quotation valid for 14 days from issue date.',
-              'One-time services: 50% advance to begin, 50% balance on final delivery.',
-              'Monthly recurring services: Full monthly fee payable in advance each cycle.',
+              `Quotation valid for ${validityDays} days from issue date.`,
+              `One-time services: ${ptOneTime}.`,
+              `Monthly recurring services: ${ptMonthly}.`,
               'Hosting, domain, ad spend & third-party API fees billed at actuals.',
-              'All prices are in Indian Rupees (INR). GST @ 18% extra as applicable.',
+              `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`,
               ...(data.docType === 'Quotation' ? [
-                'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions with the Netgain team.',
+                'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions.',
                 'The final Scope of Work (SOW) and Service Agreement will be shared and approved before project commencement.'
-              ] : [])
+              ] : []),
+              ...extraTerms,
             ].map((t, i) => (
               <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
             ))}

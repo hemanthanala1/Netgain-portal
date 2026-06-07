@@ -100,7 +100,6 @@ export default function LoginPage() {
               <p className="text-xs text-muted-foreground">Employee accounts must be created by the Founder.</p>
               <p className="text-xs text-muted-foreground mt-0.5">Self-registration is disabled for security.</p>
             </div>
-            <p className="text-center text-xs text-muted-foreground mt-4">Demo mode: enter any email/password to continue</p>
           </CardContent>
         </Card>
       </motion.div>

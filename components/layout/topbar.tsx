@@ -19,6 +19,8 @@ import { cn, getInitials } from '@/lib/utils'
 import Link from 'next/link'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { useToast } from '@/hooks/use-toast'
+import { useEffect } from 'react'
 
 const breadcrumbMap: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -66,13 +68,64 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const title = breadcrumbMap[pathname] || 'NBOS'
-  const [notifs, setNotifs] = useState(INITIAL_NOTIFICATIONS)
+  const [notifs, setNotifs] = useState<any[]>(INITIAL_NOTIFICATIONS)
   const unreadCount = notifs.filter(n => !n.read).length
   const { user } = useUser()
+  const { toast } = useToast()
 
-  const markAllRead = () => setNotifs(notifs.map(n => ({ ...n, read: true })))
-  const markRead = (id: string) => setNotifs(notifs.map(n => n.id === id ? { ...n, read: true } : n))
-  const dismiss = (id: string) => setNotifs(notifs.filter(n => n.id !== id))
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    
+    // Fetch initial
+    const fetchNotifs = async () => {
+      const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(20)
+      if (data && data.length > 0) setNotifs(data)
+    }
+    fetchNotifs()
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('public:notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newNotif = payload.new
+          // Set relative time or handle it
+          if (!newNotif.time) newNotif.time = 'Just now'
+          setNotifs(prev => [newNotif, ...prev].slice(0, 20))
+          toast({ title: newNotif.title, description: newNotif.body })
+        } else if (payload.eventType === 'UPDATE') {
+          setNotifs(prev => prev.map(n => n.id === payload.new.id ? payload.new : n))
+        } else if (payload.eventType === 'DELETE') {
+          setNotifs(prev => prev.filter(n => n.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [toast])
+
+  const markAllRead = async () => {
+    setNotifs(notifs.map(n => ({ ...n, read: true })))
+    if (isSupabaseConfigured()) {
+      await supabase.from('notifications').update({ read: true }).neq('read', true)
+    }
+  }
+
+  const markRead = async (id: string) => {
+    setNotifs(notifs.map(n => n.id === id ? { ...n, read: true } : n))
+    if (isSupabaseConfigured()) {
+      await supabase.from('notifications').update({ read: true }).eq('id', id)
+    }
+  }
+
+  const dismiss = async (id: string) => {
+    setNotifs(notifs.filter(n => n.id !== id))
+    if (isSupabaseConfigured()) {
+      await supabase.from('notifications').delete().eq('id', id)
+    }
+  }
 
   const handleSignOut = async () => {
     if (isSupabaseConfigured()) {
@@ -225,13 +278,13 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
               <div className="flex items-center gap-2.5">
                 <Avatar className="h-9 w-9">
                   <AvatarFallback className="gold-gradient text-white text-sm font-bold">
-                    {user ? getInitials(user.name) : 'DS'}
+                    {user ? getInitials(user.name) : 'NA'}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-sm font-semibold">{user?.name || 'Devon Shah'}</p>
-                  <p className="text-xs text-muted-foreground">{user?.role === 'Founder' ? 'Founder & CEO' : user?.role || 'Team Member'}</p>
-                  <Badge className="mt-1 h-4 text-[9px] bg-gold/10 text-gold border-gold/30 px-1.5">{user?.role || 'Founder'}</Badge>
+                  <p className="text-sm font-semibold">{user?.name || 'Not Authenticated'}</p>
+                  <p className="text-xs text-muted-foreground">{user?.role === 'Founder' ? 'Founder & CEO' : user?.role || 'User'}</p>
+                  <Badge className="mt-1 h-4 text-[9px] bg-gold/10 text-gold border-gold/30 px-1.5">{user?.role || 'No Role'}</Badge>
                 </div>
               </div>
             </div>

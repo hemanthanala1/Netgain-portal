@@ -37,8 +37,13 @@ export default function CommunicationsPage() {
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [search, setSearch] = useState('')
   const { toast } = useToast()
-  const [form, setForm] = useState({ client: '', channel: 'email', template: '', subject: '', body: '' })
-  const [templateForm, setTemplateForm] = useState({ name: '', channel: 'email', subject: '', body: '' })
+  const [form, setForm] = useState({ client: '', channel: 'email', template: '', subject: '', body: '', attachments: [] as File[] })
+  
+  function blankTemplate() {
+    return { name: '', channel: 'email', subject: '', body: '', attachments: [] as File[] }
+  }
+
+  const [templateForm, setTemplateForm] = useState(blankTemplate())
   const [editTemplateId, setEditTemplateId] = useState<string | null>(null)
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
@@ -47,12 +52,12 @@ export default function CommunicationsPage() {
     if (!form.client || !form.body) { toast({ title: 'Fill required fields', variant: 'destructive' }); return }
     toast({ title: 'Message Queued', description: `${form.channel.toUpperCase()} to ${form.client} is ready to send when connected.` })
     setShowCompose(false)
-    setForm({ client: '', channel: 'email', template: '', subject: '', body: '' })
+    setForm({ client: '', channel: 'email', template: '', subject: '', body: '', attachments: [] })
   }
 
   const handleTemplateSelect = (templateId: string) => {
     const t = templates.find(t => t.id === templateId)
-    if (t) setForm({ ...form, template: templateId, subject: t.subject, body: t.body })
+    if (t) setForm({ ...form, template: templateId, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] })
   }
 
   const handleCreateTemplate = () => {
@@ -66,7 +71,7 @@ export default function CommunicationsPage() {
       toast({ title: 'Template Created', description: `Template "${templateForm.name}" has been saved.` })
     }
     setShowCreateTemplate(false)
-    setTemplateForm({ name: '', channel: 'email', subject: '', body: '' })
+    setTemplateForm({ name: '', channel: 'email', subject: '', body: '', attachments: [] })
   }
 
   const insertPlaceholder = (p: string) => {
@@ -86,7 +91,7 @@ export default function CommunicationsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Communications Center</h1><p className="text-muted-foreground text-sm mt-0.5">Send emails, WhatsApp messages, and track all client communications.</p></div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditTemplateId(null); setTemplateForm({ name: '', channel: 'email', subject: '', body: '' }); setShowCreateTemplate(true) }} className="gap-1.5"><Plus className="h-4 w-4" />New Template</Button>
+          <Button variant="outline" size="sm" onClick={() => { setEditTemplateId(null); setTemplateForm(blankTemplate()); setShowCreateTemplate(true) }} className="gap-1.5"><Plus className="h-4 w-4" />New Template</Button>
           <Button variant="gold" size="sm" onClick={() => setShowCompose(true)} className="gap-1.5"><Plus className="h-4 w-4" />Compose</Button>
         </div>
       </div>
@@ -141,8 +146,8 @@ export default function CommunicationsPage() {
                         {t.subject && <p className="text-xs text-muted-foreground mt-2 truncate">{t.subject}</p>}
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.body.slice(0, 80)}...</p>
                         <div className="flex items-center gap-2 mt-3">
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setForm({ ...form, template: t.id, subject: t.subject, body: t.body, channel: t.channel }); setShowCompose(true) }}>Use Template</Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setTemplateForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body }); setEditTemplateId(t.id); setShowCreateTemplate(true) }}>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setForm({ ...form, template: t.id, subject: t.subject, body: t.body, channel: t.channel, attachments: (t as any).attachments || [] }); setShowCompose(true) }}>Use Template</Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setTemplateForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] }); setEditTemplateId(t.id); setShowCreateTemplate(true) }}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteTemplateId(t.id)}>
@@ -170,6 +175,11 @@ export default function CommunicationsPage() {
             <div className="space-y-1"><Label>Template (optional)</Label><Select value={form.template} onValueChange={handleTemplateSelect}><SelectTrigger><SelectValue placeholder="Choose a template..." /></SelectTrigger><SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
             {form.channel === 'email' && <div className="space-y-1"><Label>Subject</Label><Input placeholder="Email subject..." value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} /></div>}
             <div className="space-y-1"><Label>Message *</Label><Textarea className="h-32 resize-none" placeholder="Type your message... Use {ClientName}, {Date}, {Amount} as placeholders." value={form.body} onChange={e => setForm({...form, body: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Attachments</Label>
+              <Input type="file" multiple onChange={e => setForm({...form, attachments: Array.from(e.target.files || [])})} />
+              {form.attachments.length > 0 && <p className="text-xs text-muted-foreground mt-1">{form.attachments.length} file(s) attached</p>}
+            </div>
             <p className="text-xs text-muted-foreground">⚡ Live sending will be activated when SMTP / WhatsApp API is configured in Settings.</p>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCompose(false)}>Cancel</Button><Button variant="gold" onClick={handleSend} className="gap-1.5"><Send className="h-3.5 w-3.5" />Queue Message</Button></DialogFooter>
@@ -190,12 +200,17 @@ export default function CommunicationsPage() {
               <Textarea ref={bodyRef} className="h-32 resize-none" placeholder="Type your template... Use {Placeholders}." value={templateForm.body} onChange={e => setTemplateForm({...templateForm, body: e.target.value})} />
               <div className="text-[10px] text-muted-foreground pt-1 flex flex-wrap items-center gap-1.5">
                 <span>Click to insert:</span>
-                {['{ClientName}', '{BusinessName}', '{ProjectName}', '{InvoiceID}', '{Amount}', '{DueDate}', '{Date}', '{Time}'].map(p => (
+                {['{ClientName}', '{BusinessName}', '{ProjectName}', '{InvoiceID}', '{Amount}', '{DueDate}', '{Date}', '{Time}', '{DocumentLink}', '{DocumentName}', '{DocumentType}', '{ValidUntil}'].map(p => (
                   <button type="button" key={p} onClick={() => insertPlaceholder(p)} className="hover:opacity-80 transition-opacity">
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono font-normal cursor-pointer bg-white/5 border-white/10 hover:bg-white/10">{p}</Badge>
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Default Attachments</Label>
+              <Input type="file" multiple onChange={e => setTemplateForm({...templateForm, attachments: Array.from(e.target.files || [])})} />
+              {templateForm.attachments.length > 0 && <p className="text-xs text-muted-foreground mt-1">{templateForm.attachments.length} file(s) attached</p>}
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreateTemplate(false)}>Cancel</Button><Button variant="gold" onClick={handleCreateTemplate}>{editTemplateId ? 'Save Changes' : 'Save Template'}</Button></DialogFooter>

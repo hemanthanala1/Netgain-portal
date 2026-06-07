@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,19 +17,7 @@ import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-
-const SERVICES = [
-  { id: 's1',  name: 'E-Commerce Website (Shopify/WooCommerce)', price: 39999, timeline: '15-20 days',     category: 'Web Development',  model: 'fixed',   deliverables: ['Custom Figma Design', 'Full Development', 'Mobile Responsive', 'Payment Gateway Integration', 'Admin Dashboard', '3-Month Post-Launch Support'] },
-  { id: 's2',  name: 'Business Portfolio Website',               price: 14999, timeline: '7-10 days',      category: 'Web Development',  model: 'fixed',   deliverables: ['Figma Design', '5 Core Pages', 'Contact Form', 'SEO-Ready Structure', 'Mobile Responsive'] },
-  { id: 's3',  name: 'Social Media Management',                  price: 8999,  timeline: 'Monthly',        category: 'Digital Marketing',model: 'monthly', deliverables: ['30 Posts/month', 'Story Designs', 'Captions & Hashtags', 'Scheduling', 'Monthly Engagement Report'] },
-  { id: 's4',  name: 'Meta Ads Management (Facebook/Instagram)', price: 12999, timeline: 'Monthly',        category: 'Paid Advertising', model: 'monthly', deliverables: ['Campaign Setup', 'Ad Creatives (4/month)', 'Audience Targeting', 'A/B Testing', 'Weekly Reports'] },
-  { id: 's5',  name: 'Google Ads (Search + Display)',            price: 10999, timeline: 'Monthly',        category: 'Paid Advertising', model: 'monthly', deliverables: ['Search Campaigns', 'Display Campaigns', 'Keyword Bidding', 'Conversion Tracking', 'Monthly Report'] },
-  { id: 's6',  name: 'Local SEO + Google Maps Pack',            price: 7999,  timeline: 'Monthly',        category: 'SEO',              model: 'monthly', deliverables: ['Keyword Research (50+)', 'On-Page Optimization', 'GMB Optimization', 'Citation Building', 'Monthly Ranking Report'] },
-  { id: 's7',  name: 'WhatsApp Business Automation (WABA)',      price: 19999, timeline: '10-15 days',     category: 'Automation',       model: 'fixed',   deliverables: ['Meta WABA API Integration', 'Bot Flows (5)', 'Template Setup', 'Lead Capture', '1-Month Support'] },
-  { id: 's8',  name: 'Brand Identity Design',                    price: 12999, timeline: '7-10 days',     category: 'Brand Design',     model: 'fixed',   deliverables: ['Logo Design (3 concepts)', 'Color Palette', 'Typography', 'Brand Guidelines', 'Social Media Kit'] },
-  { id: 's9',  name: 'Content Creation Package',                 price: 6999,  timeline: 'Monthly',        category: 'Content',          model: 'monthly', deliverables: ['8 Reels/month', 'Scripting', 'Caption Writing', 'Thumbnails', 'Content Calendar'] },
-  { id: 's10', name: 'CRM Setup & Automation',                   price: 24999, timeline: '10-15 days',    category: 'CRM & Analytics',  model: 'fixed',   deliverables: ['CRM Setup', 'Pipeline Config', 'Lead Scoring', 'Email Sequences', 'Team Training'] },
-]
+import { fetchFounderProfile } from '@/lib/founder-helper'
 
 const STATUS_OPTS = ['draft', 'sent', 'approved', 'rejected']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', approved: 'Approved', rejected: 'Rejected' }
@@ -48,8 +36,92 @@ function blankForm() {
   return { projectTitle: '', client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', industry: '', gst: '', selectedIds: [] as string[], discountPct: 0, gstPct: 18, notes: '' }
 }
 
+// FormBody component - extracted outside to prevent recreation and preserve input focus
+interface FormBodyProps {
+  form: ReturnType<typeof blankForm>
+  setForm: React.Dispatch<React.SetStateAction<ReturnType<typeof blankForm>>>
+  allSvcs: any[]
+  selSvcs: any[]
+  subtotal: number
+  discAmt: number
+  gstAmt: number
+  grandTotal: number
+  toggleSvc: (id: string) => void
+}
+
+const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc }: FormBodyProps) => (
+  <div className="space-y-6 py-2">
+    <div>
+      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Project Details</p>
+      <Input placeholder="Project / Quotation Title (e.g. Digital Growth Package Q3 2024)" value={form.projectTitle} onChange={e => setForm({ ...form, projectTitle: e.target.value })} />
+    </div>
+    <div>
+      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="e.g. Urban Edge Co." value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+        <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+        <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+        <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+        <div className="space-y-1"><Label>Business Type</Label>
+          <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Retail / Offline','Service Business','Healthcare','Education','Real Estate','Manufacturing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1"><Label>Industry</Label><Input placeholder="e.g. Fashion, Tech, Food" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} /></div>
+        <div className="col-span-2 space-y-1"><Label>GST Number (optional)</Label><Input placeholder="29AABCN1234D1Z1" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+      </div>
+    </div>
+    <div>
+      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Select Services ({selSvcs.length} selected)</p>
+      <div className="space-y-2">
+        {allSvcs.map(svc => {
+          const sel = form.selectedIds.includes(svc.id)
+          const priceStr = svc.priceMin && svc.priceMax
+            ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+            : formatCurrency(svc.price)
+          return (
+            <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
+                  {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+                </div>
+                <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
+              </div>
+              <div className="text-right shrink-0 ml-4">
+                <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
+                {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+    {selSvcs.length > 0 && (
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing & Totals</p>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="space-y-1"><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={form.discountPct} onChange={e => setForm({ ...form, discountPct: Number(e.target.value) })} /></div>
+          <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+          {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount ({form.discountPct}%)</span><span>−{formatCurrency(discAmt)}</span></div>}
+          {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
+          <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
+        </div>
+      </div>
+    )}
+    <div className="space-y-1">
+      <Label>Additional Notes</Label>
+      <Textarea className="resize-none h-16" placeholder="Special terms, conditions, custom requirements..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+    </div>
+  </div>
+)
+
 export default function QuotationsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
+  const [servicesData, setServicesData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -65,15 +137,34 @@ export default function QuotationsPage() {
   const [form, setForm] = useState(blankForm())
 
   useEffect(() => {
-    async function loadQuotations() {
+    async function loadData() {
       setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const { data, error } = await supabase.from('quotations').select('*').order('created_at', { ascending: false })
-          if (error) {
-            toast({ title: 'Error loading quotations', description: error.message, variant: 'destructive' })
-          } else if (data) {
-            const mapped = data.map((q: any) => ({
+          const [qRes, sRes] = await Promise.all([
+            supabase.from('quotations').select('*').order('created_at', { ascending: false }),
+            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false })
+          ])
+          
+          if (qRes.error) throw qRes.error
+          if (sRes.error) throw sRes.error
+
+          if (sRes.data) {
+            setServicesData(sRes.data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              price: Number(s.quotation_price || s.price_max || s.base_price || 0),
+              priceMin: s.price_min ? Number(s.price_min) : undefined,
+              priceMax: s.price_max ? Number(s.price_max) : undefined,
+              timeline: s.timeline || 'TBD',
+              category: 'Service',
+              model: s.pricing || 'fixed',
+              deliverables: s.deliverables || []
+            })))
+          }
+
+          if (qRes.data) {
+            const mapped = qRes.data.map((q: any) => ({
               id: q.id,
               docId: q.doc_id,
               client: q.client,
@@ -104,11 +195,27 @@ export default function QuotationsPage() {
       }
       setLoading(false)
     }
-    loadQuotations()
+    loadData()
   }, [])
 
+  // Auto-fill founder details when creating new quotation
+  useEffect(() => {
+    if (showCreate && !editQuote) {
+      fetchFounderProfile().then(founder => {
+        if (founder) {
+          setForm(prev => ({
+            ...prev,
+            contact: founder.name,
+            email: founder.email,
+            phone: founder.phone
+          }))
+        }
+      })
+    }
+  }, [showCreate])
+
   // Derived
-  const selSvcs = SERVICES.filter(s => form.selectedIds.includes(s.id))
+  const selSvcs = servicesData.filter(s => form.selectedIds.includes(s.id))
   const subtotal = selSvcs.reduce((a, s) => a + s.price, 0)
   const discAmt  = Math.round(subtotal * form.discountPct / 100)
   const afterDisc = subtotal - discAmt
@@ -131,7 +238,7 @@ export default function QuotationsPage() {
   }
 
   async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string) {
-    const svcs = SERVICES.filter(s => svcIds.includes(s.id))
+    const svcs = servicesData.filter(s => svcIds.includes(s.id))
     const sub   = svcs.reduce((a, s) => a + s.price, 0)
     const dAmt  = Math.round(sub * disc / 100)
     const aft   = sub - dAmt
@@ -149,6 +256,9 @@ export default function QuotationsPage() {
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
+      docsSettings: {
+        gstRate: String(gst),
+      },
     }
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
@@ -307,70 +417,6 @@ export default function QuotationsPage() {
     setQuotes(quotes.map(q => q.id === id ? { ...q, status, history: updatedHistory } : q))
   }
 
-  const FormBody = () => (
-    <div className="space-y-6 py-2">
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Project Details</p>
-        <Input placeholder="Project / Quotation Title (e.g. Digital Growth Package Q3 2024)" value={form.projectTitle} onChange={e => setForm({ ...form, projectTitle: e.target.value })} />
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="e.g. Urban Edge Co." value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Business Type</Label>
-            <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Retail / Offline','Service Business','Healthcare','Education','Real Estate','Manufacturing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1"><Label>Industry</Label><Input placeholder="e.g. Fashion, Tech, Food" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} /></div>
-          <div className="col-span-2 space-y-1"><Label>GST Number (optional)</Label><Input placeholder="29AABCN1234D1Z1" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Select Services ({selSvcs.length} selected)</p>
-        <div className="space-y-2">
-          {SERVICES.map(svc => {
-            const sel = form.selectedIds.includes(svc.id)
-            return (
-              <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                    {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
-                  </div>
-                  <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
-                </div>
-                <span className="text-sm font-bold text-gold shrink-0 ml-4">{formatCurrency(svc.price)}{svc.model === 'monthly' ? '/mo' : ''}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      {selSvcs.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing & Totals</p>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="space-y-1"><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={form.discountPct} onChange={e => setForm({ ...form, discountPct: Number(e.target.value) })} /></div>
-            <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-            {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount ({form.discountPct}%)</span><span>−{formatCurrency(discAmt)}</span></div>}
-            {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
-            <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
-          </div>
-        </div>
-      )}
-      <div className="space-y-1">
-        <Label>Additional Notes</Label>
-        <Textarea className="resize-none h-16" placeholder="Special terms, conditions, custom requirements..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-      </div>
-    </div>
-  )
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -412,7 +458,7 @@ export default function QuotationsPage() {
                   <td className="py-3 px-4"><p className="font-medium">{q.client}</p><p className="text-xs text-muted-foreground">{q.contact}</p></td>
                   <td className="py-3 px-4">
                     <div className="flex gap-1 flex-wrap max-w-[220px]">
-                      {SERVICES.filter(s => q.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px] whitespace-nowrap">{s.name.split('(')[0].trim().slice(0,22)}</Badge>)}
+                      {servicesData.filter(s => q.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px] whitespace-nowrap">{s.name.split('(')[0].trim().slice(0,22)}</Badge>)}
                       {q.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{q.serviceIds.length-2}</Badge>}
                     </div>
                   </td>
@@ -459,7 +505,7 @@ export default function QuotationsPage() {
       <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); setForm(blankForm()) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Quotation</DialogTitle></DialogHeader>
-          <FormBody />
+          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} />
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generating...</> : 'Generate PDF'}</Button>
@@ -470,7 +516,7 @@ export default function QuotationsPage() {
       <Dialog open={!!editQuote} onOpenChange={v => { if (!v) { setEditQuote(null); setForm(blankForm()) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Quotation {editQuote?.docId}</DialogTitle></DialogHeader>
-          <FormBody />
+          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} />
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditQuote(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
@@ -541,17 +587,17 @@ export default function QuotationsPage() {
   )
 }
 
-function buildContentBody(q: Quote, svcs: typeof SERVICES) {
+function buildContentBody(q: Quote, svcs: any[]) {
   const lines = [
     '## Why Netgain?',
     'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
     '',
     '## Service Breakdown',
-    ...svcs.flatMap((s, i) => [
+    ...svcs.flatMap((s: any, i: number) => [
       `### ${i+1}. ${s.name}`,
       `**Category:** ${s.category}  |  **Timeline:** ${s.timeline}  |  **Model:** ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
       '',
-      ...(s.deliverables.map(d => `- ${d}`)),
+      ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
       '',
     ]),
     '## Payment Terms',

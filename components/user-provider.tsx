@@ -27,49 +27,56 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (email: string, authId: string) => {
     try {
-      const { data, error } = await supabase
+      // First try to get profile from profiles table (synced with auth.users role)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authId)
+        .maybeSingle()
+
+      if (!profileError && profileData) {
+        // Found in profiles table — now get team_members data to merge
+        const { data: teamData, error: teamError } = await supabase
+          .from('team_members')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (!teamError && teamData) {
+          // Merge: use role from profiles (source of truth), other fields from team_members
+          return {
+            ...teamData,
+            role: profileData.role
+          } as UserProfile
+        } else {
+          // Profile exists but no team_members row — this is the source of truth
+          return {
+            id: authId,
+            name: profileData.full_name || email.split('@')[0],
+            email: profileData.email,
+            phone: '',
+            role: profileData.role || 'Employee',
+            status: 'active',
+            joined: new Date().toISOString().slice(0, 10),
+            projects: 0
+          } as UserProfile
+        }
+      }
+
+      // Fallback: fetch from team_members if profiles doesn't have it
+      const { data: teamData, error: teamError } = await supabase
         .from('team_members')
         .select('*')
         .eq('email', email)
         .maybeSingle()
 
-      if (error) {
-        console.error('Error fetching profile:', error)
-        return null
+      if (!teamError && teamData) {
+        return teamData as UserProfile
       }
 
-      if (data) {
-        // If the ID in team_members doesn't match the auth UUID, update it to keep it synced
-        if (data.id !== authId) {
-          await supabase.from('team_members').update({ id: authId }).eq('email', email)
-          data.id = authId
-        }
-        return data as UserProfile
-      }
-
-      // If profile does not exist in team_members, auto-provision a Founder profile for the logged in auth user
-      const namePrefix = email.split('@')[0]
-      const defaultProfile = {
-        id: authId,
-        name: namePrefix.charAt(0).toUpperCase() + namePrefix.slice(1),
-        email: email,
-        phone: '',
-        role: 'Founder', // Default to Founder so they have full access to Netgain OS
-        status: 'active',
-        joined: new Date().toISOString().slice(0, 10),
-        projects: 0
-      }
-
-      const { error: insertErr } = await supabase
-        .from('team_members')
-        .insert([defaultProfile])
-
-      if (insertErr) {
-        console.error('Error auto-provisioning profile:', insertErr)
-        return null
-      }
-
-      return defaultProfile as UserProfile
+      // If neither profiles nor team_members exist, return null (do not auto-provision)
+      console.warn(`No profile found for ${email} — user must be created by founder via Supabase`)
+      return null
     } catch (err) {
       console.error('Exception in fetchProfile:', err)
       return null
@@ -78,17 +85,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     if (!isSupabaseConfigured()) {
-      // Demo Mode Default User
-      setUser({
-        id: '1',
-        name: 'Devon Shah',
-        email: 'devon@netgain.studio',
-        phone: '9876543210',
-        role: 'Founder',
-        status: 'active',
-        joined: '2021-01-01',
-        projects: 12
-      })
+      // Supabase is required — no demo/hardcoded users
+      console.error('Supabase is not configured. Please set up your environment variables.')
+      setUser(null)
       setLoading(false)
       return
     }

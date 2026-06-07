@@ -14,6 +14,7 @@ import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { fetchFounderProfile } from '@/lib/founder-helper'
 
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
@@ -34,6 +35,8 @@ function blank(): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> {
 
 export default function AgreementsPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([])
+  const [sourceDocs, setSourceDocs] = useState<any[]>([])
+  const [servicesMap, setServicesMap] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -51,11 +54,32 @@ export default function AgreementsPage() {
       setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const { data, error } = await supabase.from('agreements').select('*').order('created_at', { ascending: false })
-          if (error) {
-            toast({ title: 'Error loading agreements', description: error.message, variant: 'destructive' })
-          } else if (data) {
-            const mapped = data.map((a: any) => ({
+          const [aRes, qRes, iRes, svRes] = await Promise.all([
+            supabase.from('agreements').select('*').order('created_at', { ascending: false }),
+            supabase.from('quotations').select('*').order('created_at', { ascending: false }),
+            supabase.from('invoices').select('*').order('created', { ascending: false }),
+            supabase.from('services').select('id, name, deliverables')
+          ])
+
+          if (aRes.error) throw aRes.error
+
+          if (svRes.data) {
+            const sm: Record<string, any> = {}
+            svRes.data.forEach((s: any) => sm[s.id] = s)
+            setServicesMap(sm)
+          }
+
+          const docs: any[] = []
+          if (qRes.data) {
+            qRes.data.forEach((q: any) => docs.push({ type: 'Quotation', id: q.id, docId: q.doc_id, client: q.client, contact: q.contact, phone: q.phone, email: q.email, project: q.project_title, value: q.amount, serviceIds: q.service_ids || [] }))
+          }
+          if (iRes.data) {
+            iRes.data.forEach((i: any) => docs.push({ type: 'Invoice', id: i.id, docId: i.doc_id, client: i.client, contact: i.contact, phone: i.phone, email: i.email, project: `Project for ${i.client}`, value: i.amount, serviceIds: i.service_ids || [] }))
+          }
+          setSourceDocs(docs)
+
+          if (aRes.data) {
+            const mapped = aRes.data.map((a: any) => ({
               id: a.id,
               docId: a.doc_id,
               client: a.client,
@@ -85,6 +109,46 @@ export default function AgreementsPage() {
     loadAgreements()
   }, [])
 
+  // Auto-fill founder details when creating new agreement
+  useEffect(() => {
+    if (showCreate && !editItem && !form.contact) {
+      fetchFounderProfile().then(founder => {
+        if (founder) {
+          setForm(prev => ({
+            ...prev,
+            contact: prev.contact || founder.name,
+            phone: prev.phone || founder.phone
+          }))
+        }
+      })
+    }
+  }, [showCreate, editItem, form.contact])
+
+  function handleSourceDocSelect(docId: string) {
+    const doc = sourceDocs.find(d => d.docId === docId)
+    if (!doc) return
+    
+    // Build services list
+    let servicesStr = ''
+    if (doc.serviceIds && doc.serviceIds.length > 0) {
+      doc.serviceIds.forEach((id: string) => {
+        const svc = servicesMap[id]
+        if (svc) {
+          servicesStr += `${svc.name}\n`
+        }
+      })
+    }
+
+    setForm(prev => ({
+      ...prev,
+      client: doc.client || '',
+      contact: doc.contact || '',
+      phone: doc.phone || '',
+      value: doc.value ? Number(doc.value) : prev.value,
+      services: servicesStr.trim() || prev.services
+    }))
+  }
+
   function buildContent(f: typeof form, client: string) {
     return [
       `## Agreement Details`,
@@ -100,9 +164,7 @@ export default function AgreementsPage() {
       f.ip,
       '',
       '## Payment Schedule',
-      '- 50% advance payment to commence work',
-      '- Remaining balance due upon project completion / monthly for retainers',
-      '- All amounts are exclusive of applicable GST',
+      '__PAYMENT_SCHEDULE__',
       '',
       '## Confidentiality',
       'Both parties agree to maintain strict confidentiality of all proprietary information, business processes, and client data shared during this engagement.',
@@ -117,10 +179,10 @@ export default function AgreementsPage() {
       '',
       '**SIGNATURES**',
       '',
-      `| Netgain Studio | ${client} |`,
+      `| __COMPANY_NAME__ | ${client} |`,
       `|---|---|`,
       '| Signature: _________________ | Signature: _________________ |',
-      '| Name: Devon Shah | Name: _________________ |',
+      '| Name: __FOUNDER_NAME__ | Name: _________________ |',
       '| Date: _________________ | Date: _________________ |',
     ].join('\n')
   }
@@ -277,36 +339,7 @@ export default function AgreementsPage() {
     setAgreements(agreements.map(a => a.id === id ? { ...a, status, history: targetHistory } : a))
   }
 
-  const FormBody = () => (
-    <div className="space-y-5 py-2">
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>Client Company *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Agreement Type</Label>
-            <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{AGR_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
-          <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div className="col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Legal Clauses</p>
-        <div className="space-y-3">
-          <div className="space-y-1"><Label>IP Ownership</Label><Textarea className="h-14 resize-none" value={form.ip} onChange={e => setForm({ ...form, ip: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Cancellation Policy</Label><Textarea className="h-14 resize-none" value={form.cancellation} onChange={e => setForm({ ...form, cancellation: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
-        </div>
-      </div>
-    </div>
-  )
-
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -368,7 +401,52 @@ export default function AgreementsPage() {
       <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blank()) }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate Client Agreement</DialogTitle></DialogHeader>
-          <FormBody />
+          <div className="space-y-5 py-2">
+            {!editItem && sourceDocs.length > 0 && (
+              <div className="bg-muted/30 p-4 rounded-lg border border-border">
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Convert from Document</p>
+                <div className="space-y-1">
+                  <Label>Source Quotation or Invoice</Label>
+                  <Select onValueChange={handleSourceDocSelect}>
+                    <SelectTrigger><SelectValue placeholder="Select a document to auto-fill details..." /></SelectTrigger>
+                    <SelectContent>
+                      {sourceDocs.map(d => (
+                        <SelectItem key={d.docId} value={d.docId}>
+                          {d.docId} - {d.client} ({d.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Automatically fills client details, contract value, and services covered.</p>
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Client Company *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Agreement Type</Label>
+                  <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{AGR_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
+                <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Legal Clauses</p>
+              <div className="space-y-3">
+                <div className="space-y-1"><Label>IP Ownership</Label><Textarea className="h-14 resize-none" value={form.ip} onChange={e => setForm({ ...form, ip: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Cancellation Policy</Label><Textarea className="h-14 resize-none" value={form.cancellation} onChange={e => setForm({ ...form, cancellation: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
+              </div>
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blank()) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : 'Generate Agreement PDF'}</Button>
@@ -379,7 +457,33 @@ export default function AgreementsPage() {
       <Dialog open={!!editItem} onOpenChange={v => { if (!v) { setEditItem(null); setForm(blank()) } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Agreement — {editItem?.docId}</DialogTitle></DialogHeader>
-          <FormBody />
+          <div className="space-y-5 py-2">
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Client Company *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Agreement Type</Label>
+                  <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{AGR_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
+                <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Legal Clauses</p>
+              <div className="space-y-3">
+                <div className="space-y-1"><Label>IP Ownership</Label><Textarea className="h-14 resize-none" value={form.ip} onChange={e => setForm({ ...form, ip: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Cancellation Policy</Label><Textarea className="h-14 resize-none" value={form.cancellation} onChange={e => setForm({ ...form, cancellation: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
+              </div>
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditItem(null); setForm(blank()) }}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit}>Save Changes</Button>

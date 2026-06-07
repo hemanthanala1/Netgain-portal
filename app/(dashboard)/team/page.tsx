@@ -67,6 +67,8 @@ export default function TeamPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteMember, setDeleteMember] = useState<{id: string, name: string} | null>(null)
+  const [editRoleId, setEditRoleId] = useState<string | null>(null)
+  const [deleteRole, setDeleteRole] = useState<Role | null>(null)
   const { toast } = useToast()
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'Employee', password: '' })
 
@@ -87,12 +89,51 @@ export default function TeamPage() {
             })))
           }
 
+          // Fetch from profiles table (auth-linked users)
+          const { data: profilesData, error: profilesErr } = await supabase.from('profiles').select('*').order('updated_at', { ascending: false })
+          
+          // Fetch from team_members table (backward compatibility)
           const { data: dbTeam, error: teamErr } = await supabase.from('team_members').select('*').order('created_at', { ascending: true })
+          
+          if (profilesErr) {
+            console.error('Error loading profiles:', profilesErr)
+          }
           if (teamErr) {
             toast({ title: 'Error loading team members', description: teamErr.message, variant: 'destructive' })
-          } else if (dbTeam) {
-            setTeam(dbTeam)
           }
+
+          // Merge profiles and team_members, preferring profiles (auth-linked)
+          const mergedTeam: any[] = []
+          const seenIds = new Set()
+
+          // Add profiles first (auth-linked users)
+          if (profilesData) {
+            profilesData.forEach((profile: any) => {
+              seenIds.add(profile.id)
+              mergedTeam.push({
+                id: profile.id,
+                name: profile.full_name || profile.email?.split('@')[0] || 'Unknown',
+                email: profile.email,
+                phone: '',
+                role: profile.role || 'Employee',
+                status: 'active',
+                joined: profile.updated_at?.split('T')[0] || new Date().toISOString().slice(0, 10),
+                projects: 0,
+                source: 'profiles'
+              })
+            })
+          }
+
+          // Add team_members not already in profiles
+          if (dbTeam) {
+            dbTeam.forEach((member: any) => {
+              if (!seenIds.has(member.id)) {
+                mergedTeam.push(member)
+              }
+            })
+          }
+
+          setTeam(mergedTeam)
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
@@ -203,6 +244,29 @@ export default function TeamPage() {
     setSubmitting(false)
   }
 
+  const handleDeleteRole = async () => {
+    if (!deleteRole) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('custom_roles').delete().eq('id', deleteRole.id)
+        if (error) {
+          toast({ title: 'Error deleting role', description: error.message, variant: 'destructive' })
+          setSubmitting(false)
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        setSubmitting(false)
+        return
+      }
+    }
+    setRoles(roles.filter(r => r.id !== deleteRole.id))
+    toast({ title: 'Role Deleted', description: `${deleteRole.name} has been removed.` })
+    setDeleteRole(null)
+    setSubmitting(false)
+  }
+
   const openEdit = (member: any) => {
     setEditId(member.id)
     setForm({ name: member.name, email: member.email, phone: member.phone || '', role: member.role, password: '' })
@@ -287,6 +351,12 @@ export default function TeamPage() {
                       <h3 className="font-semibold">{r.name}</h3>
                       {r.isSystem && <Badge variant="secondary" className="text-[10px] mt-1">System Role</Badge>}
                     </div>
+                    {!r.isSystem && (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditRoleId(r.id); setRoleForm({ name: r.name, permissions: r.permissions }); setShowRoleCreate(true); }}><Edit className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteRole(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Access Levels</p>
@@ -325,9 +395,9 @@ export default function TeamPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showRoleCreate} onOpenChange={setShowRoleCreate}>
+      <Dialog open={showRoleCreate} onOpenChange={v => { setShowRoleCreate(v); if (!v) { setEditRoleId(null); setRoleForm({ name: '', permissions: [] }) } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Create Custom Role</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editRoleId ? 'Edit Custom Role' : 'Create Custom Role'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Role Name *</Label><Input placeholder="e.g. Content Writer" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} /></div>
             <div className="space-y-2">
@@ -343,36 +413,58 @@ export default function TeamPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRoleCreate(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowRoleCreate(false); setEditRoleId(null); setRoleForm({ name: '', permissions: [] }) }} disabled={submitting}>Cancel</Button>
             <Button variant="gold" disabled={submitting} className="gap-2" onClick={async () => {
               if(!roleForm.name) return;
               setSubmitting(true);
-              const newRoleId = `role-${Date.now()}`
-              const newRole = { id: newRoleId, name: roleForm.name, is_system: false, permissions: roleForm.permissions }
-              if (isSupabaseConfigured()) {
-                try {
-                  const { error } = await supabase.from('custom_roles').insert([newRole])
-                  if (error) {
-                    toast({ title: 'Error creating role', description: error.message, variant: 'destructive' })
+              
+              if (editRoleId) {
+                if (isSupabaseConfigured()) {
+                  try {
+                    const { error } = await supabase.from('custom_roles').update({ name: roleForm.name, permissions: roleForm.permissions }).eq('id', editRoleId)
+                    if (error) {
+                      toast({ title: 'Error updating role', description: error.message, variant: 'destructive' })
+                      setSubmitting(false);
+                      return
+                    }
+                  } catch (err: any) {
+                    toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
                     setSubmitting(false);
                     return
                   }
-                } catch (err: any) {
-                  toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-                  setSubmitting(false);
-                  return
                 }
+                setRoles(roles.map(r => r.id === editRoleId ? { ...r, name: roleForm.name, permissions: roleForm.permissions } : r));
+                toast({title: 'Role Updated'})
+              } else {
+                const newRoleId = `role-${Date.now()}`
+                const newRole = { id: newRoleId, name: roleForm.name, is_system: false, permissions: roleForm.permissions }
+                if (isSupabaseConfigured()) {
+                  try {
+                    const { error } = await supabase.from('custom_roles').insert([newRole])
+                    if (error) {
+                      toast({ title: 'Error creating role', description: error.message, variant: 'destructive' })
+                      setSubmitting(false);
+                      return
+                    }
+                  } catch (err: any) {
+                    toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+                    setSubmitting(false);
+                    return
+                  }
+                }
+                setRoles([...roles, { id: newRoleId, name: roleForm.name, permissions: roleForm.permissions, isSystem: false }]);
+                toast({title: 'Role Created'})
               }
-              setRoles([...roles, { id: newRoleId, name: roleForm.name, permissions: roleForm.permissions, isSystem: false }]);
+              
               setShowRoleCreate(false);
+              setEditRoleId(null);
               setRoleForm({name: '', permissions: []});
-              toast({title: 'Role Created'})
               setSubmitting(false);
             }}>
               {submitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Creating...</>
+                <><Loader2 className="h-4 w-4 animate-spin" />{editRoleId ? 'Saving...' : 'Creating...'}</>
               ) : (
-                'Create Role'
+                editRoleId ? 'Save Changes' : 'Create Role'
               )}
             </Button>
           </DialogFooter>
@@ -391,6 +483,20 @@ export default function TeamPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Remove User</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!deleteRole} onOpenChange={(open) => !open && setDeleteRole(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Role?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the <strong>{deleteRole?.name}</strong> role? This action cannot be undone. Users with this role may lose access to resources.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDeleteRole}>Delete Role</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

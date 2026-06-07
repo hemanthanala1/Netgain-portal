@@ -66,23 +66,43 @@ export default function ProfilePage() {
     setSaving(true)
     try {
       if (isSupabaseConfigured() && user) {
-        const { error } = await supabase
+        // 1) Update auth.users
+        const { error: authError } = await supabase.auth.updateUser({
+          data: {
+            full_name: profile.name,
+            phone: profile.phone,
+            designation: profile.designation
+          }
+        })
+
+        if (authError) {
+          toast({ title: 'Error updating auth profile', description: authError.message, variant: 'destructive' })
+          return
+        }
+
+        // 2) Update profiles table (synced with auth)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: profile.name,
+            email: profile.email,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id)
+
+        if (profileError) {
+          toast({ title: 'Error updating profile', description: profileError.message, variant: 'destructive' })
+          return
+        }
+
+        // 3) Update team_members for backward compatibility
+        await supabase
           .from('team_members')
           .update({
             name: profile.name,
             phone: profile.phone,
           })
           .eq('id', user.id)
-
-        if (error) {
-          toast({ title: 'Error updating profile', description: error.message, variant: 'destructive' })
-          return
-        }
-
-        // Also update Auth user metadata
-        await supabase.auth.updateUser({
-          data: { name: profile.name }
-        })
 
         await refreshUser()
       } else {

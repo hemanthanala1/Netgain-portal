@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,19 +14,7 @@ import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-
-const SERVICES = [
-  { id: 's1',  name: 'E-Commerce Website',           price: 39999, category: 'Web Development',  model: 'fixed',   deliverables: ['Custom Design', 'Full Development', 'Mobile Responsive', 'Payment Gateway', 'Admin Dashboard'] },
-  { id: 's2',  name: 'Business Portfolio Website',   price: 14999, category: 'Web Development',  model: 'fixed',   deliverables: ['5 Core Pages', 'Contact Form', 'SEO-Ready', 'Mobile Responsive'] },
-  { id: 's3',  name: 'Social Media Management',      price: 8999,  category: 'Digital Marketing',model: 'monthly', deliverables: ['30 Posts/month', 'Story Designs', 'Monthly Report'] },
-  { id: 's4',  name: 'Meta Ads Management',          price: 12999, category: 'Paid Advertising', model: 'monthly', deliverables: ['Campaign Setup', 'Ad Creatives (4)', 'Weekly Reports'] },
-  { id: 's5',  name: 'Google Ads',                   price: 10999, category: 'Paid Advertising', model: 'monthly', deliverables: ['Search & Display', 'Keyword Bidding', 'Monthly Report'] },
-  { id: 's6',  name: 'Local SEO + Google Maps',      price: 7999,  category: 'SEO',              model: 'monthly', deliverables: ['Keyword Research', 'On-Page SEO', 'GMB Optimization'] },
-  { id: 's7',  name: 'WhatsApp Business Automation', price: 19999, category: 'Automation',       model: 'fixed',   deliverables: ['WABA Integration', 'Bot Flows (5)', 'Lead Capture'] },
-  { id: 's8',  name: 'Brand Identity Design',        price: 12999, category: 'Brand Design',     model: 'fixed',   deliverables: ['Logo Design (3 concepts)', 'Brand Guidelines', 'Social Media Kit'] },
-  { id: 's9',  name: 'Content Creation Package',     price: 6999,  category: 'Content',          model: 'monthly', deliverables: ['8 Reels/month', 'Scripting', 'Thumbnails'] },
-  { id: 's10', name: 'CRM Setup & Automation',       price: 24999, category: 'CRM & Analytics',  model: 'fixed',   deliverables: ['CRM Setup', 'Pipeline Config', 'Team Training'] },
-]
+import { fetchFounderProfile } from '@/lib/founder-helper'
 
 const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue' }
@@ -46,6 +34,7 @@ function blankForm() {
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [servicesData, setServicesData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -61,15 +50,34 @@ export default function InvoicesPage() {
   const [form, setForm] = useState(blankForm())
 
   useEffect(() => {
-    async function loadInvoices() {
+    async function loadData() {
       setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const { data, error } = await supabase.from('invoices').select('*').order('created', { ascending: false })
-          if (error) {
-            toast({ title: 'Error loading invoices', description: error.message, variant: 'destructive' })
-          } else if (data) {
-            const mapped = data.map((i: any) => ({
+          const [invRes, sRes] = await Promise.all([
+            supabase.from('invoices').select('*').order('created', { ascending: false }),
+            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false })
+          ])
+
+          if (invRes.error) throw invRes.error
+          if (sRes.error) throw sRes.error
+
+          if (sRes.data) {
+            setServicesData(sRes.data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              price: Number(s.quotation_price || s.price_max || s.base_price || 0),
+              priceMin: s.price_min ? Number(s.price_min) : undefined,
+              priceMax: s.price_max ? Number(s.price_max) : undefined,
+              timeline: s.timeline || 'TBD',
+              category: 'Service',
+              model: s.pricing || 'fixed',
+              deliverables: s.deliverables || []
+            })))
+          }
+
+          if (invRes.data) {
+            const mapped = invRes.data.map((i: any) => ({
               id: i.id,
               docId: i.doc_id,
               client: i.client,
@@ -99,10 +107,26 @@ export default function InvoicesPage() {
       }
       setLoading(false)
     }
-    loadInvoices()
+    loadData()
   }, [])
 
-  const selSvcs = SERVICES.filter(s => form.selectedIds.includes(s.id))
+  // Auto-fill founder details when creating new invoice
+  useEffect(() => {
+    if (showCreate && !editInvoice) {
+      fetchFounderProfile().then(founder => {
+        if (founder) {
+          setForm(prev => ({
+            ...prev,
+            contact: founder.name,
+            email: founder.email,
+            phone: founder.phone
+          }))
+        }
+      })
+    }
+  }, [showCreate])
+
+  const selSvcs = servicesData.filter(s => form.selectedIds.includes(s.id))
   const subtotal = selSvcs.reduce((a, s) => a + s.price, 0)
   const discAmt = form.discountType === 'percentage' 
     ? Math.round(subtotal * form.discountValue / 100) 
@@ -127,7 +151,7 @@ export default function InvoicesPage() {
   }
 
   async function buildAndDownloadPdf(inv: Invoice, svcIds: string[], discType: 'percentage'|'fixed', discVal: number, gst: number, docId: string) {
-    const svcs = SERVICES.filter(s => svcIds.includes(s.id))
+    const svcs = servicesData.filter(s => svcIds.includes(s.id))
     const sub = svcs.reduce((a, s) => a + s.price, 0)
     const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
     const aft = Math.max(0, sub - dAmt)
@@ -150,19 +174,14 @@ export default function InvoicesPage() {
         `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
         '',
         '## Services Rendered',
-        ...svcs.flatMap((s, i) => [
+        ...svcs.flatMap((s: any, i: number) => [
           `### ${i + 1}. ${s.name}`,
           `Category: ${s.category}  |  ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
-          ...s.deliverables.map(d => `- ${d}`),
+          ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
           '',
         ]),
         '## Bank Details',
-        '- **Account Name:** Netgain Studio',
-        '- **Account No:** 92607430900 (Current)',
-        '- **Bank:** Kotak Mahindra Bank, Madhapur Branch',
-        '- **IFSC:** KKBK0007122',
-        '- **UPI:** 9347102347@kotak',
-        '',
+        '__BANK_DETAILS__',
         inv.notes ? `## Notes\n${inv.notes}` : '',
         '',
         '## Payment Policy',
@@ -174,6 +193,9 @@ export default function InvoicesPage() {
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
+      docsSettings: {
+        gstRate: String(gst),
+      },
     }
 
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -362,70 +384,7 @@ export default function InvoicesPage() {
     setInvoices(invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i))
   }
 
-  const FormBody = () => (
-    <div className="space-y-6 py-2">
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Business Type</Label>
-            <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
-        <div className="space-y-2">
-          {SERVICES.map(svc => {
-            const sel = form.selectedIds.includes(svc.id)
-            return (
-              <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                    {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
-                  </div>
-                  <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
-                </div>
-                <span className="text-sm font-bold text-gold ml-4 shrink-0">{formatCurrency(svc.price)}{svc.model === 'monthly' ? '/mo' : ''}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      {selSvcs.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="col-span-2 sm:col-span-1 space-y-1">
-              <Label>Discount Type</Label>
-              <div className="flex bg-muted/30 p-1 rounded-md border border-border">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
-            <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-            {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
-            {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
-            <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
-          </div>
-        </div>
-      )}
-      <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-    </div>
-  )
+
 
   const totals = { total: invoices.reduce((a, i) => a + i.amount, 0), paid: invoices.filter(i => i.status === 'paid').reduce((a, i) => a + i.amount, 0), pending: invoices.filter(i => i.status !== 'paid').reduce((a, i) => a + i.amount, 0), overdue: invoices.filter(i => i.status === 'overdue').reduce((a, i) => a + i.amount, 0) }
 
@@ -460,7 +419,7 @@ export default function InvoicesPage() {
                 <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-4"><span className="font-mono text-xs text-gold">{inv.docId}</span></td>
                   <td className="py-3 px-4"><p className="font-medium">{inv.client}</p><p className="text-xs text-muted-foreground">{inv.contact}</p></td>
-                  <td className="py-3 px-4"><div className="flex gap-1 flex-wrap max-w-[180px]">{SERVICES.filter(s => inv.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px]">{s.name.slice(0,18)}</Badge>)}{inv.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{inv.serviceIds.length-2}</Badge>}</div></td>
+                  <td className="py-3 px-4"><div className="flex gap-1 flex-wrap max-w-[180px]">{servicesData.filter(s => inv.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px]">{s.name.slice(0,18)}</Badge>)}{inv.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{inv.serviceIds.length-2}</Badge>}</div></td>
                   <td className="py-3 px-4 font-semibold text-gold whitespace-nowrap">{formatCurrency(inv.amount)}</td>
                   <td className="py-3 px-4">
                     <Select value={inv.status} onValueChange={v => updateStatus(inv.id, v)}>
@@ -490,7 +449,74 @@ export default function InvoicesPage() {
       <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blankForm()) }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Invoice</DialogTitle></DialogHeader>
-          <FormBody />
+          <div className="space-y-6 py-2">
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Business Type</Label>
+                  <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
+              <div className="space-y-2">
+                {servicesData.map(svc => {
+                  const sel = form.selectedIds.includes(svc.id)
+                  const priceStr = svc.priceMin && svc.priceMax
+                    ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                    : formatCurrency(svc.price)
+                  return (
+                    <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
+                          {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+                        </div>
+                        <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
+                      </div>
+                      <div className="text-right shrink-0 ml-4">
+                        <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
+                        {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {selSvcs.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-2 sm:col-span-1 space-y-1">
+                    <Label>Discount Type</Label>
+                    <div className="flex bg-muted/30 p-1 rounded-md border border-border">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                  {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
+                  {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
+                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
+                </div>
+              </div>
+            )}
+            <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating || selSvcs.length === 0}>
@@ -503,7 +529,74 @@ export default function InvoicesPage() {
       <Dialog open={!!editInvoice} onOpenChange={v => { if (!v) { setEditInvoice(null); setForm(blankForm()) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Invoice — {editInvoice?.docId}</DialogTitle></DialogHeader>
-          <FormBody />
+          <div className="space-y-6 py-2">
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Business Type</Label>
+                  <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
+              <div className="space-y-2">
+                {servicesData.map(svc => {
+                  const sel = form.selectedIds.includes(svc.id)
+                  const priceStr = svc.priceMin && svc.priceMax
+                    ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                    : formatCurrency(svc.price)
+                  return (
+                    <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
+                          {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+                        </div>
+                        <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
+                      </div>
+                      <div className="text-right shrink-0 ml-4">
+                        <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
+                        {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {selSvcs.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-2 sm:col-span-1 space-y-1">
+                    <Label>Discount Type</Label>
+                    <div className="flex bg-muted/30 p-1 rounded-md border border-border">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                  {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
+                  {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
+                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
+                </div>
+              </div>
+            )}
+            <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditInvoice(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">

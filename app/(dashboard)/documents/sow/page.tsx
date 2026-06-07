@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { fetchFounderProfile } from '@/lib/founder-helper'
 
 type SOW = { id: string; docId: string; client: string; contact: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[] }
 
@@ -22,6 +23,8 @@ const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
 
 export default function SOWPage() {
   const [sows, setSows] = useState<SOW[]>([])
+  const [sourceDocs, setSourceDocs] = useState<any[]>([])
+  const [servicesMap, setServicesMap] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -49,11 +52,32 @@ export default function SOWPage() {
       setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const { data, error } = await supabase.from('sows').select('*').order('created_at', { ascending: false })
-          if (error) {
-            toast({ title: 'Error loading SOWs', description: error.message, variant: 'destructive' })
-          } else if (data) {
-            const mapped = data.map((s: any) => ({
+          const [sRes, qRes, iRes, svRes] = await Promise.all([
+            supabase.from('sows').select('*').order('created_at', { ascending: false }),
+            supabase.from('quotations').select('*').order('created_at', { ascending: false }),
+            supabase.from('invoices').select('*').order('created', { ascending: false }),
+            supabase.from('services').select('id, name, deliverables')
+          ])
+
+          if (sRes.error) throw sRes.error
+
+          if (svRes.data) {
+            const sm: Record<string, any> = {}
+            svRes.data.forEach((s: any) => sm[s.id] = s)
+            setServicesMap(sm)
+          }
+
+          const docs: any[] = []
+          if (qRes.data) {
+            qRes.data.forEach((q: any) => docs.push({ type: 'Quotation', id: q.id, docId: q.doc_id, client: q.client, contact: q.contact, phone: q.phone, email: q.email, project: q.project_title, value: q.amount, serviceIds: q.service_ids || [] }))
+          }
+          if (iRes.data) {
+            iRes.data.forEach((i: any) => docs.push({ type: 'Invoice', id: i.id, docId: i.doc_id, client: i.client, contact: i.contact, phone: i.phone, email: i.email, project: `Project for ${i.client}`, value: i.amount, serviceIds: i.service_ids || [] }))
+          }
+          setSourceDocs(docs)
+
+          if (sRes.data) {
+            const mapped = sRes.data.map((s: any) => ({
               id: s.id,
               docId: s.doc_id,
               client: s.client,
@@ -86,6 +110,51 @@ export default function SOWPage() {
     loadSOWs()
   }, [])
 
+  // Auto-fill founder details when creating new SOW
+  useEffect(() => {
+    if (showCreate && !editItem && !form.contact) {
+      fetchFounderProfile().then(founder => {
+        if (founder) {
+          setForm(prev => ({
+            ...prev,
+            contact: prev.contact || founder.name,
+            phone: prev.phone || founder.phone
+          }))
+        }
+      })
+    }
+  }, [showCreate, editItem, form.contact])
+
+  function handleSourceDocSelect(docId: string) {
+    const doc = sourceDocs.find(d => d.docId === docId)
+    if (!doc) return
+    
+    // Build deliverables list from services
+    let deliverablesStr = ''
+    if (doc.serviceIds && doc.serviceIds.length > 0) {
+      doc.serviceIds.forEach((id: string) => {
+        const svc = servicesMap[id]
+        if (svc) {
+          deliverablesStr += `**${svc.name}**\n`
+          if (svc.deliverables && Array.isArray(svc.deliverables)) {
+            deliverablesStr += svc.deliverables.map((d: string) => `- ${d}`).join('\n') + '\n\n'
+          }
+        }
+      })
+    }
+
+    setForm(prev => ({
+      ...prev,
+      client: doc.client || '',
+      contact: doc.contact || '',
+      phone: doc.phone || '',
+      email: doc.email || '',
+      project: doc.project || '',
+      value: doc.value ? String(doc.value) : '',
+      deliverables: deliverablesStr.trim() || prev.deliverables
+    }))
+  }
+
   function buildPayload(f: typeof form, clientName: string, project: string, docId: string) {
     const content = [
       '## Project Overview',
@@ -115,7 +184,7 @@ export default function SOWPage() {
       `This agreement shall be governed by the laws of **${f.jurisdiction}**.`,
       '',
       '---',
-      `| Netgain Studio | ${clientName} |`,
+      `| __COMPANY_NAME__ | ${clientName} |`,
       `|---|---|`,
       '| Signature: _________________ | Signature: _________________ |',
       '| Date: _________________ | Date: _________________ |',
@@ -334,6 +403,25 @@ export default function SOWPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate Scope of Work</DialogTitle></DialogHeader>
           <div className="space-y-5 py-2">
+            {!editItem && sourceDocs.length > 0 && (
+              <div className="bg-muted/30 p-4 rounded-lg border border-border">
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Convert from Document</p>
+                <div className="space-y-1">
+                  <Label>Source Quotation or Invoice</Label>
+                  <Select onValueChange={handleSourceDocSelect}>
+                    <SelectTrigger><SelectValue placeholder="Select a document to auto-fill details..." /></SelectTrigger>
+                    <SelectContent>
+                      {sourceDocs.map(d => (
+                        <SelectItem key={d.docId} value={d.docId}>
+                          {d.docId} - {d.client} ({d.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Automatically fills client details, project, contract value, and service deliverables.</p>
+                </div>
+              </div>
+            )}
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client & Project</p>
               <div className="grid grid-cols-2 gap-3">

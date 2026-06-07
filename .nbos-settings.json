@@ -1,25 +1,28 @@
 {
   "company": {
     "name": "Netgain Studio",
-    "address": "Hyderabad, Telangana, India",
+    "address": "Benz Circle, Vijayawada, India",
     "gst": "",
     "pan": "",
     "email": "mail.netgain@gmail.com",
-    "website": "netgain.studio",
-    "phone": "9347102347 | 9392469669"
+    "website": "netgainstudio.com",
+    "phone": "9347102347 | 9392469669",
+    "logo": "",
+    "stamp": "",
+    "signature": ""
   },
   "founder": {
-    "name": "Devon Shah",
+    "name": "Hemanth Anala",
     "designation": "Founder & CEO",
-    "email": "devon@netgain.studio",
-    "phone": "9876543210"
+    "email": "hemanthanala@gmail.com",
+    "phone": "9347102347"
   },
   "bank": {
     "accountName": "Netgain Studio",
-    "accountNumber": "",
-    "ifsc": "",
+    "accountNumber": "123456789",
+    "ifsc": "HDFC001233475",
     "bank": "HDFC Bank",
-    "upiId": ""
+    "upiId": "9347102347@ybl"
   },
   "comm": {
     "smtpHost": "",
@@ -35,5 +38,14 @@
     "geminiKey": "",
     "defaultProvider": "claude"
   },
-  "updatedAt": "2026-06-06T11:04:40.312Z"
+  "docs": {
+    "tagline": "Your Growth Partner, Powered by AI",
+    "quotationValidity": "14",
+    "paymentTermsOneTime": "50% advance to begin, 50% balance on final delivery",
+    "paymentTermsMonthly": "Full monthly fee payable in advance each cycle",
+    "gstRate": "18",
+    "extraTerms": "",
+    "paymentSchedule": "- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST"
+  },
+  "updatedAt": "2026-06-07T08:14:18.920Z"
 }

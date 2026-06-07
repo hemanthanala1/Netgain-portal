@@ -8,8 +8,69 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react'
+import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase'
+
+// Component definitions moved outside to prevent re-creation on each render
+const FieldRow = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
+  <div className="grid grid-cols-3 items-start gap-4">
+    <div className="mt-2">
+      <Label className="text-sm">{label}</Label>
+      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
+    </div>
+    <div className="col-span-2">{children}</div>
+  </div>
+)
+
+const SecretField = ({ id, value, onChange, placeholder, showKey, setShowKey }: { id: string; value: string; onChange: (v: string) => void; placeholder?: string; showKey: Record<string, boolean>; setShowKey: (updater: (k: Record<string, boolean>) => Record<string, boolean>) => void }) => (
+  <div className="relative">
+    <Input
+      type={showKey[id] ? 'text' : 'password'}
+      placeholder={placeholder}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="pr-10"
+    />
+    <button
+      type="button"
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      onClick={() => setShowKey(k => ({ ...k, [id]: !k[id] }))}
+    >
+      {showKey[id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+    </button>
+  </div>
+)
+
+const ImageUploader = ({ label, field, company, setCompany, toast }: { label: string; field: 'logo' | 'stamp' | 'signature'; company: any; setCompany: (updater: (c: any) => any) => void; toast: any }) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = reader.result as string
+      setCompany(c => ({ ...c, [field]: base64 }))
+      toast({ title: 'Image Uploaded', description: `${field} uploaded and updated locally.` })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <FieldRow label={label}>
+      <div className="flex items-center gap-4">
+        {company[field] && <img src={company[field]} alt={label} className="h-12 w-auto object-contain bg-white/5 p-1 rounded border border-border" />}
+        <Label className="cursor-pointer">
+          <Input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+          <div className="flex h-9 items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground gap-1.5 cursor-pointer">
+            <Upload className="h-3.5 w-3.5" />
+            {company[field] ? 'Change ' + label : 'Upload ' + label}
+          </div>
+        </Label>
+        {company[field] && <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-400 h-9" onClick={() => setCompany(c => ({ ...c, [field]: '' }))}>Remove</Button>}
+      </div>
+    </FieldRow>
+  )
+}
 
 export default function SettingsPage() {
   const { toast } = useToast()
@@ -55,28 +116,62 @@ export default function SettingsPage() {
     claudeKey: '', openaiKey: '', geminiKey: '', defaultProvider: 'claude',
   })
 
+  const [docs, setDocs] = useState({
+    tagline: 'Your Growth Partner, Powered by AI',
+    quotationValidity: '14',
+    paymentTermsOneTime: '50% advance to begin, 50% balance on final delivery',
+    paymentTermsMonthly: 'Full monthly fee payable in advance each cycle',
+    gstRate: '18',
+    extraTerms: '',
+    paymentSchedule: '- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST',
+  })
+
   // Load saved settings on mount
   useEffect(() => {
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then(data => {
-        if (data.company)  setCompany(c => ({ ...c, ...data.company }))
-        if (data.founder)  setFounder(f => ({ ...f, ...data.founder }))
-        if (data.bank)     setBank(b => ({ ...b, ...data.bank }))
-        if (data.comm)     setComm(c => ({ ...c, ...data.comm }))
-        if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    loadSettings()
   }, [])
+
+  const loadSettings = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const res = await fetch('/api/settings', { headers })
+      const data = await res.json()
+
+      if (data.company)  setCompany(c => ({ ...c, ...data.company }))
+      if (data.founder)  setFounder(f => ({ ...f, ...data.founder }))
+      if (data.bank)     setBank(b => ({ ...b, ...data.bank }))
+      if (data.comm)     setComm(c => ({ ...c, ...data.comm }))
+      if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
+      if (data.docs)     setDocs(d => ({ ...d, ...data.docs }))
+    } catch (err) {
+      console.error('Error loading settings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
       const res = await fetch('/api/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company, founder, bank, comm, ai }),
+        headers,
+        body: JSON.stringify({ company, founder, bank, comm, ai, docs }),
       })
       if (!res.ok) throw new Error('Save failed')
       setSaved(true)
@@ -88,63 +183,6 @@ export default function SettingsPage() {
       setSaving(false)
     }
   }
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'logo' | 'stamp' | 'signature') => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result as string
-      setCompany(c => ({ ...c, [key]: base64 }))
-      toast({ title: 'Image Uploaded', description: `${key} uploaded and updated locally.` })
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const FieldRow = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
-    <div className="grid grid-cols-3 items-start gap-4">
-      <div className="mt-2">
-        <Label className="text-sm">{label}</Label>
-        {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
-      </div>
-      <div className="col-span-2">{children}</div>
-    </div>
-  )
-
-  const ImageUploader = ({ label, field }: { label: string, field: 'logo' | 'stamp' | 'signature' }) => (
-    <FieldRow label={label}>
-      <div className="flex items-center gap-4">
-        {company[field] && <img src={company[field]} alt={label} className="h-12 w-auto object-contain bg-white/5 p-1 rounded border border-border" />}
-        <Label className="cursor-pointer">
-          <Input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, field)} />
-          <div className="flex h-9 items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground gap-1.5 cursor-pointer">
-            <Upload className="h-3.5 w-3.5" />
-            {company[field] ? 'Change ' + label : 'Upload ' + label}
-          </div>
-        </Label>
-        {company[field] && <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-400 h-9" onClick={() => setCompany(c => ({ ...c, [field]: '' }))}>Remove</Button>}
-      </div>
-    </FieldRow>
-  )
-
-  const SecretField = ({ id, value, onChange, placeholder }: { id: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
-    <div className="relative">
-      <Input
-        type={showKey[id] ? 'text' : 'password'}
-        placeholder={placeholder}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="pr-10"
-      />
-      <button
-        type="button"
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-        onClick={() => setShowKey(k => ({ ...k, [id]: !k[id] }))}
-      >
-        {showKey[id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
-  )
 
   if (loading) {
     return (
@@ -189,6 +227,7 @@ export default function SettingsPage() {
           <TabsTrigger value="company" className="gap-1.5"><Building2 className="h-3.5 w-3.5" />Company</TabsTrigger>
           <TabsTrigger value="founder" className="gap-1.5"><User className="h-3.5 w-3.5" />Founder</TabsTrigger>
           <TabsTrigger value="bank" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Banking</TabsTrigger>
+          <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Documents</TabsTrigger>
           <TabsTrigger value="comms" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" />Communications</TabsTrigger>
           <TabsTrigger value="ai" className="gap-1.5"><Cpu className="h-3.5 w-3.5" />AI Engine</TabsTrigger>
         </TabsList>
@@ -223,9 +262,9 @@ export default function SettingsPage() {
                 <Textarea className="resize-none h-16" value={company.address} onChange={e => setCompany({ ...company, address: e.target.value })} placeholder="Street, City, State — PIN" />
               </FieldRow>
               <Separator />
-              <ImageUploader label="Company Logo" field="logo" />
-              <ImageUploader label="Company Stamp" field="stamp" />
-              <ImageUploader label="Authorized Signature" field="signature" />
+              <ImageUploader label="Company Logo" field="logo" company={company} setCompany={setCompany} toast={toast} />
+              <ImageUploader label="Company Stamp" field="stamp" company={company} setCompany={setCompany} toast={toast} />
+              <ImageUploader label="Authorized Signature" field="signature" company={company} setCompany={setCompany} toast={toast} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -261,6 +300,46 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* ── DOCUMENTS ──────────────────────────────── */}
+        <TabsContent value="docs">
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-gold" />Document Policies & Terms</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">Configure standard clauses, terms, and conditions that will automatically appear at the bottom of generated PDFs (Quotations, Agreements, Invoices).</p>
+              <FieldRow label="Brand Tagline" hint="Appears under company name in Header & Footer">
+                <Input value={docs.tagline} onChange={e => setDocs({ ...docs, tagline: e.target.value })} placeholder="Your Growth Partner, Powered by AI" />
+              </FieldRow>
+              <FieldRow label="Quotation Validity" hint="In Days">
+                <div className="flex items-center gap-2">
+                  <Input className="w-24" type="number" value={docs.quotationValidity} onChange={e => setDocs({ ...docs, quotationValidity: e.target.value })} placeholder="14" />
+                  <span className="text-sm text-muted-foreground">Days</span>
+                </div>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="One-Time Payment Terms">
+                <Textarea className="resize-none" rows={2} value={docs.paymentTermsOneTime} onChange={e => setDocs({ ...docs, paymentTermsOneTime: e.target.value })} placeholder="50% advance to begin, 50% balance on final delivery" />
+              </FieldRow>
+              <FieldRow label="Monthly Payment Terms">
+                <Textarea className="resize-none" rows={2} value={docs.paymentTermsMonthly} onChange={e => setDocs({ ...docs, paymentTermsMonthly: e.target.value })} placeholder="Full monthly fee payable in advance each cycle" />
+              </FieldRow>
+              <FieldRow label="GST Note">
+                <div className="flex items-center gap-2">
+                  <Input className="w-24" type="number" value={docs.gstRate} onChange={e => setDocs({ ...docs, gstRate: e.target.value })} placeholder="18" />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Agreement Payment Schedule" hint="One schedule point per line. Used in Agreements.">
+                <Textarea className="min-h-24" value={docs.paymentSchedule} onChange={e => setDocs({ ...docs, paymentSchedule: e.target.value })} placeholder="- 50% advance payment to commence work&#10;- Remaining balance due upon project completion / monthly for retainers&#10;- All amounts are exclusive of applicable GST" />
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Additional Custom Terms" hint="One term per line. These will appear as bullet points.">
+                <Textarea className="min-h-32" value={docs.extraTerms} onChange={e => setDocs({ ...docs, extraTerms: e.target.value })} placeholder="Intellectual property will be transferred upon final payment.&#10;Support covers bug fixes for 30 days post-launch." />
+              </FieldRow>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ── COMMUNICATIONS ─────────────────────────── */}
         <TabsContent value="comms">
           <Card>
@@ -274,7 +353,7 @@ export default function SettingsPage() {
                   <FieldRow label="SMTP Host"><Input placeholder="smtp.gmail.com" value={comm.smtpHost} onChange={e => setComm({ ...comm, smtpHost: e.target.value })} /></FieldRow>
                   <FieldRow label="SMTP Port"><Input placeholder="587" value={comm.smtpPort} onChange={e => setComm({ ...comm, smtpPort: e.target.value })} /></FieldRow>
                   <FieldRow label="Username / Email"><Input placeholder="noreply@netgain.studio" value={comm.smtpUser} onChange={e => setComm({ ...comm, smtpUser: e.target.value })} /></FieldRow>
-                  <FieldRow label="App Password"><SecretField id="smtp" value={comm.smtpPass} onChange={v => setComm({ ...comm, smtpPass: v })} placeholder="Gmail app password" /></FieldRow>
+                  <FieldRow label="App Password"><SecretField id="smtp" value={comm.smtpPass} onChange={v => setComm({ ...comm, smtpPass: v })} placeholder="Gmail app password" showKey={showKey} setShowKey={setShowKey} /></FieldRow>
                 </div>
               </div>
 
@@ -282,7 +361,7 @@ export default function SettingsPage() {
 
               <div>
                 <p className="text-xs font-semibold text-gold mb-3">💬 WhatsApp Business API (Meta Cloud)</p>
-                <FieldRow label="Access Token"><SecretField id="wa" value={comm.waToken} onChange={v => setComm({ ...comm, waToken: v })} placeholder="EAAx..." /></FieldRow>
+                <FieldRow label="Access Token"><SecretField id="wa" value={comm.waToken} onChange={v => setComm({ ...comm, waToken: v })} placeholder="EAAx..." showKey={showKey} setShowKey={setShowKey} /></FieldRow>
               </div>
 
               <Separator />
@@ -322,13 +401,13 @@ export default function SettingsPage() {
               </FieldRow>
               <Separator />
               <FieldRow label="Claude API Key" hint="Anthropic">
-                <SecretField id="claude" value={ai.claudeKey} onChange={v => setAi({ ...ai, claudeKey: v })} placeholder="sk-ant-..." />
+                <SecretField id="claude" value={ai.claudeKey} onChange={v => setAi({ ...ai, claudeKey: v })} placeholder="sk-ant-..." showKey={showKey} setShowKey={setShowKey} />
               </FieldRow>
               <FieldRow label="OpenAI API Key" hint="ChatGPT / GPT-4">
-                <SecretField id="openai" value={ai.openaiKey} onChange={v => setAi({ ...ai, openaiKey: v })} placeholder="sk-..." />
+                <SecretField id="openai" value={ai.openaiKey} onChange={v => setAi({ ...ai, openaiKey: v })} placeholder="sk-..." showKey={showKey} setShowKey={setShowKey} />
               </FieldRow>
               <FieldRow label="Gemini API Key" hint="Google AI">
-                <SecretField id="gemini" value={ai.geminiKey} onChange={v => setAi({ ...ai, geminiKey: v })} placeholder="AIza..." />
+                <SecretField id="gemini" value={ai.geminiKey} onChange={v => setAi({ ...ai, geminiKey: v })} placeholder="AIza..." showKey={showKey} setShowKey={setShowKey} />
               </FieldRow>
             </CardContent>
           </Card>
