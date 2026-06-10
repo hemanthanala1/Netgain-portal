@@ -11,6 +11,7 @@ import {
   ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign
 } from 'lucide-react'
 import { useState } from 'react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 const navItems = [
   {
@@ -134,11 +135,12 @@ export function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
         <div className="border-t border-white/5 p-3">
           <Link href="/profile" onClick={onMobileClose}>
             <div className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-white/5 transition-colors cursor-pointer">
-              <div className="h-7 w-7 rounded-full gold-gradient flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-white">
-                  {user ? getInitials(user.name) : 'DS'}
-                </span>
-              </div>
+              <Avatar className="h-7 w-7 shrink-0">
+                {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
+                <AvatarFallback className="gold-gradient text-white text-[10px] font-bold">
+                  {user ? getInitials(user.name) : 'U'}
+                </AvatarFallback>
+              </Avatar>
               <div className="overflow-hidden">
                 <p className="text-xs font-semibold text-white whitespace-nowrap">
                   {user?.name ? (user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')) : 'User'}

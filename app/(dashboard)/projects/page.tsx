@@ -14,6 +14,10 @@ import { Search, Plus, Zap, Calendar, DollarSign, Users, Download, CheckCircle2,
 import { formatCurrency, formatDate, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[]
@@ -38,8 +42,14 @@ export default function ProjectsPage() {
   const [form, setForm] = useState({ title: '', client: '', type: 'Web Development', budget: '', timeline: '', goals: '', services: '', risks: '', resources: '', successMetrics: '' })
 
   useEffect(() => {
+    const cached = getCachedData<Project[]>('projects')
+    if (cached) {
+      setProjects(cached)
+      setLoading(false)
+    }
+
     async function loadProjects() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
@@ -72,17 +82,20 @@ export default function ProjectsPage() {
               }
             })
             setProjects(mapped)
+            setCachedData('projects', mapped)
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setProjects(mockProjects)
+        setCachedData('projects', mockProjects)
       }
       setLoading(false)
     }
     loadProjects()
   }, [])
+
 
   const filtered = projects.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
 
@@ -148,11 +161,15 @@ export default function ProjectsPage() {
         }
       }
 
-      setProjects([newProj, ...projects])
+      const updatedList = [newProj, ...projects]
+      setProjects(updatedList)
+      setCachedData('projects', updatedList)
+      invalidateCache('dashboard')
       setShowCreate(false); toast({ title: 'Project Plan Created!', description: 'PDF downloaded to your device.' })
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
+
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -168,10 +185,14 @@ export default function ProjectsPage() {
         return
       }
     }
-    setProjects(projects.filter(p => p.id !== deleteId))
+    const updatedList = projects.filter(p => p.id !== deleteId)
+    setProjects(updatedList)
+    setCachedData('projects', updatedList)
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'Project Deleted' })
   }
+
 
   const handleEditSubmit = async () => {
     if (!editId) return
@@ -211,10 +232,14 @@ export default function ProjectsPage() {
       }
     }
 
-    setProjects(projects.map(p => p.id === editId ? updated : p))
+    const updatedList = projects.map(p => p.id === editId ? updated : p)
+    setProjects(updatedList)
+    setCachedData('projects', updatedList)
+    invalidateCache('dashboard')
     setEditId(null)
     toast({ title: 'Project Updated' })
   }
+
 
   const handleDownload = async (p: Project) => {
     setDownloadingId(p.id)
@@ -233,8 +258,11 @@ export default function ProjectsPage() {
           toast({ title: 'Error updating project history', description: error.message, variant: 'destructive' })
         }
       }
-      setProjects(projects.map(proj => proj.id === p.id ? { ...proj, history: newHistory } : proj))
+      const updatedList = projects.map(proj => proj.id === p.id ? { ...proj, history: newHistory } : proj)
+      setProjects(updatedList)
+      setCachedData('projects', updatedList)
       toast({ title: 'Download Started', description: `Downloading ${p.title}.pdf` })
+
     } catch (e: any) {
       toast({ title: 'Download failed', description: e.message, variant: 'destructive' })
     } finally {
@@ -293,7 +321,18 @@ export default function ProjectsPage() {
           <DialogHeader><DialogTitle>Create New Project + Generate Plan</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build Q3 2024" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Client *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client *</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Project Type</Label><Select value={form.type} onValueChange={v => setForm({...form, type: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web Development', 'Marketing', 'Software', 'Automation', 'Design', 'SEO'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Budget (₹)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 6 weeks, 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
@@ -311,7 +350,18 @@ export default function ProjectsPage() {
           <DialogHeader><DialogTitle>Edit Project Details</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Client *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client *</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Project Type</Label><Select value={form.type} onValueChange={v => setForm({...form, type: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web Development', 'Marketing', 'Software', 'Automation', 'Design', 'SEO'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Budget (₹)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 6 weeks, 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>

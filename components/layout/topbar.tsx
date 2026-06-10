@@ -5,7 +5,7 @@ import { Moon, Sun, Bell, Search, Plus, Settings, User, LogOut, ChevronDown, Shi
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -68,24 +68,36 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const title = breadcrumbMap[pathname] || 'NBOS'
-  const [notifs, setNotifs] = useState<any[]>(INITIAL_NOTIFICATIONS)
+  const [notifs, setNotifs] = useState<any[]>([])
   const unreadCount = notifs.filter(n => !n.read).length
   const { user } = useUser()
   const { toast } = useToast()
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      setNotifs(INITIAL_NOTIFICATIONS)
+      return
+    }
     
     // Fetch initial
     const fetchNotifs = async () => {
-      const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(20)
-      if (data && data.length > 0) setNotifs(data)
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20)
+      if (error) {
+        console.error('Error fetching notifications:', error)
+        return
+      }
+      if (data) setNotifs(data)
     }
     fetchNotifs()
 
     // Realtime subscription
+    const channelId = `notifications_realtime_${Math.random().toString(36).substring(2, 11)}`
     const channel = supabase
-      .channel('public:notifications')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newNotif = payload.new
@@ -265,8 +277,9 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-1.5 rounded-lg hover:bg-muted/50 pl-1 pr-2 py-1 transition-colors">
               <Avatar className="h-7 w-7">
+                {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
                 <AvatarFallback className="gold-gradient text-white text-[10px] font-bold">
-                  {user ? getInitials(user.name) : 'DS'}
+                  {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
               <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block" />
@@ -277,8 +290,9 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
             <div className="px-3 py-3 border-b border-border">
               <div className="flex items-center gap-2.5">
                 <Avatar className="h-9 w-9">
+                  {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
                   <AvatarFallback className="gold-gradient text-white text-sm font-bold">
-                    {user ? getInitials(user.name) : 'NA'}
+                    {user ? getInitials(user.name) : 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div>

@@ -27,7 +27,7 @@ const recentActivity = [
 export default function ProfilePage() {
   const { toast } = useToast()
   const router = useRouter()
-  const { user, refreshUser } = useUser()
+  const { user, loading, refreshUser } = useUser()
   const [saving, setSaving] = useState(false)
   const [savedProfile, setSavedProfile] = useState(false)
   const [changingPw, setChangingPw] = useState(false)
@@ -35,6 +35,7 @@ export default function ProfilePage() {
   const [showNewPw, setShowNewPw] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const [profile, setProfile] = useState({
     name: '',
@@ -53,6 +54,7 @@ export default function ProfilePage() {
         designation: user.role === 'Founder' ? 'Founder & CEO' : user.role || '',
         bio: 'Team member at Netgain Studio.',
       })
+      setAvatarUrl(user.avatar_url || null)
     }
   }, [user])
 
@@ -66,17 +68,41 @@ export default function ProfilePage() {
     setSaving(true)
     try {
       if (isSupabaseConfigured() && user) {
-        // 1) Update auth.users
+        let uploadedUrl = user.avatar_url || ''
+
+        if (selectedFile) {
+          const formData = new FormData()
+          formData.append('file', selectedFile)
+          formData.append('userId', user.id)
+
+          const res = await fetch('/api/profile/avatar', {
+            method: 'POST',
+            body: formData
+          })
+
+          const data = await res.json()
+          if (!res.ok) {
+            toast({ title: 'Error uploading image', description: data.error || 'Upload failed', variant: 'destructive' })
+            setSaving(false)
+            return
+          }
+
+          uploadedUrl = data.publicUrl
+        }
+
+        // 1) Update auth.users user_metadata
         const { error: authError } = await supabase.auth.updateUser({
           data: {
             full_name: profile.name,
             phone: profile.phone,
-            designation: profile.designation
+            designation: profile.designation,
+            avatar_url: uploadedUrl
           }
         })
 
         if (authError) {
           toast({ title: 'Error updating auth profile', description: authError.message, variant: 'destructive' })
+          setSaving(false)
           return
         }
 
@@ -86,12 +112,18 @@ export default function ProfilePage() {
           .update({
             full_name: profile.name,
             email: profile.email,
+            settings: {
+              ...(user.settings || {}),
+              avatar_url: uploadedUrl,
+              phone: profile.phone
+            },
             updated_at: new Date().toISOString()
           })
           .eq('id', user.id)
 
         if (profileError) {
           toast({ title: 'Error updating profile', description: profileError.message, variant: 'destructive' })
+          setSaving(false)
           return
         }
 
@@ -102,8 +134,9 @@ export default function ProfilePage() {
             name: profile.name,
             phone: profile.phone,
           })
-          .eq('id', user.id)
+          .eq('email', user.email)
 
+        setSelectedFile(null)
         await refreshUser()
       } else {
         await new Promise(r => setTimeout(r, 600))
@@ -158,8 +191,17 @@ export default function ProfilePage() {
     if (file) {
       const url = URL.createObjectURL(file)
       setAvatarUrl(url)
+      setSelectedFile(file)
       toast({ title: 'Image Uploaded', description: 'Your profile picture has been updated temporarily. Save profile to keep changes.' })
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gold" />
+      </div>
+    )
   }
 
   return (
@@ -185,7 +227,7 @@ export default function ProfilePage() {
               <Avatar className="h-20 w-20">
                 {avatarUrl && <AvatarImage src={avatarUrl} />}
                 <AvatarFallback className="gold-gradient text-white text-2xl font-bold">
-                  {user ? getInitials(user.name) : 'DS'}
+                  {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
               <button onClick={() => fileInputRef.current?.click()} className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-gold flex items-center justify-center shadow-lg hover:bg-gold/80 transition-colors">
@@ -193,10 +235,10 @@ export default function ProfilePage() {
               </button>
             </div>
             <div>
-              <h2 className="text-xl font-bold">{profile.name || 'Devon Shah'}</h2>
-              <p className="text-muted-foreground text-sm">{profile.designation || 'Founder'}</p>
+              <h2 className="text-xl font-bold">{profile.name || user?.name || 'User'}</h2>
+              <p className="text-muted-foreground text-sm">{profile.designation || user?.role || 'Team Member'}</p>
               <div className="flex items-center gap-2 mt-2">
-                <Badge className="bg-gold/10 text-gold border-gold/30 text-xs">{user?.role || 'Founder'}</Badge>
+                <Badge className="bg-gold/10 text-gold border-gold/30 text-xs">{user?.role || 'Employee'}</Badge>
                 <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-400/30">Active</Badge>
               </div>
             </div>

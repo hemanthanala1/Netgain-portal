@@ -18,6 +18,10 @@ import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 const STATUS_OPTS = ['draft', 'sent', 'approved', 'rejected']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', approved: 'Approved', rejected: 'Rejected' }
@@ -33,7 +37,7 @@ type Quote = {
 const INITIAL: Quote[] = []
 
 function blankForm() {
-  return { projectTitle: '', client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', industry: '', gst: '', selectedIds: [] as string[], discountPct: 0, gstPct: 18, notes: '' }
+  return { projectTitle: '', client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', industry: '', gst: '', selectedIds: [] as string[], discountPct: 0, gstPct: 18, notes: '', paymentScheduleId: '' }
 }
 
 // FormBody component - extracted outside to prevent recreation and preserve input focus
@@ -47,9 +51,10 @@ interface FormBodyProps {
   gstAmt: number
   grandTotal: number
   toggleSvc: (id: string) => void
+  paymentSchedules: any[]
 }
 
-const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc }: FormBodyProps) => (
+const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc, paymentSchedules }: FormBodyProps) => (
   <div className="space-y-6 py-2">
     <div>
       <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Project Details</p>
@@ -58,7 +63,24 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
     <div>
       <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="e.g. Urban Edge Co." value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+        <div className="space-y-1">
+          <Label>Company Name *</Label>
+          <ClientAutocomplete
+            placeholder="e.g. Urban Edge Co."
+            value={form.client}
+            onChange={v => setForm({ ...form, client: v })}
+            onSelect={client => setForm({
+              ...form,
+              client: client.business || client.name,
+              contact: client.name,
+              email: client.email || '',
+              phone: client.phone || '',
+              businessType: client.type || form.businessType,
+              industry: client.type || form.industry,
+              gst: client.gst || form.gst
+            })}
+          />
+        </div>
         <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
         <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
         <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
@@ -112,6 +134,31 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         </div>
       </div>
     )}
+    {paymentSchedules && paymentSchedules.length > 0 && (
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
+        <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v })}>
+          <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+          <SelectContent>
+            {paymentSchedules.map(ps => (
+              <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {form.paymentScheduleId && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+          <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
+            {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
+                <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+
     <div className="space-y-1">
       <Label>Additional Notes</Label>
       <Textarea className="resize-none h-16" placeholder="Special terms, conditions, custom requirements..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -122,6 +169,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
 export default function QuotationsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
+  const [paymentSchedules, setPaymentSchedules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -137,20 +185,36 @@ export default function QuotationsPage() {
   const [form, setForm] = useState(blankForm())
 
   useEffect(() => {
+    const cached = getCachedData<{ quotes: Quote[], servicesData: any[], paymentSchedules: any[] }>('quotations')
+    if (cached) {
+      setQuotes(cached.quotes)
+      setServicesData(cached.servicesData)
+      if (cached.paymentSchedules) setPaymentSchedules(cached.paymentSchedules)
+      setLoading(false)
+    }
+
     async function loadData() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const [qRes, sRes] = await Promise.all([
+          const [qRes, sRes, cRes] = await Promise.all([
             supabase.from('quotations').select('*').order('created_at', { ascending: false }),
-            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false })
+            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false }),
+            supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
           
           if (qRes.error) throw qRes.error
           if (sRes.error) throw sRes.error
 
+          let schedules = []
+          if (cRes.data && cRes.data.docs?.paymentSchedules) {
+            schedules = cRes.data.docs.paymentSchedules
+            setPaymentSchedules(schedules)
+          }
+
+          let mappedSvcs: any[] = []
           if (sRes.data) {
-            setServicesData(sRes.data.map((s: any) => ({
+            mappedSvcs = sRes.data.map((s: any) => ({
               id: s.id,
               name: s.name,
               price: Number(s.quotation_price || s.price_max || s.base_price || 0),
@@ -160,11 +224,13 @@ export default function QuotationsPage() {
               category: 'Service',
               model: s.pricing || 'fixed',
               deliverables: s.deliverables || []
-            })))
+            }))
+            setServicesData(mappedSvcs)
           }
 
+          let mappedQuotes: Quote[] = []
           if (qRes.data) {
-            const mapped = qRes.data.map((q: any) => ({
+            mappedQuotes = qRes.data.map((q: any) => ({
               id: q.id,
               docId: q.doc_id,
               client: q.client,
@@ -183,20 +249,25 @@ export default function QuotationsPage() {
               status: q.status || 'draft',
               created: q.created,
               valid: q.valid,
-              history: Array.isArray(q.history) ? q.history : []
+              history: Array.isArray(q.history) ? q.history : [],
+              paymentScheduleId: q.payment_schedule_id || ''
             }))
-            setQuotes(mapped)
+            setQuotes(mappedQuotes)
           }
+
+          setCachedData('quotations', { quotes: mappedQuotes, servicesData: mappedSvcs, paymentSchedules: schedules })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setQuotes(INITIAL)
+        setCachedData('quotations', { quotes: INITIAL, servicesData: [], paymentSchedules: [] })
       }
       setLoading(false)
     }
     loadData()
   }, [])
+
 
   // Auto-fill founder details when creating new quotation
   useEffect(() => {
@@ -230,14 +301,14 @@ export default function QuotationsPage() {
 
   function openEdit(q: Quote) {
     setEditQuote(q)
-    setForm({ projectTitle: q.projectTitle, client: q.client, contact: q.contact, email: q.email, phone: q.phone, businessType: q.businessType, industry: q.industry, gst: q.gst, selectedIds: q.serviceIds, discountPct: q.discountPct, gstPct: q.gstPct, notes: q.notes })
+    setForm({ projectTitle: q.projectTitle, client: q.client, contact: q.contact, email: q.email, phone: q.phone, businessType: q.businessType, industry: q.industry, gst: q.gst, selectedIds: q.serviceIds, discountPct: q.discountPct, gstPct: q.gstPct, notes: q.notes, paymentScheduleId: (q as any).paymentScheduleId || '' })
   }
 
   function toggleSvc(id: string) {
     setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
   }
 
-  async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string) {
+  async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     const sub   = svcs.reduce((a, s) => a + s.price, 0)
     const dAmt  = Math.round(sub * disc / 100)
@@ -256,6 +327,7 @@ export default function QuotationsPage() {
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
+      paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),
       },
@@ -271,7 +343,7 @@ export default function QuotationsPage() {
   async function handleDownload(q: Quote) {
     setDownloadingId(q.id)
     try {
-      await buildAndDownloadPdf(q, q.serviceIds, q.discountPct, q.gstPct, q.projectTitle, q.docId)
+      await buildAndDownloadPdf(q, q.serviceIds, q.discountPct, q.gstPct, q.projectTitle, q.docId, (q as any).paymentScheduleId)
       toast({ title: `✅ ${q.docId} downloaded` })
     } catch (e: any) { toast({ title: 'Download failed', description: e.message, variant: 'destructive' }) }
     finally { setDownloadingId(null) }
@@ -285,7 +357,7 @@ export default function QuotationsPage() {
       const docId = generateDocId('NG-QUO')
       const createdDate = new Date().toISOString().slice(0,10)
       const validDate = new Date(Date.now()+14*864e5).toISOString().slice(0,10)
-      const newQ: Quote = { id: String(Date.now()), docId, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, status: 'draft', created: createdDate, valid: validDate, history: [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }] }
+      const newQ: Quote = { id: String(Date.now()), docId, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, status: 'draft', created: createdDate, valid: validDate, history: [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }], paymentScheduleId: form.paymentScheduleId } as any
 
       if (isSupabaseConfigured()) {
         try {
@@ -308,7 +380,8 @@ export default function QuotationsPage() {
             status: newQ.status,
             created: newQ.created,
             valid: newQ.valid,
-            history: newQ.history
+            history: newQ.history,
+            payment_schedule_id: form.paymentScheduleId
           }])
           if (error) {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
@@ -322,8 +395,11 @@ export default function QuotationsPage() {
         }
       }
 
-      await buildAndDownloadPdf(newQ, form.selectedIds, form.discountPct, form.gstPct, form.projectTitle, docId)
-      setQuotes([newQ, ...quotes])
+      await buildAndDownloadPdf(newQ, form.selectedIds, form.discountPct, form.gstPct, form.projectTitle, docId, form.paymentScheduleId)
+      const updatedQuotes = [newQ, ...quotes]
+      setQuotes(updatedQuotes)
+      setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+      invalidateCache('dashboard')
       setShowCreate(false)
       setForm(blankForm())
       toast({ title: '✅ Quotation Generated!', description: `${docId} downloaded.` })
@@ -331,11 +407,12 @@ export default function QuotationsPage() {
     finally { setGenerating(false) }
   }
 
+
   async function handleSaveEdit() {
     if (!editQuote) return
     setGenerating(true)
     const updatedHistory = [...editQuote.history, { date: new Date().toISOString().split('T')[0], action: 'Document updated', canDownload: true }]
-    const updated = { ...editQuote, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, history: updatedHistory }
+    const updated = { ...editQuote, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, history: updatedHistory, paymentScheduleId: form.paymentScheduleId } as any
 
     if (isSupabaseConfigured()) {
       try {
@@ -353,7 +430,8 @@ export default function QuotationsPage() {
           gst_pct: updated.gstPct,
           notes: updated.notes,
           amount: updated.amount,
-          history: updated.history
+          history: updated.history,
+          payment_schedule_id: form.paymentScheduleId
         }).eq('id', editQuote.id)
         if (error) {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })
@@ -367,12 +445,16 @@ export default function QuotationsPage() {
       }
     }
 
-    setQuotes(quotes.map(q => q.id === editQuote.id ? updated : q))
+    const updatedQuotes = quotes.map(q => q.id === editQuote.id ? updated : q)
+    setQuotes(updatedQuotes)
+    setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+    invalidateCache('dashboard')
     setEditQuote(null)
     setForm(blankForm())
     toast({ title: '✅ Quotation updated' })
     setGenerating(false)
   }
+
 
   async function handleDelete() {
     if (!deleteId) return
@@ -388,10 +470,14 @@ export default function QuotationsPage() {
         return
       }
     }
-    setQuotes(quotes.filter(q => q.id !== deleteId))
+    const updatedQuotes = quotes.filter(q => q.id !== deleteId)
+    setQuotes(updatedQuotes)
+    setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'Quotation deleted' })
   }
+
 
   async function updateStatus(id: string, status: string) {
     const match = quotes.find(q => q.id === id)
@@ -414,8 +500,12 @@ export default function QuotationsPage() {
       }
     }
 
-    setQuotes(quotes.map(q => q.id === id ? { ...q, status, history: updatedHistory } : q))
+    const updatedQuotes = quotes.map(q => q.id === id ? { ...q, status, history: updatedHistory } : q)
+    setQuotes(updatedQuotes)
+    setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+    invalidateCache('dashboard')
   }
+
 
   return (
     <div className="space-y-6">
@@ -505,7 +595,7 @@ export default function QuotationsPage() {
       <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); setForm(blankForm()) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Quotation</DialogTitle></DialogHeader>
-          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} />
+          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generating...</> : 'Generate PDF'}</Button>
@@ -516,7 +606,7 @@ export default function QuotationsPage() {
       <Dialog open={!!editQuote} onOpenChange={v => { if (!v) { setEditQuote(null); setForm(blankForm()) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Quotation {editQuote?.docId}</DialogTitle></DialogHeader>
-          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} />
+          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditQuote(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">

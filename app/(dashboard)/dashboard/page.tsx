@@ -16,6 +16,8 @@ import {
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { getCachedData, setCachedData } from '@/lib/data-cache'
+
 
 const fadeUp = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }
 const stagger = { show: { transition: { staggerChildren: 0.07 } } }
@@ -38,8 +40,20 @@ export default function DashboardPage() {
   const [topServices, setTopServices] = useState<any[]>([])
 
   useEffect(() => {
+    const cached = getCachedData<any>('dashboard')
+    if (cached) {
+      setStats(cached.stats)
+      setRevenueData(cached.revenueData)
+      setRecentActivities(cached.recentActivities)
+      setUpcomingTasks(cached.upcomingTasks)
+      setTopServices(cached.topServices)
+      setLoading(false)
+    }
+
     async function loadDashboardData() {
-      setLoading(true)
+      if (!cached) {
+        setLoading(true)
+      }
       if (isSupabaseConfigured()) {
         try {
           const [
@@ -77,7 +91,7 @@ export default function DashboardPage() {
           const mtdInvoices = invoices?.filter(i => i.status === 'paid' && i.created && i.created.startsWith(`${currentYearStr}-${currentMonthStr}`)) || []
           const revenueMtd = mtdInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
 
-          setStats({
+          const newStats = {
             totalClients,
             revenueMtd,
             activeProjects,
@@ -86,7 +100,7 @@ export default function DashboardPage() {
             revenueTrend: revenueMtd > 0 ? '+10%' : '0%',
             projectTrend: activeProjects > 0 ? `+${activeProjects}` : '0',
             invoiceTrend: pendingInvoices.length > 0 ? `${pendingInvoices.length} due` : 'Healthy',
-          })
+          }
 
           // 5. Chart Data (Revenue vs Target)
           const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -108,7 +122,6 @@ export default function DashboardPage() {
               target: targetVal
             })
           }
-          setRevenueData(chartDataList)
 
           // 6. Recent Activity list aggregation
           const activityList: any[] = []
@@ -167,7 +180,6 @@ export default function DashboardPage() {
               type: act.type,
               status: act.status
             }))
-          setRecentActivities(sortedActivities)
 
           // 7. Upcoming Follow-ups / Tasks
           const tasksList: any[] = []
@@ -192,7 +204,6 @@ export default function DashboardPage() {
           if (tasksList.length === 0) {
             tasksList.push({ task: 'No immediate follow-ups required', due: '—', priority: 'low' })
           }
-          setUpcomingTasks(tasksList)
 
           // 8. Top Services by revenue
           const serviceUsage: Record<string, { count: number, revenue: number }> = {}
@@ -217,54 +228,76 @@ export default function DashboardPage() {
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 4)
 
-          setTopServices(computedTopServices)
+          const fetchedData = {
+            stats: newStats,
+            revenueData: chartDataList,
+            recentActivities: sortedActivities,
+            upcomingTasks: tasksList,
+            topServices: computedTopServices
+          }
+
+          setStats(fetchedData.stats)
+          setRevenueData(fetchedData.revenueData)
+          setRecentActivities(fetchedData.recentActivities)
+          setUpcomingTasks(fetchedData.upcomingTasks)
+          setTopServices(fetchedData.topServices)
+          setCachedData('dashboard', fetchedData)
 
         } catch (err: any) {
           console.error('Error fetching dashboard stats:', err)
         }
       } else {
-        setStats({
-          totalClients: 47,
-          revenueMtd: 289000,
-          activeProjects: 12,
-          pendingInvoicesVal: 94500,
-          clientTrend: '+6.4%',
-          revenueTrend: '+15.6%',
-          projectTrend: '+2',
-          invoiceTrend: 'Action Needed',
-        })
-        setRevenueData([
-          { month: 'Jan', revenue: 125000, target: 100000 },
-          { month: 'Feb', revenue: 189000, target: 150000 },
-          { month: 'Mar', revenue: 142000, target: 160000 },
-          { month: 'Apr', revenue: 267000, target: 200000 },
-          { month: 'May', revenue: 312000, target: 250000 },
-          { month: 'Jun', revenue: 289000, target: 280000 },
-        ])
-        setRecentActivities([
-          { action: 'Quotation sent to Urban Edge Co.', time: '2 hours ago', type: 'quotation', status: 'sent' },
-          { action: 'Invoice #INV-2024-0891 marked paid', time: '4 hours ago', type: 'invoice', status: 'paid' },
-          { action: 'New client: Apex Retail added to CRM', time: '6 hours ago', type: 'client', status: 'new' },
-          { action: 'Project "Shopify Migration" kicked off', time: '1 day ago', type: 'project', status: 'active' },
-          { action: 'Agreement signed by TechCore Solutions', time: '2 days ago', type: 'agreement', status: 'signed' },
-        ])
-        setUpcomingTasks([
-          { task: 'Follow up with Urban Edge on quotation', due: 'Today', priority: 'high' },
-          { task: 'Send invoice to Apex Retail', due: 'Tomorrow', priority: 'medium' },
-          { task: 'Project review call — TechCore', due: '08 Jun', priority: 'medium' },
-          { task: 'Renew SLA with FashionHub', due: '12 Jun', priority: 'low' },
-        ])
-        setTopServices([
-          { name: 'Website Development', revenue: 145000, count: 8 },
-          { name: 'SEO & GEO', revenue: 98000, count: 12 },
-          { name: 'Paid Ads (Meta)', revenue: 76000, count: 6 },
-          { name: 'WhatsApp Automation', revenue: 54000, count: 9 },
-        ])
+        const demoData = {
+          stats: {
+            totalClients: 47,
+            revenueMtd: 289000,
+            activeProjects: 12,
+            pendingInvoicesVal: 94500,
+            clientTrend: '+6.4%',
+            revenueTrend: '+15.6%',
+            projectTrend: '+2',
+            invoiceTrend: 'Action Needed',
+          },
+          revenueData: [
+            { month: 'Jan', revenue: 125000, target: 100000 },
+            { month: 'Feb', revenue: 189000, target: 150000 },
+            { month: 'Mar', revenue: 142000, target: 160000 },
+            { month: 'Apr', revenue: 267000, target: 200000 },
+            { month: 'May', revenue: 312000, target: 250000 },
+            { month: 'Jun', revenue: 289000, target: 280000 },
+          ],
+          recentActivities: [
+            { action: 'Quotation sent to Urban Edge Co.', time: '2 hours ago', type: 'quotation', status: 'sent' },
+            { action: 'Invoice #INV-2024-0891 marked paid', time: '4 hours ago', type: 'invoice', status: 'paid' },
+            { action: 'New client: Apex Retail added to CRM', time: '6 hours ago', type: 'client', status: 'new' },
+            { action: 'Project "Shopify Migration" kicked off', time: '1 day ago', type: 'project', status: 'active' },
+            { action: 'Agreement signed by TechCore Solutions', time: '2 days ago', type: 'agreement', status: 'signed' },
+          ],
+          upcomingTasks: [
+            { task: 'Follow up with Urban Edge on quotation', due: 'Today', priority: 'high' },
+            { task: 'Send invoice to Apex Retail', due: 'Tomorrow', priority: 'medium' },
+            { task: 'Project review call — TechCore', due: '08 Jun', priority: 'medium' },
+            { task: 'Renew SLA with FashionHub', due: '12 Jun', priority: 'low' },
+          ],
+          topServices: [
+            { name: 'Website Development', revenue: 145000, count: 8 },
+            { name: 'SEO & GEO', revenue: 98000, count: 12 },
+            { name: 'Paid Ads (Meta)', revenue: 76000, count: 6 },
+            { name: 'WhatsApp Automation', revenue: 54000, count: 9 },
+          ]
+        }
+        setStats(demoData.stats)
+        setRevenueData(demoData.revenueData)
+        setRecentActivities(demoData.recentActivities)
+        setUpcomingTasks(demoData.upcomingTasks)
+        setTopServices(demoData.topServices)
+        setCachedData('dashboard', demoData)
       }
       setLoading(false)
     }
     loadDashboardData()
   }, [])
+
 
   const kpiCards = [
     { label: 'Total Clients', value: stats.totalClients.toString(), sub: stats.clientTrend ? stats.clientTrend + ' this month' : 'No new clients', icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10', trend: stats.clientTrend || '0%' },

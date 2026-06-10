@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 // ΓöÇΓöÇ Categories ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { id: '1', name: 'Web Development',   icon: '🌐' },
   { id: '2', name: 'Digital Marketing', icon: '📢' },
   { id: '3', name: 'Paid Advertising',  icon: '💰' },
@@ -76,12 +76,15 @@ export default function ServicesPage() {
   const [search, setSearch] = useState('')
   const [selectedCat, setSelectedCat] = useState('all')
   const [gridView, setGridView] = useState(false)
+  const [categories, setCategories] = useState<{id: string, name: string, icon: string}[]>(DEFAULT_CATEGORIES)
 
   // Dialogs
   const [showAdd, setShowAdd]         = useState(false)
   const [editItem, setEditItem]       = useState<Service | null>(null)
   const [deleteId, setDeleteId]       = useState<string | null>(null)
   const [showUpload, setShowUpload]   = useState(false)
+  const [showManageCats, setShowManageCats] = useState(false)
+  const [catDrafts, setCatDrafts]     = useState<{id: string, name: string, icon: string}[]>([])
 
   // Form state
   const [form, setForm] = useState<Omit<Service, 'id'>>(blankSvc())
@@ -133,16 +136,46 @@ export default function ServicesPage() {
             }))
             setSvcs(mapped)
           }
+          
+          // Load Categories
+          const { data: cData } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (cData && cData.docs && cData.docs.serviceCategories && Array.isArray(cData.docs.serviceCategories)) {
+            setCategories(cData.docs.serviceCategories)
+          }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setSvcs(INITIAL_SERVICES)
+        setCategories(DEFAULT_CATEGORIES)
       }
       setLoading(false)
     }
     loadServices()
   }, [])
+
+  async function handleSaveCategories() {
+    setSubmitting(true)
+    try {
+      if (isSupabaseConfigured()) {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...(exist.docs || {}), serviceCategories: catDrafts }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          // Typically there is a row, but if not we shouldn't insert without user_id context, so just skip
+          toast({ title: 'Company settings row not found', variant: 'destructive' })
+        }
+      }
+      setCategories(catDrafts)
+      setShowManageCats(false)
+      toast({ title: '✅ Categories updated' })
+    } catch (e: any) {
+      toast({ title: 'Database Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   // ── Add / Edit ────────────────────────────────────────────────────────────────────────────
   function openAdd() {
@@ -464,14 +497,14 @@ export default function ServicesPage() {
       </div>
 
       {/* ── Category Pills ── */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <button
           onClick={() => setSelectedCat('all')}
           className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-all ${selectedCat === 'all' ? 'border-gold/50 bg-gold/10 text-gold' : 'border-border hover:border-gold/30 text-muted-foreground'}`}
         >
           📁 All ({svcs.length})
         </button>
-        {CATEGORIES.map(cat => {
+        {categories.map(cat => {
           const cnt = svcs.filter(s => s.catId === cat.id).length
           return (
             <button
@@ -483,6 +516,9 @@ export default function ServicesPage() {
             </button>
           )
         })}
+        <Button variant="ghost" size="sm" onClick={() => { setCatDrafts([...categories]); setShowManageCats(true); }} className="h-7 text-xs text-muted-foreground ml-2">
+          <Edit className="h-3 w-3 mr-1" /> Manage Categories
+        </Button>
       </div>
 
       {/* ── Search + View Toggle ── */}
@@ -588,7 +624,7 @@ export default function ServicesPage() {
         <Label>Category</Label>
         <Select value={form.catId} onValueChange={v => setForm({ ...form, catId: v })} disabled={submitting}>
           <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>{CATEGORIES.map(c => <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-1">
@@ -676,7 +712,7 @@ export default function ServicesPage() {
         <Label>Category</Label>
         <Select value={form.catId} onValueChange={v => setForm({ ...form, catId: v })} disabled={submitting}>
           <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>{CATEGORIES.map(c => <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-1">
@@ -862,8 +898,8 @@ export default function ServicesPage() {
                             <Badge className={`text-[10px] ${svc.pricing === 'monthly' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
                               {svc.pricing === 'monthly' ? '🔄 Monthly' : '💳 One-Time'}
                             </Badge>
-                            {CATEGORIES.find(c => c.id === svc.catId) && (
-                              <span className="text-[10px] text-muted-foreground">{CATEGORIES.find(c => c.id === svc.catId)?.icon} {CATEGORIES.find(c => c.id === svc.catId)?.name}</span>
+                            {categories.find(c => c.id === svc.catId) && (
+                              <span className="text-[10px] text-muted-foreground">{categories.find(c => c.id === svc.catId)?.icon} {categories.find(c => c.id === svc.catId)?.name}</span>
                             )}
                           </div>
                           {svc.deliverables && svc.deliverables.length > 0 && (
@@ -943,6 +979,37 @@ export default function ServicesPage() {
             <Button variant="outline" onClick={() => { setDuplicateConflicts([]); setPendingImport(null); }} disabled={submitting}>Cancel</Button>
             <Button variant="gold" onClick={() => executeImport(pendingImport!, duplicateAction)} disabled={submitting}>
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Importing...</> : 'Confirm & Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Manage Categories Dialog ── */}
+      <Dialog open={showManageCats} onOpenChange={v => { if (!v && !submitting) setShowManageCats(false) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Manage Service Categories</DialogTitle></DialogHeader>
+          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto">
+            {catDrafts.map((cat, idx) => (
+              <div key={cat.id} className="flex gap-2 items-center border border-border p-2 rounded bg-muted/10">
+                <Input className="w-16 h-8 text-center" value={cat.icon} onChange={e => {
+                  const n = [...catDrafts]; n[idx].icon = e.target.value; setCatDrafts(n)
+                }} placeholder="Icon" />
+                <Input className="flex-1 h-8" value={cat.name} onChange={e => {
+                  const n = [...catDrafts]; n[idx].name = e.target.value; setCatDrafts(n)
+                }} placeholder="Category Name" />
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400 shrink-0" onClick={() => {
+                  const n = [...catDrafts]; n.splice(idx, 1); setCatDrafts(n)
+                }}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => {
+              setCatDrafts([...catDrafts, { id: String(Date.now()), name: 'New Category', icon: '📁' }])
+            }}><Plus className="h-4 w-4 mr-2" /> Add Category</Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageCats(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" onClick={handleSaveCategories} disabled={submitting}>
+              {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : 'Save Categories'}
             </Button>
           </DialogFooter>
         </DialogContent>

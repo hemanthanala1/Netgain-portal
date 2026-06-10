@@ -15,6 +15,10 @@ import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
@@ -50,8 +54,16 @@ export default function AgreementsPage() {
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
   useEffect(() => {
+    const cached = getCachedData<{ agreements: Agreement[], sourceDocs: any[], servicesMap: Record<string, any> }>('agreements')
+    if (cached) {
+      setAgreements(cached.agreements)
+      setSourceDocs(cached.sourceDocs)
+      setServicesMap(cached.servicesMap)
+      setLoading(false)
+    }
+
     async function loadAgreements() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const [aRes, qRes, iRes, svRes] = await Promise.all([
@@ -63,10 +75,11 @@ export default function AgreementsPage() {
 
           if (aRes.error) throw aRes.error
 
+          let mappedSvMap: Record<string, any> = {}
           if (svRes.data) {
-            const sm: Record<string, any> = {}
-            svRes.data.forEach((s: any) => sm[s.id] = s)
-            setServicesMap(sm)
+            mappedSvMap = {}
+            svRes.data.forEach((s: any) => mappedSvMap[s.id] = s)
+            setServicesMap(mappedSvMap)
           }
 
           const docs: any[] = []
@@ -78,8 +91,9 @@ export default function AgreementsPage() {
           }
           setSourceDocs(docs)
 
+          let mappedAgreements: Agreement[] = []
           if (aRes.data) {
-            const mapped = aRes.data.map((a: any) => ({
+            mappedAgreements = aRes.data.map((a: any) => ({
               id: a.id,
               docId: a.doc_id,
               client: a.client,
@@ -96,18 +110,22 @@ export default function AgreementsPage() {
               created: a.created,
               history: Array.isArray(a.history) ? a.history : []
             }))
-            setAgreements(mapped)
+            setAgreements(mappedAgreements)
           }
+
+          setCachedData('agreements', { agreements: mappedAgreements, sourceDocs: docs, servicesMap: mappedSvMap })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setAgreements(INITIAL)
+        setCachedData('agreements', { agreements: INITIAL, sourceDocs: [], servicesMap: {} })
       }
       setLoading(false)
     }
     loadAgreements()
   }, [])
+
 
   // Auto-fill founder details when creating new agreement
   useEffect(() => {
@@ -252,12 +270,16 @@ export default function AgreementsPage() {
         }
       }
 
-      setAgreements([newAgr, ...agreements])
+      const updatedList = [newAgr, ...agreements]
+      setAgreements(updatedList)
+      setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+      invalidateCache('dashboard')
       setShowCreate(false); setForm(blank())
       toast({ title: '✅ Agreement Generated!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
+
 
   async function handleSaveEdit() {
     if (!editItem) return
@@ -291,10 +313,14 @@ export default function AgreementsPage() {
       }
     }
 
-    setAgreements(agreements.map(a => a.id === editItem.id ? updated : a))
+    const updatedList = agreements.map(a => a.id === editItem.id ? updated : a)
+    setAgreements(updatedList)
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+    invalidateCache('dashboard')
     setEditItem(null); setForm(blank())
     toast({ title: '✅ Agreement updated' })
   }
+
 
   async function handleDelete() {
     if (!deleteId) return
@@ -310,10 +336,14 @@ export default function AgreementsPage() {
         return
       }
     }
-    setAgreements(agreements.filter(a => a.id !== deleteId))
+    const updatedList = agreements.filter(a => a.id !== deleteId)
+    setAgreements(updatedList)
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'Agreement deleted' })
   }
+
 
   async function updateStatus(id: string, status: string) {
     const targetAgr = agreements.find(a => a.id === id)
@@ -336,8 +366,12 @@ export default function AgreementsPage() {
       }
     }
 
-    setAgreements(agreements.map(a => a.id === id ? { ...a, status, history: targetHistory } : a))
+    const updatedList = agreements.map(a => a.id === id ? { ...a, status, history: targetHistory } : a)
+    setAgreements(updatedList)
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+    invalidateCache('dashboard')
   }
+
 
   
   return (
@@ -424,7 +458,20 @@ export default function AgreementsPage() {
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Client Company *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Client Company *</Label>
+                  <ClientAutocomplete
+                    placeholder="Company name"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      phone: client.phone || ''
+                    })}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Agreement Type</Label>
                   <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
@@ -461,7 +508,20 @@ export default function AgreementsPage() {
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Client Company *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Client Company *</Label>
+                  <ClientAutocomplete
+                    placeholder="Company name"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      phone: client.phone || ''
+                    })}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Agreement Type</Label>
                   <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>

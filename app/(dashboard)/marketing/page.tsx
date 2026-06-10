@@ -14,6 +14,10 @@ import { formatDate, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 type MarketingReport = {
   id: string; docId: string; client: string; period: string; channels: string[]; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]
@@ -41,8 +45,14 @@ export default function MarketingPage() {
   })
 
   useEffect(() => {
+    const cached = getCachedData<MarketingReport[]>('marketing_reports')
+    if (cached) {
+      setReports(cached)
+      setLoading(false)
+    }
+
     async function loadReports() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await supabase.from('marketing_reports').select('*').order('created_at', { ascending: false })
@@ -68,17 +78,20 @@ export default function MarketingPage() {
               }
             })
             setReports(mapped)
+            setCachedData('marketing_reports', mapped)
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setReports(mockReports)
+        setCachedData('marketing_reports', mockReports)
       }
       setLoading(false)
     }
     loadReports()
   }, [])
+
 
   const buildReportContent = (f: typeof form) => {
     const hasMetaData = f.metaSpend || f.metaRevenue
@@ -123,30 +136,26 @@ export default function MarketingPage() {
         }
       }
 
-      setReports([{ id: targetId, docId, client: form.client, period: form.period, channels: form.channels, status: 'draft', created: targetCreated, history: targetHistory }, ...reports])
+      const updatedList = [{ id: targetId, docId, client: form.client, period: form.period, channels: form.channels, status: 'draft', created: targetCreated, history: targetHistory }, ...reports]
+      setReports(updatedList)
+      setCachedData('marketing_reports', updatedList)
+      invalidateCache('dashboard')
       setShowCreate(false); toast({ title: 'Report Generated!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
 
+
   const handleDelete = async () => {
     if (!deleteId) return
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('marketing_reports').delete().eq('id', deleteId)
-        if (error) {
-          toast({ title: 'Error deleting report', description: error.message, variant: 'destructive' })
-          return
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        return
-      }
-    }
-    setReports(reports.filter(p => p.id !== deleteId))
+    const updatedList = reports.filter(p => p.id !== deleteId)
+    setReports(updatedList)
+    setCachedData('marketing_reports', updatedList)
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'Report Deleted' })
   }
+
 
   const handleEditSubmit = async () => {
     if (!editId) return
@@ -175,10 +184,14 @@ export default function MarketingPage() {
       }
     }
 
-    setReports(reports.map(p => p.id === editId ? updated : p))
+    const updatedList = reports.map(p => p.id === editId ? updated : p)
+    setReports(updatedList)
+    setCachedData('marketing_reports', updatedList)
+    invalidateCache('dashboard')
     setEditId(null)
     toast({ title: 'Report Updated' })
   }
+
 
   const handleDownload = async (p: MarketingReport) => {
     setDownloadingId(p.id)
@@ -209,8 +222,11 @@ export default function MarketingPage() {
           toast({ title: 'Error updating report history', description: error.message, variant: 'destructive' })
         }
       }
-      setReports(reports.map(doc => doc.id === p.id ? { ...doc, history: newHistory } : doc))
+      const updatedList = reports.map(doc => doc.id === p.id ? { ...doc, history: newHistory } : doc)
+      setReports(updatedList)
+      setCachedData('marketing_reports', updatedList)
       toast({ title: 'Download Started', description: `Downloading ${p.docId}.pdf` })
+
     } catch (e: any) {
       toast({ title: 'Download failed', description: e.message, variant: 'destructive' })
     } finally {
@@ -274,7 +290,18 @@ export default function MarketingPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate Marketing Report</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-1"><Label>Client *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client *</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Report Period *</Label><Input placeholder="e.g. May 2024" value={form.period} onChange={e => setForm({...form, period: e.target.value})} /></div>
             <div className="col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
 
@@ -310,7 +337,18 @@ export default function MarketingPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Edit Report Details</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-1"><Label>Client *</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client *</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Report Period *</Label><Input placeholder="e.g. May 2024" value={form.period} onChange={e => setForm({...form, period: e.target.value})} /></div>
             <div className="col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
           </div>

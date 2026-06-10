@@ -15,6 +15,10 @@ import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue' }
@@ -50,8 +54,15 @@ export default function InvoicesPage() {
   const [form, setForm] = useState(blankForm())
 
   useEffect(() => {
+    const cached = getCachedData<{ invoices: Invoice[], servicesData: any[] }>('invoices')
+    if (cached) {
+      setInvoices(cached.invoices)
+      setServicesData(cached.servicesData)
+      setLoading(false)
+    }
+
     async function loadData() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const [invRes, sRes] = await Promise.all([
@@ -62,8 +73,9 @@ export default function InvoicesPage() {
           if (invRes.error) throw invRes.error
           if (sRes.error) throw sRes.error
 
+          let mappedSvcs: any[] = []
           if (sRes.data) {
-            setServicesData(sRes.data.map((s: any) => ({
+            mappedSvcs = sRes.data.map((s: any) => ({
               id: s.id,
               name: s.name,
               price: Number(s.quotation_price || s.price_max || s.base_price || 0),
@@ -73,11 +85,13 @@ export default function InvoicesPage() {
               category: 'Service',
               model: s.pricing || 'fixed',
               deliverables: s.deliverables || []
-            })))
+            }))
+            setServicesData(mappedSvcs)
           }
 
+          let mappedInvoices: Invoice[] = []
           if (invRes.data) {
-            const mapped = invRes.data.map((i: any) => ({
+            mappedInvoices = invRes.data.map((i: any) => ({
               id: i.id,
               docId: i.doc_id,
               client: i.client,
@@ -97,18 +111,22 @@ export default function InvoicesPage() {
               due: i.due,
               history: Array.isArray(i.history) ? i.history : []
             }))
-            setInvoices(mapped)
+            setInvoices(mappedInvoices)
           }
+
+          setCachedData('invoices', { invoices: mappedInvoices, servicesData: mappedSvcs })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setInvoices(INITIAL)
+        setCachedData('invoices', { invoices: INITIAL, servicesData: [] })
       }
       setLoading(false)
     }
     loadData()
   }, [])
+
 
   // Auto-fill founder details when creating new invoice
   useEffect(() => {
@@ -277,12 +295,16 @@ export default function InvoicesPage() {
         }
       }
 
-      setInvoices([newInv, ...invoices])
+      const updatedInvoices = [newInv, ...invoices]
+      setInvoices(updatedInvoices)
+      setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+      invalidateCache('dashboard')
       setShowCreate(false); setForm(blankForm())
       toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
+
 
   async function handleSaveEdit() {
     if (!editInvoice) return
@@ -335,11 +357,15 @@ export default function InvoicesPage() {
       }
     }
 
-    setInvoices(invoices.map(i => i.id === editInvoice.id ? updated : i))
+    const updatedInvoices = invoices.map(i => i.id === editInvoice.id ? updated : i)
+    setInvoices(updatedInvoices)
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+    invalidateCache('dashboard')
     setEditInvoice(null); setForm(blankForm())
     toast({ title: '✅ Invoice updated' })
     setGenerating(false)
   }
+
 
   async function handleDelete() {
     if (!deleteId) return
@@ -355,10 +381,14 @@ export default function InvoicesPage() {
         return
       }
     }
-    setInvoices(invoices.filter(i => i.id !== deleteId))
+    const updatedInvoices = invoices.filter(i => i.id !== deleteId)
+    setInvoices(updatedInvoices)
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'Invoice deleted' })
   }
+
 
   async function updateStatus(id: string, status: string) {
     const targetInv = invoices.find(i => i.id === id)
@@ -381,8 +411,12 @@ export default function InvoicesPage() {
       }
     }
 
-    setInvoices(invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i))
+    const updatedInvoices = invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i)
+    setInvoices(updatedInvoices)
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+    invalidateCache('dashboard')
   }
+
 
 
 
@@ -453,7 +487,23 @@ export default function InvoicesPage() {
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Company Name *</Label>
+                  <ClientAutocomplete
+                    placeholder="Client company"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      email: client.email || '',
+                      phone: client.phone || '',
+                      businessType: client.type || form.businessType,
+                      gst: client.gst || form.gst
+                    })}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
@@ -533,7 +583,23 @@ export default function InvoicesPage() {
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Company Name *</Label>
+                  <ClientAutocomplete
+                    placeholder="Client company"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      email: client.email || '',
+                      phone: client.phone || '',
+                      businessType: client.type || form.businessType,
+                      gst: client.gst || form.gst
+                    })}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>

@@ -14,6 +14,9 @@ import { formatDateTime, getInitials } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { useRef } from 'react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { useCRMClients } from '@/hooks/use-crm-clients'
+
 
 const commHistory = [
   { id: 'c1', client: 'FashionHub India', channel: 'email', subject: 'Invoice #INV-0891 Payment Reminder', preview: 'Dear Priya, This is a friendly reminder...', sentAt: '2024-06-04T10:30:00', sentBy: 'Devon S.' },
@@ -32,7 +35,9 @@ const channelIcon: Record<string, any> = { email: Mail, whatsapp: Phone, sms: Me
 const channelColor: Record<string, string> = { email: 'text-blue-400 bg-blue-500/10', whatsapp: 'text-green-400 bg-green-500/10', sms: 'text-purple-400 bg-purple-500/10' }
 
 export default function CommunicationsPage() {
+  const { clients: crmClients } = useCRMClients()
   const [templates, setTemplates] = useState(initialTemplates)
+
   const [showCompose, setShowCompose] = useState(false)
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [search, setSearch] = useState('')
@@ -57,8 +62,27 @@ export default function CommunicationsPage() {
 
   const handleTemplateSelect = (templateId: string) => {
     const t = templates.find(t => t.id === templateId)
-    if (t) setForm({ ...form, template: templateId, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] })
+    if (t) {
+      const crmClient = crmClients.find(c => c.name === form.client || c.business === form.client)
+      let body = t.body
+      let subject = t.subject
+      if (crmClient) {
+        const clientName = crmClient.name
+        const businessName = crmClient.business || crmClient.name
+        const replacer = (text: string) => {
+          return text
+            .replace(/{ClientName}/g, clientName)
+            .replace(/{BusinessName}/g, businessName)
+            .replace(/{Date}/g, new Date().toLocaleDateString('en-IN'))
+            .replace(/{Time}/g, new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+        }
+        body = replacer(body)
+        subject = replacer(subject)
+      }
+      setForm({ ...form, template: templateId, subject, body, attachments: (t as any).attachments || [] })
+    }
   }
+
 
   const handleCreateTemplate = () => {
     if (!templateForm.name || !templateForm.body) { toast({ title: 'Name and Body are required', variant: 'destructive' }); return }
@@ -169,7 +193,42 @@ export default function CommunicationsPage() {
           <DialogHeader><DialogTitle>Compose Message</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Client *</Label><Input placeholder="Company / Contact" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+              <div className="space-y-1">
+                <Label>Client *</Label>
+                <ClientAutocomplete
+                  placeholder="Company / Contact"
+                  value={form.client}
+                  onChange={v => setForm({ ...form, client: v })}
+                  onSelect={client => {
+                    const clientName = client.name
+                    const businessName = client.business || client.name
+                    
+                    let updatedBody = form.body
+                    let updatedSubject = form.subject
+                    if (form.template) {
+                      const t = templates.find(temp => temp.id === form.template)
+                      if (t) {
+                        const replacer = (text: string) => {
+                          return text
+                            .replace(/{ClientName}/g, clientName)
+                            .replace(/{BusinessName}/g, businessName)
+                            .replace(/{Date}/g, new Date().toLocaleDateString('en-IN'))
+                            .replace(/{Time}/g, new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+                        }
+                        updatedBody = replacer(t.body)
+                        updatedSubject = replacer(t.subject)
+                      }
+                    }
+                    
+                    setForm(f => ({
+                      ...f,
+                      client: businessName,
+                      body: updatedBody,
+                      subject: updatedSubject
+                    }))
+                  }}
+                />
+              </div>
               <div className="space-y-1"><Label>Channel</Label><Select value={form.channel} onValueChange={v => setForm({...form, channel: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="email">Email</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="sms">SMS</SelectItem></SelectContent></Select></div>
             </div>
             <div className="space-y-1"><Label>Template (optional)</Label><Select value={form.template} onValueChange={handleTemplateSelect}><SelectTrigger><SelectValue placeholder="Choose a template..." /></SelectTrigger><SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>

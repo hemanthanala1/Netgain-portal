@@ -15,6 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 type SOW = { id: string; docId: string; client: string; contact: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[] }
 
@@ -48,8 +52,16 @@ export default function SOWPage() {
   })
 
   useEffect(() => {
+    const cached = getCachedData<{ sows: SOW[], sourceDocs: any[], servicesMap: Record<string, any> }>('sows')
+    if (cached) {
+      setSows(cached.sows)
+      setSourceDocs(cached.sourceDocs)
+      setServicesMap(cached.servicesMap)
+      setLoading(false)
+    }
+
     async function loadSOWs() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const [sRes, qRes, iRes, svRes] = await Promise.all([
@@ -61,10 +73,11 @@ export default function SOWPage() {
 
           if (sRes.error) throw sRes.error
 
+          let mappedSvMap: Record<string, any> = {}
           if (svRes.data) {
-            const sm: Record<string, any> = {}
-            svRes.data.forEach((s: any) => sm[s.id] = s)
-            setServicesMap(sm)
+            mappedSvMap = {}
+            svRes.data.forEach((s: any) => mappedSvMap[s.id] = s)
+            setServicesMap(mappedSvMap)
           }
 
           const docs: any[] = []
@@ -76,8 +89,9 @@ export default function SOWPage() {
           }
           setSourceDocs(docs)
 
+          let mappedSows: SOW[] = []
           if (sRes.data) {
-            const mapped = sRes.data.map((s: any) => ({
+            mappedSows = sRes.data.map((s: any) => ({
               id: s.id,
               docId: s.doc_id,
               client: s.client,
@@ -97,18 +111,22 @@ export default function SOWPage() {
               created: s.created,
               history: Array.isArray(s.history) ? s.history : []
             }))
-            setSows(mapped)
+            setSows(mappedSows)
           }
+
+          setCachedData('sows', { sows: mappedSows, sourceDocs: docs, servicesMap: mappedSvMap })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setSows(mockSOWs)
+        setCachedData('sows', { sows: mockSOWs, sourceDocs: [], servicesMap: {} })
       }
       setLoading(false)
     }
     loadSOWs()
   }, [])
+
 
   // Auto-fill founder details when creating new SOW
   useEffect(() => {
@@ -225,39 +243,23 @@ export default function SOWPage() {
     if (!targetSow) return
     const newHistory = [...targetSow.history, { date: new Date().toISOString().split('T')[0], action: `Status changed to ${status}` }]
     
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('sows').update({ status, history: newHistory }).eq('id', id)
-        if (error) {
-          toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
-          return
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        return
-      }
-    }
-    setSows(sows.map(s => s.id === id ? { ...s, status, history: newHistory } : s))
+    const updatedList = sows.map(s => s.id === id ? { ...s, status, history: newHistory } : s)
+    setSows(updatedList)
+    setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
+    invalidateCache('dashboard')
   }
+
 
   async function handleDelete() {
     if (!deleteId) return
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('sows').delete().eq('id', deleteId)
-        if (error) {
-          toast({ title: 'Error deleting SOW', description: error.message, variant: 'destructive' })
-          return
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        return
-      }
-    }
-    setSows(sows.filter(s => s.id !== deleteId))
+    const updatedList = sows.filter(s => s.id !== deleteId)
+    setSows(updatedList)
+    setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'SOW deleted' })
   }
+
 
   const handleGenerate = async () => {
     if (!form.client || !form.project) {
@@ -337,15 +339,21 @@ export default function SOWPage() {
       }
 
       if (editItem) {
-        setSows(sows.map(s => s.id === editItem.id ? newSOW : s))
+        const updatedList = sows.map(s => s.id === editItem.id ? newSOW : s)
+        setSows(updatedList)
+        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
         toast({ title: '✅ SOW Updated!', description: `${docId} updated and downloaded.` })
       } else {
-        setSows([newSOW, ...sows])
+        const updatedList = [newSOW, ...sows]
+        setSows(updatedList)
+        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
         toast({ title: '✅ SOW Generated!', description: `${docId} downloaded successfully.` })
       }
+      invalidateCache('dashboard')
       
       setShowCreate(false)
       setEditItem(null)
+
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
@@ -425,7 +433,22 @@ export default function SOWPage() {
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client & Project</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Company Name *</Label><Input placeholder="Client company" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Company Name *</Label>
+                  <ClientAutocomplete
+                    placeholder="Client company"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      phone: client.phone || '',
+                      email: client.email || '',
+                      businessType: client.type || form.businessType
+                    })}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="col-span-2 space-y-1"><Label>Project Name *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></div>

@@ -126,6 +126,7 @@ export interface PdfPayload {
   subtotal?: number
   discountTotal?: number
   grandTotal?: number
+  paymentScheduleObj?: { name: string, points: { label: string, pct: number }[] } | null
   content?: string           // Markdown-lite body text
 }
 
@@ -424,11 +425,23 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
               const oneTimeSub = oneTime.reduce((a, i) => a + i.finalPrice, 0)
               const monthlyTotal = monthly.reduce((a, i) => a + i.finalPrice, 0)
               if (oneTime.length === 0 && monthly.length === 0) return null
+
               return (
                 <View style={{ marginTop: 10, marginBottom: 4 }}>
                   <Text style={[s.h2, { marginTop: 6 }]}>PAYMENT SCHEDULE</Text>
                   <View style={s.invCard}>
-                    {oneTime.length > 0 && (
+                    {data.paymentScheduleObj ? (
+                      <View>
+                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#22c55e', marginBottom: 6 }}>{data.paymentScheduleObj.name.toUpperCase()}</Text>
+                        {data.paymentScheduleObj.points.map((pt, i) => (
+                          <View key={i} style={s.invRow}>
+                            <Text style={s.invLabel}>{pt.label} ({pt.pct}%)</Text>
+                            <Text style={i === 0 ? [s.invValue, { color: '#22c55e' }] : s.invValue}>INR {Math.round(data.grandTotal! * (pt.pct / 100)).toLocaleString('en-IN')}</Text>
+                          </View>
+                        ))}
+                        {monthly.length > 0 && <View style={s.invDivider} />}
+                      </View>
+                    ) : oneTime.length > 0 ? (
                       <View>
                         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#22c55e', marginBottom: 6 }}>ONE-TIME SERVICES</Text>
                         <View style={s.invRow}>
@@ -441,9 +454,9 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
                         </View>
                         {monthly.length > 0 && <View style={s.invDivider} />}
                       </View>
-                    )}
+                    ) : null}
                     {monthly.length > 0 && (
-                      <View style={{ marginTop: oneTime.length > 0 ? 4 : 0 }}>
+                      <View style={{ marginTop: oneTime.length > 0 || data.paymentScheduleObj ? 4 : 0 }}>
                         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#F59E0B', marginBottom: 6 }}>MONTHLY RECURRING SERVICES</Text>
                         <View style={s.invRow}>
                           <Text style={s.invLabel}>Due every month (in advance)</Text>

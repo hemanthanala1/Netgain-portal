@@ -11,6 +11,8 @@ export interface UserProfile {
   status: string
   joined: string
   projects: number
+  avatar_url?: string
+  settings?: any
 }
 
 interface UserContextType {
@@ -25,7 +27,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (email: string, authId: string) => {
+  const fetchProfile = async (email: string, authId: string, authUserMetadata: any) => {
     try {
       // First try to get profile from profiles table (synced with auth.users role)
       const { data: profileData, error: profileError } = await supabase
@@ -46,7 +48,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           // Merge: use role from profiles (source of truth), other fields from team_members
           return {
             ...teamData,
-            role: profileData.role
+            role: profileData.role,
+            phone: authUserMetadata?.phone || profileData.settings?.phone || teamData.phone || '',
+            settings: profileData.settings || {},
+            avatar_url: profileData.settings?.avatar_url || authUserMetadata?.avatar_url || ''
           } as UserProfile
         } else {
           // Profile exists but no team_members row — this is the source of truth
@@ -54,11 +59,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             id: authId,
             name: profileData.full_name || email.split('@')[0],
             email: profileData.email,
-            phone: '',
+            phone: authUserMetadata?.phone || profileData.settings?.phone || '',
             role: profileData.role || 'Employee',
             status: 'active',
             joined: new Date().toISOString().slice(0, 10),
-            projects: 0
+            projects: 0,
+            settings: profileData.settings || {},
+            avatar_url: profileData.settings?.avatar_url || authUserMetadata?.avatar_url || ''
           } as UserProfile
         }
       }
@@ -71,7 +78,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle()
 
       if (!teamError && teamData) {
-        return teamData as UserProfile
+        return {
+          ...teamData,
+          phone: authUserMetadata?.phone || teamData.phone || '',
+          avatar_url: authUserMetadata?.avatar_url || ''
+        } as UserProfile
       }
 
       // If neither profiles nor team_members exist, return null (do not auto-provision)
@@ -95,7 +106,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser?.email) {
-        const profile = await fetchProfile(authUser.email, authUser.id)
+        const profile = await fetchProfile(authUser.email, authUser.id, authUser.user_metadata)
         setUser(profile)
       } else {
         setUser(null)

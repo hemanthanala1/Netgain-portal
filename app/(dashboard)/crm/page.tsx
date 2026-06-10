@@ -30,6 +30,8 @@ const statusLabels: Record<string, string> = {
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useEffect } from 'react'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
 
 export default function CRMPage() {
   const [clients, setClients] = useState<any[]>([])
@@ -49,8 +51,14 @@ export default function CRMPage() {
   })
 
   useEffect(() => {
+    const cached = getCachedData<any[]>('crm_clients')
+    if (cached) {
+      setClients(cached)
+      setLoading(false)
+    }
+
     async function fetchClients() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await supabase.from('crm_clients').select('*').order('created_at', { ascending: false })
@@ -73,17 +81,20 @@ export default function CRMPage() {
               website: c.website
             }))
             setClients(mapped)
+            setCachedData('crm_clients', mapped)
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setClients(mockClients)
+        setCachedData('crm_clients', mockClients)
       }
       setLoading(false)
     }
     fetchClients()
   }, [])
+
 
   const filtered = clients.filter(c => {
     const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -135,12 +146,16 @@ export default function CRMPage() {
       revenue: 0,
       lastContact: lastContactDate
     }
-    setClients([localClient, ...clients])
+    const updatedList = [localClient, ...clients]
+    setClients(updatedList)
+    setCachedData('crm_clients', updatedList)
+    invalidateCache('dashboard')
     setShowAdd(false)
     setNewClient({ name: '', business: '', type: 'E-Commerce', email: '', phone: '', status: 'new', gst: '', address: '', website: '', city: '' })
     toast({ title: 'Client Added', description: `${newClient.name} has been added successfully.` })
     setSubmitting(false)
   }
+
 
   const handleEditSubmit = async () => {
     if (!editClient || !editClient.name || !editClient.email) return
@@ -175,11 +190,15 @@ export default function CRMPage() {
       }
     }
 
-    setClients(clients.map(c => c.id === editClient.id ? { ...c, ...editClient } : c))
+    const updatedList = clients.map(c => c.id === editClient.id ? { ...c, ...editClient } : c)
+    setClients(updatedList)
+    setCachedData('crm_clients', updatedList)
+    invalidateCache('dashboard')
     setEditClient(null)
     toast({ title: 'Client Updated', description: `${editClient.name} has been updated successfully.` })
     setSubmitting(false)
   }
+
 
   const handleDelete = async () => {
     if (!deleteClient) return
@@ -200,11 +219,15 @@ export default function CRMPage() {
       }
     }
 
-    setClients(clients.filter(c => c.id !== deleteClient.id))
+    const updatedList = clients.filter(c => c.id !== deleteClient.id)
+    setClients(updatedList)
+    setCachedData('crm_clients', updatedList)
+    invalidateCache('dashboard')
     toast({ title: 'Client Removed', description: `${deleteClient.name} has been removed from the CRM.` })
     setDeleteClient(null)
     setSubmitting(false)
   }
+
 
   const stats = {
     total: clients.length,

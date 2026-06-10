@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText } from 'lucide-react'
+import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -124,6 +124,11 @@ export default function SettingsPage() {
     gstRate: '18',
     extraTerms: '',
     paymentSchedule: '- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST',
+    paymentSchedules: [
+      { id: '1', name: '50/50 Split', points: [{ label: 'Advance to begin', pct: 50 }, { label: 'Balance on delivery', pct: 50 }] },
+      { id: '2', name: '100% Upfront', points: [{ label: 'Full Payment', pct: 100 }] },
+      { id: '3', name: '40/40/20 Split', points: [{ label: 'Advance', pct: 40 }, { label: 'Milestone 1', pct: 40 }, { label: 'Final Delivery', pct: 20 }] }
+    ]
   })
 
   // Load saved settings on mount
@@ -336,6 +341,73 @@ export default function SettingsPage() {
               <FieldRow label="Additional Custom Terms" hint="One term per line. These will appear as bullet points.">
                 <Textarea className="min-h-32" value={docs.extraTerms} onChange={e => setDocs({ ...docs, extraTerms: e.target.value })} placeholder="Intellectual property will be transferred upon final payment.&#10;Support covers bug fixes for 30 days post-launch." />
               </FieldRow>
+              <Separator />
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base font-semibold text-gold">Quotation Payment Schedules</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Define the standard payment schedule splits (e.g. 50/50) you can choose from when creating a Quotation. The UI will calculate the amounts automatically.</p>
+                </div>
+                {docs.paymentSchedules?.map((schedule, sIdx) => (
+                  <div key={schedule.id} className="border border-border rounded-lg p-4 bg-muted/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Input className="font-semibold max-w-[200px] h-8" value={schedule.name} onChange={e => {
+                        const newSchedules = [...docs.paymentSchedules];
+                        newSchedules[sIdx].name = e.target.value;
+                        setDocs({ ...docs, paymentSchedules: newSchedules });
+                      }} placeholder="Schedule Name" />
+                      {docs.paymentSchedules.length > 1 && (
+                        <Button variant="ghost" size="sm" className="h-8 text-red-400 hover:text-red-400" onClick={() => {
+                          const newSchedules = [...docs.paymentSchedules];
+                          newSchedules.splice(sIdx, 1);
+                          setDocs({ ...docs, paymentSchedules: newSchedules });
+                        }}>Remove</Button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {schedule.points.map((pt: any, pIdx: number) => (
+                        <div key={pIdx} className="flex gap-2 items-center">
+                          <Input className="h-8" value={pt.label} onChange={e => {
+                            const newSchedules = [...docs.paymentSchedules];
+                            newSchedules[sIdx].points[pIdx].label = e.target.value;
+                            setDocs({ ...docs, paymentSchedules: newSchedules });
+                          }} placeholder="e.g. Advance to begin" />
+                          <div className="flex items-center gap-1 shrink-0 w-24">
+                            <Input type="number" className="h-8 text-right" value={pt.pct} onChange={e => {
+                              const newSchedules = [...docs.paymentSchedules];
+                              newSchedules[sIdx].points[pIdx].pct = Number(e.target.value);
+                              setDocs({ ...docs, paymentSchedules: newSchedules });
+                            }} />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-400 shrink-0" onClick={() => {
+                            const newSchedules = [...docs.paymentSchedules];
+                            newSchedules[sIdx].points.splice(pIdx, 1);
+                            setDocs({ ...docs, paymentSchedules: newSchedules });
+                          }}><Trash2 className="h-3 w-3" /></Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" className="h-7 text-xs border-dashed w-full" onClick={() => {
+                        const newSchedules = [...docs.paymentSchedules];
+                        newSchedules[sIdx].points.push({ label: 'New Milestone', pct: 0 });
+                        setDocs({ ...docs, paymentSchedules: newSchedules });
+                      }}>+ Add Milestone</Button>
+                    </div>
+                    <div className="text-xs text-right mt-1 text-muted-foreground">
+                      Total: <span className={schedule.points.reduce((sum: number, p: any) => sum + Number(p.pct), 0) === 100 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                        {schedule.points.reduce((sum: number, p: any) => sum + Number(p.pct), 0)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {(!docs.paymentSchedules || docs.paymentSchedules.length < 3) && (
+                  <Button variant="outline" size="sm" className="border-dashed w-full gap-2 text-gold hover:text-gold" onClick={() => {
+                    setDocs({
+                      ...docs, 
+                      paymentSchedules: [...(docs.paymentSchedules || []), { id: String(Date.now()), name: 'New Schedule', points: [{ label: 'Advance', pct: 100 }] }]
+                    });
+                  }}><Plus className="h-4 w-4" /> Add Payment Schedule</Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

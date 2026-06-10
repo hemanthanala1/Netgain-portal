@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Plus, UserCog, Mail, Phone, Shield, MoreHorizontal, Edit, Trash2, Activity, Loader2 } from 'lucide-react'
 import { getInitials, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
@@ -119,7 +119,8 @@ export default function TeamPage() {
                 status: 'active',
                 joined: profile.updated_at?.split('T')[0] || new Date().toISOString().slice(0, 10),
                 projects: 0,
-                source: 'profiles'
+                source: 'profiles',
+                avatar_url: profile.settings?.avatar_url || ''
               })
             })
           }
@@ -299,6 +300,7 @@ export default function TeamPage() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-10 w-10">
+                    {member.avatar_url && <AvatarImage src={member.avatar_url} />}
                     <AvatarFallback className="gold-gradient text-white text-sm font-bold">{getInitials(member.name)}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">

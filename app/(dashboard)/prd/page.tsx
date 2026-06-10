@@ -13,6 +13,10 @@ import { Plus, FileCode2, Download, Cpu, Layers, Database, Code, Edit, Trash2, H
 import { formatDate, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+
+
 
 type PRD = {
   id: string; docId: string; title: string; client: string; stack: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]
@@ -33,8 +37,14 @@ export default function PRDPage() {
   const [form, setForm] = useState({ title: '', client: '', productType: 'Web App', techStack: '', objectives: '', userPersonas: '', coreFeatures: '', database: '', apiEndpoints: '', uiFramework: '', timeline: '3 months', targetUsers: '' })
 
   useEffect(() => {
+    const cached = getCachedData<PRD[]>('prds')
+    if (cached) {
+      setPrds(cached)
+      setLoading(false)
+    }
+
     async function loadPRDs() {
-      setLoading(true)
+      if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await supabase.from('prds').select('*').order('created_at', { ascending: false })
@@ -52,17 +62,20 @@ export default function PRDPage() {
               history: Array.isArray(p.history) ? p.history : []
             }))
             setPrds(mapped)
+            setCachedData('prds', mapped)
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setPrds(mockPRDs)
+        setCachedData('prds', mockPRDs)
       }
       setLoading(false)
     }
     loadPRDs()
   }, [])
+
 
   const buildPrdContent = (f: typeof form) => {
     return `# Product Requirements Document (PRD)\n\n## Executive Summary\n**Product:** ${f.title}\n**Client:** ${f.client}\n**Type:** ${f.productType}\n**Tech Stack:** ${f.techStack}\n**Timeline:** ${f.timeline}\n\n## Problem Statement\n${f.objectives}\n\n## Target Users\n${f.targetUsers}\n\n## User Personas\n${f.userPersonas}\n\n## Core Features\n${f.coreFeatures}\n\n## Database Design\n${f.database || 'To be defined in technical specification phase.'}\n\n## API Endpoints\n${f.apiEndpoints || 'RESTful API architecture. Detailed endpoint mapping in technical spec.'}\n\n## UI Architecture\n**Framework:** ${f.uiFramework || f.techStack.split('+')[0] || 'To be determined'}\n\nKey screens: Dashboard, Login/Auth, Main CRUD views, Settings, Reports\n\n## Development Roadmap\n### Phase 1 — Foundation (Weeks 1-4)\n- Project setup and architecture\n- Auth system\n- Core database schema\n- Base UI components\n\n### Phase 2 — Core Features (Weeks 5-10)\n- Main feature modules\n- API integration\n- User flows\n\n### Phase 3 — Polish & Deploy (Weeks 11-12)\n- QA & testing\n- Performance optimization\n- Production deployment\n- Documentation\n\n## Success Metrics\n- Load time < 2 seconds\n- 99.9% uptime\n- Core user flows ≤ 3 clicks\n- User satisfaction score ≥ 4.5/5`
@@ -103,11 +116,15 @@ export default function PRDPage() {
         }
       }
 
-      setPrds([{ id: targetId, docId, title: form.title, client: form.client, stack: form.techStack, status: 'draft', created: targetCreated, history: targetHistory }, ...prds])
+      const updatedList = [{ id: targetId, docId, title: form.title, client: form.client, stack: form.techStack, status: 'draft', created: targetCreated, history: targetHistory }, ...prds]
+      setPrds(updatedList)
+      setCachedData('prds', updatedList)
+      invalidateCache('dashboard')
       setShowCreate(false); toast({ title: 'PRD Generated!', description: `${docId} created and downloaded.` })
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
+
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -123,10 +140,14 @@ export default function PRDPage() {
         return
       }
     }
-    setPrds(prds.filter(p => p.id !== deleteId))
+    const updatedList = prds.filter(p => p.id !== deleteId)
+    setPrds(updatedList)
+    setCachedData('prds', updatedList)
+    invalidateCache('dashboard')
     setDeleteId(null)
     toast({ title: 'PRD Deleted' })
   }
+
 
   const handleEditSubmit = async () => {
     if (!editId) return
@@ -155,10 +176,14 @@ export default function PRDPage() {
       }
     }
 
-    setPrds(prds.map(p => p.id === editId ? updated : p))
+    const updatedList = prds.map(p => p.id === editId ? updated : p)
+    setPrds(updatedList)
+    setCachedData('prds', updatedList)
+    invalidateCache('dashboard')
     setEditId(null)
     toast({ title: 'PRD Updated' })
   }
+
 
   const handleDownload = async (p: PRD) => {
     setDownloadingId(p.id)
@@ -191,8 +216,11 @@ export default function PRDPage() {
           toast({ title: 'Error updating PRD history', description: error.message, variant: 'destructive' })
         }
       }
-      setPrds(prds.map(doc => doc.id === p.id ? { ...doc, history: newHistory } : doc))
+      const updatedList = prds.map(doc => doc.id === p.id ? { ...doc, history: newHistory } : doc)
+      setPrds(updatedList)
+      setCachedData('prds', updatedList)
       toast({ title: 'Download Started', description: `Downloading ${p.docId}.pdf` })
+
     } catch (e: any) {
       toast({ title: 'Download failed', description: e.message, variant: 'destructive' })
     } finally {
@@ -244,7 +272,19 @@ export default function PRDPage() {
           <DialogHeader><DialogTitle>Generate New PRD</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Client</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name,
+                  techStack: client.type ? `${client.type} Tech Stack` : form.techStack
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Product Type</Label><Select value={form.productType} onValueChange={v => setForm({...form, productType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase + Stripe" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
@@ -262,7 +302,18 @@ export default function PRDPage() {
           <DialogHeader><DialogTitle>Edit PRD Details</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Client</Label><Input placeholder="Company name" value={form.client} onChange={e => setForm({...form, client: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Client</Label>
+              <ClientAutocomplete
+                placeholder="Company name"
+                value={form.client}
+                onChange={v => setForm({ ...form, client: v })}
+                onSelect={client => setForm({
+                  ...form,
+                  client: client.business || client.name
+                })}
+              />
+            </div>
             <div className="space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button><Button variant="gold" onClick={handleEditSubmit}>Save Changes</Button></DialogFooter>

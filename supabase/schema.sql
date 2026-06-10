@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     title TEXT NOT NULL,
     category TEXT NOT NULL,
     amount NUMERIC NOT NULL,
+    tax_amount NUMERIC DEFAULT 0,
     date DATE DEFAULT CURRENT_DATE,
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())

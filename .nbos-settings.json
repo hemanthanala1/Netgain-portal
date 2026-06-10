@@ -6,7 +6,7 @@
     "pan": "",
     "email": "mail.netgain@gmail.com",
     "website": "netgainstudio.com",
-    "phone": "9347102347 | 9392469669",
+    "phone": "9347102347",
     "logo": "",
     "stamp": "",
     "signature": ""
@@ -45,7 +45,23 @@
     "paymentTermsMonthly": "Full monthly fee payable in advance each cycle",
     "gstRate": "18",
     "extraTerms": "",
-    "paymentSchedule": "- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST"
+    "paymentSchedule": "- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST",
+    "paymentSchedules": [
+      {
+        "id": "1",
+        "name": "50/50 Split",
+        "points": [
+          {
+            "pct": 50,
+            "label": "Advance to begin"
+          },
+          {
+            "pct": 50,
+            "label": "Balance on delivery"
+          }
+        ]
+      }
+    ]
   },
-  "updatedAt": "2026-06-07T08:14:18.920Z"
+  "updatedAt": "2026-06-08T10:15:41.657Z"
 }
