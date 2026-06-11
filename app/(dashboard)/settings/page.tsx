@@ -14,12 +14,12 @@ import { supabase } from '@/lib/supabase'
 
 // Component definitions moved outside to prevent re-creation on each render
 const FieldRow = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
-  <div className="grid grid-cols-3 items-start gap-4">
-    <div className="mt-2">
+  <div className="grid grid-cols-1 md:grid-cols-3 items-start gap-4">
+    <div className="mt-1 md:mt-2">
       <Label className="text-sm">{label}</Label>
       {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
     </div>
-    <div className="col-span-2">{children}</div>
+    <div className="col-span-1 md:col-span-2">{children}</div>
   </div>
 )
 
@@ -199,7 +199,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
@@ -211,7 +211,7 @@ export default function SettingsPage() {
           size="sm"
           onClick={handleSave}
           disabled={saving}
-          className="gap-1.5"
+          className="gap-1.5 w-full sm:w-auto"
         >
           {saving ? (
             <><Loader2 className="h-4 w-4 animate-spin" />Saving...</>

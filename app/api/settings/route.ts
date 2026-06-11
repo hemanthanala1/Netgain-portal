@@ -105,6 +105,46 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
+      // Sync founder details with public.profiles and team_members table if they are provided
+      if (founder) {
+        try {
+          // Find the user with role = 'Founder' in profiles table
+          const { data: founderProfile } = await supabase
+            .from('profiles')
+            .select('id, settings')
+            .eq('role', 'Founder')
+            .maybeSingle()
+
+          if (founderProfile) {
+            const currentSettings = founderProfile.settings || {}
+
+            await supabase
+              .from('profiles')
+              .update({
+                full_name: founder.name,
+                email: founder.email,
+                settings: {
+                  ...currentSettings,
+                  phone: founder.phone
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', founderProfile.id)
+
+            // Also update team_members for backward compatibility
+            await supabase
+              .from('team_members')
+              .update({
+                name: founder.name,
+                phone: founder.phone
+              })
+              .eq('email', founder.email)
+          }
+        } catch (syncErr) {
+          console.error('Error syncing founder settings to profiles:', syncErr)
+        }
+      }
+
       // Also mirror to local file so the PDF generator always has fresh settings
       try {
         const mirror = { company: company || {}, founder: founder || {}, bank: bank || {}, comm: comm || {}, ai: ai || {}, docs: docs || {}, updatedAt: new Date().toISOString() }

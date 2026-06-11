@@ -461,12 +461,12 @@ export default function ServicesPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Services Library</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Centralized pricing, deliverables, and service data — single source of truth.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
             <a href="/api/generate-sample-services" target="_blank" rel="noopener noreferrer">
               <FileText className="h-4 w-4" /> Download Sample
@@ -482,7 +482,7 @@ export default function ServicesPage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { l: 'Total Services', v: svcs.length },
           { l: 'Active',         v: svcs.filter(s => s.status === 'active').length },
@@ -615,8 +615,8 @@ export default function ServicesPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Add New Service</DialogTitle></DialogHeader>
           
-    <div className="grid grid-cols-2 gap-4 py-2">
-      <div className="col-span-2 space-y-1">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Service Name *</Label>
         <Input placeholder="e.g. E-Commerce Website (Shopify)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} disabled={submitting} />
       </div>
@@ -653,7 +653,7 @@ export default function ServicesPage() {
         <Label>Price Range Max (optional)</Label>
         <Input type="number" placeholder="50000" value={form.priceMax || ''} onChange={e => setForm({ ...form, priceMax: Number(e.target.value) })} disabled={submitting} />
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Timeline</Label>
         <Input placeholder="15-20 days / Ongoing" value={form.timeline} onChange={e => setForm({ ...form, timeline: e.target.value })} disabled={submitting} />
       </div>
@@ -668,7 +668,7 @@ export default function ServicesPage() {
           </SelectContent>
         </Select>
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Deliverables (one per line)</Label>
         <Textarea
           className="h-24 resize-none"
@@ -678,7 +678,7 @@ export default function ServicesPage() {
           disabled={submitting}
         />
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Exclusions (one per line)</Label>
         <Textarea
           className="h-16 resize-none"
@@ -703,8 +703,8 @@ export default function ServicesPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Service — {editItem?.name}</DialogTitle></DialogHeader>
           
-    <div className="grid grid-cols-2 gap-4 py-2">
-      <div className="col-span-2 space-y-1">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Service Name *</Label>
         <Input placeholder="e.g. E-Commerce Website (Shopify)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} disabled={submitting} />
       </div>
@@ -741,7 +741,7 @@ export default function ServicesPage() {
         <Label>Price Range Max (optional)</Label>
         <Input type="number" placeholder="50000" value={form.priceMax || ''} onChange={e => setForm({ ...form, priceMax: Number(e.target.value) })} disabled={submitting} />
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Timeline</Label>
         <Input placeholder="15-20 days / Ongoing" value={form.timeline} onChange={e => setForm({ ...form, timeline: e.target.value })} disabled={submitting} />
       </div>
@@ -756,7 +756,7 @@ export default function ServicesPage() {
           </SelectContent>
         </Select>
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Deliverables (one per line)</Label>
         <Textarea
           className="h-24 resize-none"
@@ -766,7 +766,7 @@ export default function ServicesPage() {
           disabled={submitting}
         />
       </div>
-      <div className="col-span-2 space-y-1">
+      <div className="col-span-1 sm:col-span-2 space-y-1">
         <Label>Exclusions (one per line)</Label>
         <Textarea
           className="h-16 resize-none"

@@ -376,12 +376,12 @@ export default function AgreementsPage() {
   
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Client Agreements</h1><p className="text-muted-foreground text-sm mt-0.5">Generate legally structured client agreements.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blank()); setShowCreate(true) }} className="gap-1.5"><Plus className="h-4 w-4" />New Agreement</Button>
+        <Button variant="gold" size="sm" onClick={() => { setForm(blank()); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Agreement</Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total', v: agreements.length }, { l: 'Signed', v: agreements.filter(a => a.status === 'signed').length }, { l: 'Draft', v: agreements.filter(a => a.status === 'draft').length }, { l: 'Sent', v: agreements.filter(a => a.status === 'sent').length }].map(s => (
           <Card key={s.l}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.l}</p><p className="text-2xl font-bold mt-1">{s.v}</p></CardContent></Card>
         ))}
@@ -457,7 +457,7 @@ export default function AgreementsPage() {
             )}
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Client Company *</Label>
                   <ClientAutocomplete
@@ -482,7 +482,7 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>
             <div>
@@ -507,7 +507,7 @@ export default function AgreementsPage() {
           <div className="space-y-5 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Client Company *</Label>
                   <ClientAutocomplete
@@ -532,7 +532,7 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>
             <div>

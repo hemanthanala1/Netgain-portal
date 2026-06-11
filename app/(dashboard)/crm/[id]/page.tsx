@@ -78,16 +78,18 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   }
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/crm"><Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button></Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{client.business}</h1>
-            <span className={`status-badge border ${getLeadStatusColor(client.status)}`}>{client.status.replace('_', ' ')}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link href="/crm"><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{client.business}</h1>
+              <span className={`status-badge border text-[10px] sm:text-xs shrink-0 ${getLeadStatusColor(client.status)}`}>{client.status.replace('_', ' ')}</span>
+            </div>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">Rep: {client.name} · {client.city}</p>
           </div>
-          <p className="text-muted-foreground text-sm mt-0.5">Rep: {client.name} · {client.city}</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5"><Edit className="h-3.5 w-3.5" />Edit</Button>
+        <Button variant="outline" size="sm" className="gap-1.5 self-start sm:self-auto"><Edit className="h-3.5 w-3.5" />Edit</Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

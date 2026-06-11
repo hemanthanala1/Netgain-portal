@@ -196,7 +196,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-96 p-0 border-border" sideOffset={6}>
+          <PopoverContent align="end" className="w-[calc(100vw-32px)] max-w-md sm:w-96 p-0 border-border" sideOffset={6}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div>

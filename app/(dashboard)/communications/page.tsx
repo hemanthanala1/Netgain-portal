@@ -192,7 +192,7 @@ export default function CommunicationsPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Compose Message</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Client *</Label>
                 <ClientAutocomplete
@@ -210,10 +210,10 @@ export default function CommunicationsPage() {
                       if (t) {
                         const replacer = (text: string) => {
                           return text
-                            .replace(/{ClientName}/g, clientName)
-                            .replace(/{BusinessName}/g, businessName)
-                            .replace(/{Date}/g, new Date().toLocaleDateString('en-IN'))
-                            .replace(/{Time}/g, new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+                             .replace(/{ClientName}/g, clientName)
+                             .replace(/{BusinessName}/g, businessName)
+                             .replace(/{Date}/g, new Date().toLocaleDateString('en-IN'))
+                             .replace(/{Time}/g, new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
                         }
                         updatedBody = replacer(t.body)
                         updatedSubject = replacer(t.subject)
@@ -249,7 +249,7 @@ export default function CommunicationsPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>{editTemplateId ? 'Edit Template' : 'Create New Template'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Template Name *</Label><Input placeholder="e.g. Welcome Email" value={templateForm.name} onChange={e => setTemplateForm({...templateForm, name: e.target.value})} /></div>
               <div className="space-y-1"><Label>Default Channel</Label><Select value={templateForm.channel} onValueChange={v => setTemplateForm({...templateForm, channel: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="email">Email</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="sms">SMS</SelectItem></SelectContent></Select></div>
             </div>

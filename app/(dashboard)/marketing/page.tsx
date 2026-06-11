@@ -236,9 +236,9 @@ export default function MarketingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Marketing Reports</h1><p className="text-muted-foreground text-sm mt-0.5">Generate comprehensive marketing performance reports with analysis.</p></div>
-        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5"><Plus className="h-4 w-4" />New Report</Button>
+        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Report</Button>
       </div>
 
       <Card>
@@ -289,7 +289,7 @@ export default function MarketingPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate Marketing Report</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1">
               <Label>Client *</Label>
               <ClientAutocomplete
@@ -303,31 +303,31 @@ export default function MarketingPage() {
               />
             </div>
             <div className="space-y-1"><Label>Report Period *</Label><Input placeholder="e.g. May 2024" value={form.period} onChange={e => setForm({...form, period: e.target.value})} /></div>
-            <div className="col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
-
+            <div className="col-span-1 sm:col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
+ 
             {(form.channels.includes('Meta Ads')) && <>
-              <div className="col-span-2"><p className="text-xs font-semibold text-gold mb-2">📣 Meta Ads Metrics</p></div>
+              <div className="col-span-1 sm:col-span-2"><p className="text-xs font-semibold text-gold mb-2">📣 Meta Ads Metrics</p></div>
               <div className="space-y-1"><Label>Ad Spend (₹)</Label><Input type="number" value={form.metaSpend} onChange={e => setForm({...form, metaSpend: e.target.value})} /></div>
               <div className="space-y-1"><Label>Revenue Generated (₹)</Label><Input type="number" value={form.metaRevenue} onChange={e => setForm({...form, metaRevenue: e.target.value})} /></div>
               <div className="space-y-1"><Label>Leads / Conversions</Label><Input type="number" value={form.metaLeads} onChange={e => setForm({...form, metaLeads: e.target.value})} /></div>
               <div className="space-y-1"><Label>Total Impressions</Label><Input type="number" value={form.metaImpressions} onChange={e => setForm({...form, metaImpressions: e.target.value})} /></div>
             </>}
-
+ 
             {form.channels.includes('Google Ads') && <>
-              <div className="col-span-2"><p className="text-xs font-semibold text-gold mb-2">🔍 Google Ads Metrics</p></div>
+              <div className="col-span-1 sm:col-span-2"><p className="text-xs font-semibold text-gold mb-2">🔍 Google Ads Metrics</p></div>
               <div className="space-y-1"><Label>Ad Spend (₹)</Label><Input type="number" value={form.googleSpend} onChange={e => setForm({...form, googleSpend: e.target.value})} /></div>
               <div className="space-y-1"><Label>Revenue (₹)</Label><Input type="number" value={form.googleRevenue} onChange={e => setForm({...form, googleRevenue: e.target.value})} /></div>
             </>}
-
+ 
             {form.channels.includes('SEO') && <>
-              <div className="col-span-2"><p className="text-xs font-semibold text-gold mb-2">📈 SEO Metrics</p></div>
+              <div className="col-span-1 sm:col-span-2"><p className="text-xs font-semibold text-gold mb-2">📈 SEO Metrics</p></div>
               <div className="space-y-1"><Label>Organic Traffic</Label><Input type="number" placeholder="Monthly visitors" value={form.seoTraffic} onChange={e => setForm({...form, seoTraffic: e.target.value})} /></div>
               <div className="space-y-1"><Label>Avg Keyword Rank</Label><Input type="number" value={form.seoRanking} onChange={e => setForm({...form, seoRanking: e.target.value})} /></div>
             </>}
-
-            <div className="col-span-2 space-y-1"><Label>Executive Summary</Label><Textarea className="h-16 resize-none" placeholder="Overall performance summary..." value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Key Insights</Label><Textarea className="h-16 resize-none" placeholder="What worked? What didn't?" value={form.insights} onChange={e => setForm({...form, insights: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Recommendations</Label><Textarea className="h-16 resize-none" placeholder="Action items for next month..." value={form.recommendations} onChange={e => setForm({...form, recommendations: e.target.value})} /></div>
+ 
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Executive Summary</Label><Textarea className="h-16 resize-none" placeholder="Overall performance summary..." value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Key Insights</Label><Textarea className="h-16 resize-none" placeholder="What worked? What didn't?" value={form.insights} onChange={e => setForm({...form, insights: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Recommendations</Label><Textarea className="h-16 resize-none" placeholder="Action items for next month..." value={form.recommendations} onChange={e => setForm({...form, recommendations: e.target.value})} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? 'Generating...' : 'Generate Report PDF'}</Button></DialogFooter>
         </DialogContent>
@@ -336,7 +336,7 @@ export default function MarketingPage() {
       <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Edit Report Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1">
               <Label>Client *</Label>
               <ClientAutocomplete
@@ -350,7 +350,7 @@ export default function MarketingPage() {
               />
             </div>
             <div className="space-y-1"><Label>Report Period *</Label><Input placeholder="e.g. May 2024" value={form.period} onChange={e => setForm({...form, period: e.target.value})} /></div>
-            <div className="col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
+            <div className="col-span-1 sm:col-span-2 space-y-2"><Label>Channels Covered</Label><div className="flex flex-wrap gap-3">{['Meta Ads', 'Google Ads', 'SEO', 'WhatsApp', 'Email', 'Content'].map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.channels.includes(c)} onChange={e => setForm({...form, channels: e.target.checked ? [...form.channels, c] : form.channels.filter(x => x !== c)})} />{c}</label>))}</div></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button><Button variant="gold" onClick={handleEditSubmit}>Save Changes</Button></DialogFooter>
         </DialogContent>

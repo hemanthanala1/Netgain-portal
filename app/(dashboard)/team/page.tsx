@@ -184,6 +184,29 @@ export default function TeamPage() {
               setSubmitting(false)
               return
             }
+
+            // Sync with company_settings if the edited user is a Founder
+            if (form.role === 'Founder' || member?.role === 'Founder') {
+              const { data: settingsData } = await supabase
+                .from('company_settings')
+                .select('founder')
+                .eq('user_id', editId)
+                .maybeSingle()
+
+              const currentFounderSettings = settingsData?.founder || {}
+
+              await supabase
+                .from('company_settings')
+                .upsert({
+                  user_id: editId,
+                  founder: {
+                    ...currentFounderSettings,
+                    name: form.name,
+                    email: form.email,
+                    phone: form.phone
+                  }
+                }, { onConflict: 'user_id' })
+            }
           }
 
           const { error } = await supabase.from('team_members').update({
@@ -308,9 +331,9 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Team Management</h1><p className="text-muted-foreground text-sm mt-0.5">Manage your team members, roles, and access levels.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" />Add Employee</Button>
+        <Button variant="gold" size="sm" onClick={() => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />Add Employee</Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -340,9 +363,11 @@ export default function TeamPage() {
                       <p className="font-semibold text-sm">{member.name}</p>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleColors[member.role] || 'bg-muted text-muted-foreground border-border'}`}>{member.role}</span>
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{member.email}</span>
-                      <span className="hidden sm:flex items-center gap-1"><Phone className="h-3 w-3" />{member.phone}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{member.email}</span>
+                      {member.phone && (
+                        <span className="flex items-center gap-1"><Phone className="h-3 w-3 shrink-0" />{member.phone}</span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">Joined {formatDate(member.joined)} · {member.projects} active projects</p>
                   </div>
@@ -408,13 +433,17 @@ export default function TeamPage() {
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editId ? 'Edit Employee Account' : 'Create Employee Account'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            {!editId && <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">⚠️ Only Founders can create employee accounts. Employees cannot self-register.</p>}
-            <div className="space-y-1"><Label>Full Name *</Label><Input placeholder="Employee full name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            {!editId && (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 sm:col-span-2">
+                ⚠️ Only Founders can create employee accounts. Employees cannot self-register.
+              </p>
+            )}
+            <div className="space-y-1 sm:col-span-2"><Label>Full Name *</Label><Input placeholder="Employee full name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="employee@netgain.studio" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
             <div className="space-y-1"><Label>Phone</Label><Input placeholder="Mobile number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Role</Label><Select value={form.role} onValueChange={v => setForm({...form, role: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ROLES.filter(r => r !== 'Founder').map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-            {!editId && <div className="space-y-1"><Label>Temporary Password</Label><Input type="password" placeholder="Must be changed on first login" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>}
+            <div className={`space-y-1 ${editId ? 'sm:col-span-2' : ''}`}><Label>Role</Label><Select value={form.role} onValueChange={v => setForm({...form, role: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ROLES.filter(r => r !== 'Founder').map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+            {!editId && <div className="space-y-1 sm:col-span-2"><Label>Temporary Password</Label><Input type="password" placeholder="Must be changed on first login" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
@@ -436,7 +465,7 @@ export default function TeamPage() {
             <div className="space-y-1"><Label>Role Name *</Label><Input placeholder="e.g. Content Writer" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} /></div>
             <div className="space-y-2">
               <Label>Module Access</Label>
-              <div className="grid grid-cols-2 gap-3 p-3 border border-border rounded-lg bg-muted/20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 border border-border rounded-lg bg-muted/20">
                 {MODULES.map(m => (
                   <label key={m} className="flex items-center gap-2 cursor-pointer text-sm">
                     <input type="checkbox" checked={roleForm.permissions.includes(m)} onChange={e => setRoleForm({...roleForm, permissions: e.target.checked ? [...roleForm.permissions, m] : roleForm.permissions.filter(p => p !== m)})} className="accent-gold rounded" />

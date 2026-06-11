@@ -272,9 +272,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Project Planning Engine</h1><p className="text-muted-foreground text-sm mt-0.5">Create, track, and manage all client projects.</p></div>
-        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5"><Plus className="h-4 w-4" />New Project</Button>
+        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Project</Button>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ label: 'Total Projects', value: projects.length }, { label: 'Active', value: projects.filter(p => p.status === 'active').length }, { label: 'Total Budget', value: formatCurrency(projects.reduce((s, p) => s + p.budget, 0)) }, { label: 'Planned', value: projects.filter(p => p.status === 'planned').length }].map(s => (
@@ -319,8 +319,8 @@ export default function ProjectsPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Project + Generate Plan</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build Q3 2024" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build Q3 2024" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1">
               <Label>Client *</Label>
               <ClientAutocomplete
@@ -336,10 +336,10 @@ export default function ProjectsPage() {
             <div className="space-y-1"><Label>Project Type</Label><Select value={form.type} onValueChange={v => setForm({...form, type: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web Development', 'Marketing', 'Software', 'Automation', 'Design', 'SEO'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Budget (₹)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 6 weeks, 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Project Goals</Label><Textarea className="h-16 resize-none" placeholder="What does success look like for the client?" value={form.goals} onChange={e => setForm({...form, goals: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Services / Scope</Label><Textarea className="h-16 resize-none" placeholder="List the services and scope of work..." value={form.services} onChange={e => setForm({...form, services: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Key Risks</Label><Textarea className="h-12 resize-none" placeholder="Potential risks and blockers..." value={form.risks} onChange={e => setForm({...form, risks: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Success Metrics</Label><Textarea className="h-12 resize-none" placeholder="How will you measure success?" value={form.successMetrics} onChange={e => setForm({...form, successMetrics: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Project Goals</Label><Textarea className="h-16 resize-none" placeholder="What does success look like for the client?" value={form.goals} onChange={e => setForm({...form, goals: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services / Scope</Label><Textarea className="h-16 resize-none" placeholder="List the services and scope of work..." value={form.services} onChange={e => setForm({...form, services: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Key Risks</Label><Textarea className="h-12 resize-none" placeholder="Potential risks and blockers..." value={form.risks} onChange={e => setForm({...form, risks: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Success Metrics</Label><Textarea className="h-12 resize-none" placeholder="How will you measure success?" value={form.successMetrics} onChange={e => setForm({...form, successMetrics: e.target.value})} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button variant="gold" onClick={handleGeneratePlan} disabled={generating}>{generating ? 'Generating...' : 'Create Project + Generate PDF Plan'}</Button></DialogFooter>
         </DialogContent>
@@ -348,8 +348,8 @@ export default function ProjectsPage() {
       <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Edit Project Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Project Title *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1">
               <Label>Client *</Label>
               <ClientAutocomplete

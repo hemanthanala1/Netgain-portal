@@ -424,9 +424,9 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Invoices</h1><p className="text-muted-foreground text-sm mt-0.5">Create and manage tax invoices for clients.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm()); setShowCreate(true) }} className="gap-1.5"><Plus className="h-4 w-4" />New Invoice</Button>
+        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm()); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Invoice</Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -435,10 +435,10 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search invoices..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">All Status</SelectItem>{STATUS_OPTS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
       </div>
@@ -486,7 +486,7 @@ export default function InvoicesPage() {
           <div className="space-y-6 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Company Name *</Label>
                   <ClientAutocomplete
@@ -544,8 +544,8 @@ export default function InvoicesPage() {
             {selSvcs.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="col-span-2 sm:col-span-1 space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
                     <Label>Discount Type</Label>
                     <div className="flex bg-muted/30 p-1 rounded-md border border-border">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
@@ -553,7 +553,7 @@ export default function InvoicesPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
                   <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>
@@ -582,7 +582,7 @@ export default function InvoicesPage() {
           <div className="space-y-6 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Company Name *</Label>
                   <ClientAutocomplete
@@ -640,8 +640,8 @@ export default function InvoicesPage() {
             {selSvcs.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="col-span-2 sm:col-span-1 space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
                     <Label>Discount Type</Label>
                     <div className="flex bg-muted/30 p-1 rounded-md border border-border">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
@@ -649,7 +649,7 @@ export default function InvoicesPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
                   <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>

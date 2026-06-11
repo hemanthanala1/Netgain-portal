@@ -230,9 +230,9 @@ export default function PRDPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">PRD Engine</h1><p className="text-muted-foreground text-sm mt-0.5">Generate structured Product Requirements Documents for development projects.</p></div>
-        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5"><Plus className="h-4 w-4" />New PRD</Button>
+        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New PRD</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
         {[{ icon: Layers, label: 'Executive Summary', desc: 'Product overview, goals & objectives' }, { icon: Database, label: 'DB Design & APIs', desc: 'Schema, endpoints, architecture' }, { icon: Code, label: 'UI Architecture', desc: 'Component map & user flows' }].map(f => (
@@ -270,8 +270,8 @@ export default function PRDPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate New PRD</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1">
               <Label>Client</Label>
               <ClientAutocomplete
@@ -288,10 +288,10 @@ export default function PRDPage() {
             <div className="space-y-1"><Label>Product Type</Label><Select value={form.productType} onValueChange={v => setForm({...form, productType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase + Stripe" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Objectives & Problem Statement</Label><Textarea className="h-20 resize-none" placeholder="What problem does this product solve? What are the goals?" value={form.objectives} onChange={e => setForm({...form, objectives: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Target Users / Personas</Label><Textarea className="h-16 resize-none" placeholder="Who will use this product? Describe primary user types." value={form.userPersonas} onChange={e => setForm({...form, userPersonas: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Core Features (one per line)</Label><Textarea className="h-20 resize-none" placeholder="User authentication&#10;Dashboard with analytics&#10;Invoice generation&#10;Client management" value={form.coreFeatures} onChange={e => setForm({...form, coreFeatures: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Key Database Tables (optional)</Label><Textarea className="h-16 resize-none" placeholder="users, clients, projects, invoices, services..." value={form.database} onChange={e => setForm({...form, database: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Objectives & Problem Statement</Label><Textarea className="h-20 resize-none" placeholder="What problem does this product solve? What are the goals?" value={form.objectives} onChange={e => setForm({...form, objectives: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Target Users / Personas</Label><Textarea className="h-16 resize-none" placeholder="Who will use this product? Describe primary user types." value={form.userPersonas} onChange={e => setForm({...form, userPersonas: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Core Features (one per line)</Label><Textarea className="h-20 resize-none" placeholder="User authentication&#10;Dashboard with analytics&#10;Invoice generation&#10;Client management" value={form.coreFeatures} onChange={e => setForm({...form, coreFeatures: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Key Database Tables (optional)</Label><Textarea className="h-16 resize-none" placeholder="users, clients, projects, invoices, services..." value={form.database} onChange={e => setForm({...form, database: e.target.value})} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? 'Generating PRD...' : 'Generate PRD PDF'}</Button></DialogFooter>
         </DialogContent>
@@ -300,8 +300,8 @@ export default function PRDPage() {
       <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Edit PRD Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1">
               <Label>Client</Label>
               <ClientAutocomplete

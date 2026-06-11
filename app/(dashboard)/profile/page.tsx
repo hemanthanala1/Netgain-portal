@@ -136,6 +136,30 @@ export default function ProfilePage() {
           })
           .eq('email', user.email)
 
+        // 4) If the user is a Founder, also sync with company_settings table
+        if (user.role === 'Founder') {
+          const { data: settingsData } = await supabase
+            .from('company_settings')
+            .select('founder')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+          const currentFounderSettings = settingsData?.founder || {}
+
+          await supabase
+            .from('company_settings')
+            .upsert({
+              user_id: user.id,
+              founder: {
+                ...currentFounderSettings,
+                name: profile.name,
+                email: profile.email,
+                phone: profile.phone,
+                designation: profile.designation
+              }
+            }, { onConflict: 'user_id' })
+        }
+
         setSelectedFile(null)
         await refreshUser()
       } else {
@@ -206,12 +230,12 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Profile</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage your account settings and security.</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5 text-red-400 border-red-400/20 hover:bg-red-400/10 hover:text-red-400"
+        <Button variant="outline" size="sm" className="gap-1.5 text-red-400 border-red-400/20 hover:bg-red-400/10 hover:text-red-400 w-full sm:w-auto"
           onClick={handleSignOut}>
           <LogOut className="h-3.5 w-3.5" /> Sign Out
         </Button>
@@ -258,7 +282,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader><CardTitle className="text-sm">Personal Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label>Full Name</Label>
                   <Input value={profile.name} onChange={e => setProfile({ ...profile, name: e.target.value })} />
@@ -275,7 +299,7 @@ export default function ProfilePage() {
                   <Label>Phone Number</Label>
                   <Input value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} />
                 </div>
-                <div className="col-span-2 space-y-1">
+                <div className="col-span-1 sm:col-span-2 space-y-1">
                   <Label>Bio</Label>
                   <Textarea className="resize-none h-20" value={profile.bio} onChange={e => setProfile({ ...profile, bio: e.target.value })} />
                 </div>
@@ -337,12 +361,12 @@ export default function ProfilePage() {
 
               <div>
                 <p className="text-sm font-semibold mb-3">Danger Zone</p>
-                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between">
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-red-400">Delete Account</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Permanently delete your account and all associated data. This cannot be undone.</p>
                   </div>
-                  <Button variant="outline" size="sm" className="border-red-400/30 text-red-400 hover:bg-red-400/10 shrink-0 ml-4">Delete Account</Button>
+                  <Button variant="outline" size="sm" className="border-red-400/30 text-red-400 hover:bg-red-400/10 shrink-0 w-full sm:w-auto">Delete Account</Button>
                 </div>
               </div>
             </CardContent>

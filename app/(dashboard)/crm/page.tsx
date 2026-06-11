@@ -238,12 +238,12 @@ export default function CRMPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Client Relationship Manager</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage leads, clients, and relationship pipeline.</p>
         </div>
-        <Button variant="gold" size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
+        <Button variant="gold" size="sm" onClick={() => setShowAdd(true)} className="gap-1.5 self-start sm:self-auto">
           <Plus className="h-4 w-4" /> Add Client
         </Button>
       </div>
@@ -358,7 +358,7 @@ export default function CRMPage() {
           <DialogHeader>
             <DialogTitle>Add New Client</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1"><Label>Client Name *</Label><Input placeholder="John Doe" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} /></div>
             <div className="space-y-1"><Label>Business Name</Label><Input placeholder="Company LLC" value={newClient.business} onChange={e => setNewClient({ ...newClient, business: e.target.value })} /></div>
             <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} /></div>
@@ -379,9 +379,8 @@ export default function CRMPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1"><Label>City</Label><Input placeholder="Mumbai, Delhi..." value={newClient.city} onChange={e => setNewClient({...newClient, city: e.target.value})} /></div>
             <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={newClient.gst} onChange={e => setNewClient({...newClient, gst: e.target.value})} /></div>
-            <div className="col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
@@ -403,7 +402,7 @@ export default function CRMPage() {
             <DialogTitle>Edit Client</DialogTitle>
           </DialogHeader>
           {editClient && (
-            <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
               <div className="space-y-1"><Label>Client Name *</Label><Input placeholder="John Doe" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} /></div>
               <div className="space-y-1"><Label>Business Name</Label><Input placeholder="Company LLC" value={editClient.business} onChange={e => setEditClient({ ...editClient, business: e.target.value })} /></div>
               <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
@@ -425,7 +424,7 @@ export default function CRMPage() {
                 </Select>
               </div>
               <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({...editClient, gst: e.target.value})} /></div>
-              <div className="col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({...editClient, address: e.target.value})} /></div>
+              <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({...editClient, address: e.target.value})} /></div>
             </div>
           )}
           <DialogFooter>

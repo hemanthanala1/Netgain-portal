@@ -249,14 +249,14 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Finance Tracking</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage revenues, expenses, and payroll in one place.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" /> Add Expense</Button>
-          <Button variant="gold" size="sm" onClick={() => { setEditSalaryId(null); setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' }); setShowSalaryAdd(true) }} className="gap-1.5"><Plus className="h-4 w-4" /> Process Payroll</Button>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) }} className="gap-1.5 flex-1 sm:flex-none"><Plus className="h-4 w-4" /> Add Expense</Button>
+          <Button variant="gold" size="sm" onClick={() => { setEditSalaryId(null); setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' }); setShowSalaryAdd(true) }} className="gap-1.5 flex-1 sm:flex-none"><Plus className="h-4 w-4" /> Process Payroll</Button>
         </div>
       </div>
 
@@ -341,9 +341,9 @@ export default function FinancePage() {
                 .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .slice(0, 5)
                 .map((t: any, i) => (
-                <div key={i} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-red-500/10 text-red-400">
+                    <div className="p-2 rounded-full bg-red-500/10 text-red-400 shrink-0">
                       <ArrowDownRight className="h-4 w-4" />
                     </div>
                     <div>
@@ -351,7 +351,7 @@ export default function FinancePage() {
                       <p className="text-xs text-muted-foreground">{formatDate(t.date)}</p>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <p className="text-sm font-bold text-foreground">-{formatCurrency(Number(t.amount) + Number(t.tax_amount || 0))}</p>
                     <p className="text-[10px] uppercase text-muted-foreground font-semibold">{t.status}</p>
                   </div>
@@ -408,21 +408,21 @@ export default function FinancePage() {
               <div className="divide-y divide-border">
                 {expenses.length === 0 && <div className="p-8 text-center text-muted-foreground">No expenses recorded yet.</div>}
                 {expenses.map(e => (
-                  <div key={e.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors group">
+                  <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
                     <div>
-                      <p className="font-semibold">{e.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <p className="font-semibold text-sm sm:text-base">{e.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge variant="outline" className="text-[10px]">{e.category}</Badge>
                         <span className="text-xs text-muted-foreground">{formatDate(e.date)}</span>
                         <Badge variant={e.status === 'paid' ? 'success' : 'secondary'} className="text-[10px] capitalize">{e.status}</Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-bold text-red-400">-{formatCurrency(Number(e.amount) + Number(e.tax_amount || 0))}</p>
+                    <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                      <div className="text-left sm:text-right">
+                        <p className="font-bold text-red-400 text-sm sm:text-base">-{formatCurrency(Number(e.amount) + Number(e.tax_amount || 0))}</p>
                         {Number(e.tax_amount) > 0 && <p className="text-[10px] text-muted-foreground">Includes {formatCurrency(e.tax_amount)} tax</p>}
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setExpenseForm({ title: e.title, category: e.category, amount: String(e.amount), taxAmount: String(e.tax_amount || ''), date: e.date, status: e.status }); setEditExpenseId(e.id); setShowExpenseAdd(true) }}><Edit className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteExpense(e.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
@@ -439,21 +439,21 @@ export default function FinancePage() {
               <div className="divide-y divide-border">
                 {salaries.length === 0 && <div className="p-8 text-center text-muted-foreground">No payroll records yet.</div>}
                 {salaries.map(s => (
-                  <div key={s.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors group">
+                  <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
                     <div>
-                      <p className="font-semibold">{s.employee}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <p className="font-semibold text-sm sm:text-base">{s.employee}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
                         <Badge variant="outline" className="text-[10px]">{s.role}</Badge>
                         <span className="text-xs text-muted-foreground">{formatDate(s.date)}</span>
                         <Badge variant={s.status === 'paid' ? 'success' : 'secondary'} className="text-[10px] capitalize">{s.status}</Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-bold text-blue-400">-{formatCurrency(s.baseSalary + s.bonus)}</p>
+                    <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                      <div className="text-left sm:text-right">
+                        <p className="font-bold text-blue-400 text-sm sm:text-base">-{formatCurrency(s.baseSalary + s.bonus)}</p>
                         {s.bonus > 0 && <p className="text-[10px] text-muted-foreground">Includes {formatCurrency(s.bonus)} bonus</p>}
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setSalaryForm({ employee: s.employee, role: s.role, baseSalary: String(s.baseSalary), bonus: String(s.bonus || 0), status: s.status }); setEditSalaryId(s.id); setShowSalaryAdd(true) }}><Edit className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteSalary(s.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
@@ -474,12 +474,12 @@ export default function FinancePage() {
           <DialogHeader><DialogTitle>{editExpenseId ? 'Edit Expense' : 'Add New Expense'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Title *</Label><Input placeholder="e.g. AWS Hosting" value={expenseForm.title} onChange={e => setExpenseForm({...expenseForm, title: e.target.value})} disabled={submitting} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Category</Label><Select value={expenseForm.category} onValueChange={v => setExpenseForm({...expenseForm, category: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Infrastructure', 'Operations', 'Marketing', 'Software', 'Other'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Amount (₹) *</Label><Input type="number" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} disabled={submitting} /></div>
               <div className="space-y-1"><Label>Tax/GST (₹)</Label><Input type="number" value={expenseForm.taxAmount} onChange={e => setExpenseForm({...expenseForm, taxAmount: e.target.value})} disabled={submitting} /></div>
               <div className="space-y-1"><Label>Date</Label><Input type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} disabled={submitting} /></div>
-              <div className="col-span-2 space-y-1"><Label>Status</Label><Select value={expenseForm.status} onValueChange={v => setExpenseForm({...expenseForm, status: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent></Select></div>
+              <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Status</Label><Select value={expenseForm.status} onValueChange={v => setExpenseForm({...expenseForm, status: v})} disabled={submitting}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent></Select></div>
             </div>
           </div>
           <DialogFooter>
@@ -495,7 +495,7 @@ export default function FinancePage() {
         <DialogContent>
           <DialogHeader><DialogTitle>{editSalaryId ? 'Edit Payroll / Salary' : 'Process Payroll / Salary'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Employee Name *</Label><Input placeholder="e.g. Devon Shah" value={salaryForm.employee} onChange={e => setSalaryForm({...salaryForm, employee: e.target.value})} disabled={submitting} /></div>
               <div className="space-y-1"><Label>Role</Label><Select value={salaryForm.role} onValueChange={v => setSalaryForm({...salaryForm, role: v})} disabled={submitting}><SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger><SelectContent>{['Founder','Co-Founder','CEO','CTO','COO','CFO','Project Manager','Team Lead','Senior Developer','Developer','Frontend Developer','Backend Developer','Full Stack Developer','UI/UX Designer','Graphic Designer','Digital Marketer','SEO Specialist','Content Writer','Sales Executive','Business Development Manager','Account Manager','HR Manager','Admin','Operations Manager','Finance Manager','Customer Support','Intern'].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Base Salary (₹) *</Label><Input type="number" value={salaryForm.baseSalary} onChange={e => setSalaryForm({...salaryForm, baseSalary: e.target.value})} disabled={submitting} /></div>

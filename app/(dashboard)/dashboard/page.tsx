@@ -318,12 +318,12 @@ export default function DashboardPage() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
       {/* Header */}
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Operating Dashboard 👋</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Here's what's happening at Netgain today.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/crm"><Button variant="outline" size="sm" className="gap-1.5"><Plus className="h-3.5 w-3.5" />New Client</Button></Link>
           <Link href="/documents/quotations"><Button variant="gold" size="sm" className="gap-1.5"><FileText className="h-3.5 w-3.5" />New Quotation</Button></Link>
         </div>

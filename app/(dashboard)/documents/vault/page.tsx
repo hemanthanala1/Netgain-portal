@@ -98,7 +98,7 @@ export default function VaultPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 mt-3 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => toast({ title: 'Download Started', description: `${doc.docId}.pdf` })}><Download className="h-3 w-3" />Download</Button>
                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}><Copy className="h-3 w-3" /></Button>
                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => doc.status === 'archived' ? handleUnarchive(doc.id) : handleArchive(doc.id)} title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}>
