@@ -110,15 +110,16 @@ export default function TeamPage() {
           if (profilesData) {
             profilesData.forEach((profile: any) => {
               seenIds.add(profile.id)
+              const matchingMember = dbTeam ? dbTeam.find((m: any) => m.id === profile.id || m.email === profile.email) : null
               mergedTeam.push({
                 id: profile.id,
                 name: profile.full_name || profile.email?.split('@')[0] || 'Unknown',
                 email: profile.email,
-                phone: '',
+                phone: matchingMember?.phone || profile.settings?.phone || '',
                 role: profile.role || 'Employee',
-                status: 'active',
-                joined: profile.updated_at?.split('T')[0] || new Date().toISOString().slice(0, 10),
-                projects: 0,
+                status: matchingMember?.status || 'active',
+                joined: matchingMember?.joined || profile.updated_at?.split('T')[0] || new Date().toISOString().slice(0, 10),
+                projects: matchingMember?.projects || 0,
                 source: 'profiles',
                 avatar_url: profile.settings?.avatar_url || ''
               })
@@ -154,6 +155,37 @@ export default function TeamPage() {
     if (editId) {
       if (isSupabaseConfigured()) {
         try {
+          const member = team.find(t => t.id === editId)
+          if (member?.source === 'profiles') {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('settings')
+              .eq('id', editId)
+              .maybeSingle()
+
+            const currentSettings = profileData?.settings || {}
+
+            const { error: profileErr } = await supabase
+              .from('profiles')
+              .update({
+                full_name: form.name,
+                email: form.email,
+                role: form.role,
+                settings: {
+                  ...currentSettings,
+                  phone: form.phone
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', editId)
+
+            if (profileErr) {
+              toast({ title: 'Error updating profile', description: profileErr.message, variant: 'destructive' })
+              setSubmitting(false)
+              return
+            }
+          }
+
           const { error } = await supabase.from('team_members').update({
             name: form.name,
             email: form.email,

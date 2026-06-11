@@ -20,8 +20,8 @@ export async function fetchFounderProfile() {
     return {
       name: data?.full_name || '',
       email: data?.email || '',
-      phone: data?.user_metadata?.phone || '',
-      designation: data?.user_metadata?.designation || 'Founder & CEO'
+      phone: data?.settings?.phone || '',
+      designation: 'Founder & CEO'
     }
   } catch (err) {
     console.error('Founder fetch error:', err)
