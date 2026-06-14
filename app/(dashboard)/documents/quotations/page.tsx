@@ -328,6 +328,8 @@ export default function QuotationsPage() {
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
+      fullProjectTotal: tot,
+      fullSubtotal: sub,
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),

@@ -29,12 +29,28 @@ type Invoice = {
   notes: string; amount: number; status: string; created: string; due: string
   history: { date: string; action: string; canDownload?: boolean }[]
   paymentScheduleId?: string;
+  paymentScheduleEntry?: string;
 }
 
 const INITIAL: Invoice[] = []
 
-function blankForm() {
-  return { client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', gst: '', selectedIds: [] as string[], discountType: 'percentage' as 'percentage'|'fixed', discountValue: 0, gstPct: 18, notes: '', paymentScheduleId: '' }
+function blankForm(initialDocs?: any) {
+  return { 
+    client: '', 
+    contact: '', 
+    email: '', 
+    phone: '', 
+    businessType: 'E-Commerce', 
+    gst: '', 
+    selectedIds: [] as string[], 
+    discountType: 'percentage' as 'percentage'|'fixed', 
+    discountValue: 0, 
+    gstPct: 18, 
+    notes: initialDocs?.invoiceNotes || 'Thank you for your business!', 
+    paymentScheduleId: '',
+    paymentSchedulePointIndex: 'none',
+    due: new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10)
+  }
 }
 
 export default function InvoicesPage() {
@@ -52,8 +68,9 @@ export default function InvoicesPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
+  const [companyDocs, setCompanyDocs] = useState<any>(null)
 
-  const [form, setForm] = useState(blankForm())
+  const [form, setForm] = useState(() => blankForm())
 
   useEffect(() => {
     const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[] }>('invoices')
@@ -78,9 +95,12 @@ export default function InvoicesPage() {
           if (sRes.error) throw sRes.error
 
           let schedules = []
-          if (cRes.data && cRes.data.docs?.paymentSchedules) {
-            schedules = cRes.data.docs.paymentSchedules
-            setPaymentSchedules(schedules)
+          if (cRes.data && cRes.data.docs) {
+            setCompanyDocs(cRes.data.docs)
+            if (cRes.data.docs.paymentSchedules) {
+              schedules = cRes.data.docs.paymentSchedules
+              setPaymentSchedules(schedules)
+            }
           }
 
           let mappedSvcs: any[] = []
@@ -120,7 +140,8 @@ export default function InvoicesPage() {
               created: i.created,
               due: i.due,
               history: Array.isArray(i.history) ? i.history : [],
-              paymentScheduleId: i.payment_schedule_id || ''
+              paymentScheduleId: i.payment_schedule_id || '',
+              paymentScheduleEntry: i.payment_schedule_entry || ''
             }))
             setInvoices(mappedInvoices)
           }
@@ -164,6 +185,11 @@ export default function InvoicesPage() {
   const gstAmt = Math.round(afterDisc * form.gstPct / 100)
   const grandTotal = afterDisc + gstAmt
 
+  const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
+  const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
+  const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
+  const invoiceAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+
   const filtered = invoices.filter(inv => {
     const matchSearch = inv.client.toLowerCase().includes(search.toLowerCase()) || inv.docId.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || inv.status === statusFilter
@@ -172,14 +198,47 @@ export default function InvoicesPage() {
 
   function openEdit(inv: Invoice) {
     setEditInvoice(inv)
-    setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes, paymentScheduleId: inv.paymentScheduleId || '' })
+    const schedule = paymentSchedules.find(p => p.id === inv.paymentScheduleId)
+    let pointIdx = 'none'
+    if (schedule && inv.paymentScheduleEntry) {
+      const idx = schedule.points.findIndex((pt: any) => `${pt.label} (${pt.pct}%)` === inv.paymentScheduleEntry)
+      if (idx !== -1) {
+        pointIdx = String(idx)
+      }
+    }
+    setForm({ 
+      client: inv.client, 
+      contact: inv.contact, 
+      email: inv.email, 
+      phone: inv.phone, 
+      businessType: inv.businessType, 
+      gst: inv.gst, 
+      selectedIds: inv.serviceIds, 
+      discountType: inv.discountType, 
+      discountValue: inv.discountValue, 
+      gstPct: inv.gstPct, 
+      notes: inv.notes, 
+      paymentScheduleId: inv.paymentScheduleId || '',
+      paymentSchedulePointIndex: pointIdx,
+      due: inv.due ? inv.due.slice(0, 10) : new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10)
+    })
   }
 
   function toggleSvc(id: string) {
     setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
   }
 
-  async function buildAndDownloadPdf(inv: Invoice, svcIds: string[], discType: 'percentage'|'fixed', discVal: number, gst: number, docId: string, paymentScheduleId?: string) {
+  async function buildAndDownloadPdf(
+    inv: Invoice, 
+    svcIds: string[], 
+    discType: 'percentage'|'fixed', 
+    discVal: number, 
+    gst: number, 
+    docId: string, 
+    paymentScheduleId?: string,
+    paymentScheduleEntry?: string,
+    dueDate?: string
+  ) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     const sub = svcs.reduce((a, s) => a + s.price, 0)
     const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
@@ -187,8 +246,41 @@ export default function InvoicesPage() {
     const gAmt = Math.round(aft * gst / 100)
     const tot = aft + gAmt
 
+    let pct = 100
+    if (paymentScheduleEntry) {
+      const match = paymentScheduleEntry.match(/\((\d+)%\)/)
+      if (match) {
+        pct = Number(match[1])
+      }
+    }
+    const scaleFactor = pct / 100
+    const scaledSub = Math.round(sub * scaleFactor)
+    const scaledDAmt = Math.round(dAmt * scaleFactor)
+    const scaledAft = Math.max(0, scaledSub - scaledDAmt)
+    const scaledGAmt = Math.round(scaledAft * gst / 100)
+    const scaledTot = scaledAft + scaledGAmt
+
+    const scaledItems = svcs.map(s => {
+      const scaledPrice = Math.round(s.price * scaleFactor)
+      let customName = s.name
+      if (paymentScheduleEntry) {
+        customName = `${s.name} - ${paymentScheduleEntry}`
+      }
+      return { 
+        serviceName: customName, 
+        finalPrice: scaledPrice, 
+        price: scaledPrice, 
+        quantity: 1, 
+        category: s.category, 
+        pricing_model: s.model, 
+        deliverables: s.deliverables 
+      }
+    })
+
     const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    const due = new Date(Date.now() + 10 * 864e5).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    const dueFormatted = dueDate
+      ? new Date(dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : new Date(Date.now() + 10 * 864e5).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
     const payload = {
       docType: 'Invoice',
@@ -198,33 +290,34 @@ export default function InvoicesPage() {
       clientInfo: { business: inv.businessType, mobile: inv.phone, gst: inv.gst },
       content: [
         `## Invoice Details`,
-        `**Invoice Date:** ${today}  |  **Due Date:** ${due}`,
+        `**Invoice Date:** ${today}  |  **Due Date:** ${dueFormatted}`,
         `**Invoice Ref:** ${docId}`,
         `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
         '',
         '## Services Rendered',
-        ...svcs.flatMap((s: any, i: number) => [
-          `### ${i + 1}. ${s.name}`,
-          `Category: ${s.category}  |  ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
+        ...scaledItems.flatMap((s: any, i: number) => [
+          `### ${i + 1}. ${s.serviceName}`,
+          `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
           ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
           '',
         ]),
-        '## Bank Details',
+        '## Payment Details',
         '__BANK_DETAILS__',
-        inv.notes ? `## Notes\n${inv.notes}` : '',
-        '',
-        '## Payment Policy',
-        '- Payment is due within 10 days of invoice date.',
-        '- Late payments attract 2% per month penalty.',
-        '- Accepted: NEFT / IMPS / UPI / Cheque',
+        ...(companyDocs?.invoicePaymentInstructions ? ['', companyDocs.invoicePaymentInstructions] : []),
+        ...(companyDocs?.invoiceAdditionalText ? ['', '## Additional Details', companyDocs.invoiceAdditionalText] : []),
+        ...(inv.notes ? ['', '## Notes', inv.notes] : []),
       ].join('\n'),
-      items: svcs.map(s => ({ serviceName: s.name, finalPrice: s.price, price: s.price, quantity: 1, category: s.category, pricing_model: s.model, deliverables: s.deliverables })),
-      subtotal: sub,
-      discountTotal: dAmt,
-      grandTotal: tot,
+      items: scaledItems,
+      subtotal: scaledSub,
+      discountTotal: scaledDAmt,
+      grandTotal: scaledTot,
+      fullProjectTotal: tot,
+      fullSubtotal: sub,
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),
+        invoiceTerms: companyDocs?.invoiceTerms || '',
+        invoiceFooter: companyDocs?.invoiceFooter || '',
       },
     }
 
@@ -239,7 +332,7 @@ export default function InvoicesPage() {
   async function handleDownload(inv: Invoice) {
     setDownloadingId(inv.id)
     try {
-      await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId, inv.paymentScheduleId)
+      await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId, inv.paymentScheduleId, inv.paymentScheduleEntry, inv.due)
       toast({ title: `✅ ${inv.docId} downloaded` })
     } catch (e: any) { toast({ title: 'Download failed', description: e.message, variant: 'destructive' }) }
     finally { setDownloadingId(null) }
@@ -253,8 +346,14 @@ export default function InvoicesPage() {
       const docId = generateDocId('NG-INV')
       const targetId = String(Date.now())
       const targetCreated = new Date().toISOString().slice(0,10)
-      const targetDue = new Date(Date.now()+10*864e5).toISOString().slice(0,10)
+      const targetDue = form.due || new Date(Date.now()+10*864e5).toISOString().slice(0,10)
       const targetHistory = [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }]
+
+      const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
+      const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
+      const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
+      const finalAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+      const milestoneText = selectedMilestone ? `${selectedMilestone.label} (${selectedMilestone.pct}%)` : ''
 
       const newInv: Invoice = { 
         id: targetId, 
@@ -270,15 +369,16 @@ export default function InvoicesPage() {
         discountValue: form.discountValue, 
         gstPct: form.gstPct, 
         notes: form.notes, 
-        amount: grandTotal, 
+        amount: finalAmount, 
         status: 'draft', 
         created: targetCreated, 
         due: targetDue, 
         history: targetHistory,
-        paymentScheduleId: form.paymentScheduleId
+        paymentScheduleId: form.paymentScheduleId,
+        paymentScheduleEntry: milestoneText
       }
 
-      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId)
+      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
 
       if (isSupabaseConfigured()) {
         const { error } = await supabase.from('invoices').insert([{
@@ -295,12 +395,13 @@ export default function InvoicesPage() {
           discount_value: form.discountValue,
           gst_pct: form.gstPct,
           notes: form.notes,
-          amount: grandTotal,
+          amount: finalAmount,
           status: 'draft',
           created: targetCreated,
           due: targetDue,
           history: targetHistory,
-          payment_schedule_id: form.paymentScheduleId
+          payment_schedule_id: form.paymentScheduleId,
+          payment_schedule_entry: milestoneText
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -313,7 +414,7 @@ export default function InvoicesPage() {
       setInvoices(updatedInvoices)
       setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
       invalidateCache('dashboard')
-      setShowCreate(false); setForm(blankForm())
+      setShowCreate(false); setForm(blankForm(companyDocs))
       toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
@@ -324,6 +425,14 @@ export default function InvoicesPage() {
     if (!editInvoice) return
     setGenerating(true)
     const targetHistory = [...editInvoice.history, { date: new Date().toISOString().split('T')[0], action: 'Document updated', canDownload: true }]
+
+    const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
+    const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
+    const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
+    const finalAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+    const milestoneText = selectedMilestone ? `${selectedMilestone.label} (${selectedMilestone.pct}%)` : ''
+    const targetDue = form.due || new Date(Date.now()+10*864e5).toISOString().slice(0,10)
+
     const updated: Invoice = { 
       ...editInvoice, 
       client: form.client, 
@@ -337,9 +446,11 @@ export default function InvoicesPage() {
       discountValue: form.discountValue, 
       gstPct: form.gstPct,
       notes: form.notes,
-      amount: grandTotal,
+      amount: finalAmount,
       history: targetHistory,
-      paymentScheduleId: form.paymentScheduleId
+      paymentScheduleId: form.paymentScheduleId,
+      paymentScheduleEntry: milestoneText,
+      due: targetDue
     }
 
     if (isSupabaseConfigured()) {
@@ -356,9 +467,11 @@ export default function InvoicesPage() {
           discount_value: form.discountValue,
           gst_pct: form.gstPct,
           notes: form.notes,
-          amount: grandTotal,
+          amount: finalAmount,
           history: targetHistory,
-          payment_schedule_id: form.paymentScheduleId
+          payment_schedule_id: form.paymentScheduleId,
+          payment_schedule_entry: milestoneText,
+          due: targetDue
         }).eq('id', editInvoice.id)
 
         if (error) {
@@ -377,7 +490,7 @@ export default function InvoicesPage() {
     setInvoices(updatedInvoices)
     setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
     invalidateCache('dashboard')
-    setEditInvoice(null); setForm(blankForm())
+    setEditInvoice(null); setForm(blankForm(companyDocs))
     toast({ title: '✅ Invoice updated' })
     setGenerating(false)
   }
@@ -496,7 +609,7 @@ export default function InvoicesPage() {
         </div>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blankForm()) }}>
+      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blankForm(companyDocs)) }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Invoice</DialogTitle></DialogHeader>
           <div className="space-y-6 py-2">
@@ -530,6 +643,10 @@ export default function InvoicesPage() {
                   </Select>
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Due Date *</Label>
+                  <Input type="date" value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} />
+                </div>
               </div>
             </div>
             <div>
@@ -577,30 +694,64 @@ export default function InvoicesPage() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                   {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
                   {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
-                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
+                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
+                    <span>Total Payable</span>
+                    <div className="text-right">
+                      <span>{formatCurrency(invoiceAmount)}</span>
+                      {selectedMilestone && (
+                        <p className="text-[10px] text-muted-foreground font-normal">
+                          ({selectedMilestone.label} - {selectedMilestone.pct}% of {formatCurrency(grandTotal)} project total)
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
             {paymentSchedules && paymentSchedules.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
-                <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
-                  <SelectContent>
-                    {paymentSchedules.map(ps => (
-                      <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Schedule Type</Label>
+                    <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v, paymentSchedulePointIndex: 'none' })}>
+                      <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (Full Payment)</SelectItem>
+                        {paymentSchedules.map(ps => (
+                          <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {form.paymentScheduleId && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                  {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Milestone / Installment *</Label>
+                      <Select value={form.paymentSchedulePointIndex} onValueChange={v => setForm({ ...form, paymentSchedulePointIndex: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select milestone..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Full Amount (100%)</SelectItem>
+                          {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+                            <SelectItem key={i} value={String(i)}>{pt.label} ({pt.pct}%)</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
                   <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
-                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
-                      <div key={i} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
-                        <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
-                      </div>
-                    ))}
+                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => {
+                      const isSelected = form.paymentSchedulePointIndex === String(i)
+                      return (
+                        <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
+                          <span>{pt.label} ({pt.pct}%)</span>
+                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -608,15 +759,15 @@ export default function InvoicesPage() {
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating || selSvcs.length === 0}>
-              {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : `Generate Invoice${grandTotal > 0 ? ` (${formatCurrency(grandTotal)})` : ''}`}
+              {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : `Generate Invoice${invoiceAmount > 0 ? ` (${formatCurrency(invoiceAmount)})` : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editInvoice} onOpenChange={v => { if (!v) { setEditInvoice(null); setForm(blankForm()) } }}>
+      <Dialog open={!!editInvoice} onOpenChange={v => { if (!v) { setEditInvoice(null); setForm(blankForm(companyDocs)) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Invoice — {editInvoice?.docId}</DialogTitle></DialogHeader>
           <div className="space-y-6 py-2">
@@ -650,6 +801,10 @@ export default function InvoicesPage() {
                   </Select>
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Due Date *</Label>
+                  <Input type="date" value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} />
+                </div>
               </div>
             </div>
             <div>
@@ -697,30 +852,64 @@ export default function InvoicesPage() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                   {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
                   {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
-                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
+                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
+                    <span>Total Payable</span>
+                    <div className="text-right">
+                      <span>{formatCurrency(invoiceAmount)}</span>
+                      {selectedMilestone && (
+                        <p className="text-[10px] text-muted-foreground font-normal">
+                          ({selectedMilestone.label} - {selectedMilestone.pct}% of {formatCurrency(grandTotal)} project total)
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
             {paymentSchedules && paymentSchedules.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
-                <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
-                  <SelectContent>
-                    {paymentSchedules.map(ps => (
-                      <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Schedule Type</Label>
+                    <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v, paymentSchedulePointIndex: 'none' })}>
+                      <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (Full Payment)</SelectItem>
+                        {paymentSchedules.map(ps => (
+                          <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {form.paymentScheduleId && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                  {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Milestone / Installment *</Label>
+                      <Select value={form.paymentSchedulePointIndex} onValueChange={v => setForm({ ...form, paymentSchedulePointIndex: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select milestone..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Full Amount (100%)</SelectItem>
+                          {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+                            <SelectItem key={i} value={String(i)}>{pt.label} ({pt.pct}%)</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
                   <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
-                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
-                      <div key={i} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
-                        <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
-                      </div>
-                    ))}
+                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => {
+                      const isSelected = form.paymentSchedulePointIndex === String(i)
+                      return (
+                        <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
+                          <span>{pt.label} ({pt.pct}%)</span>
+                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -728,7 +917,7 @@ export default function InvoicesPage() {
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditInvoice(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditInvoice(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
               {generating ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}
             </Button>

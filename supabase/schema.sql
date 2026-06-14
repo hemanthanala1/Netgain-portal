@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     due DATE,
     history JSONB DEFAULT '[]'::JSONB,
     payment_schedule_id TEXT,
+    payment_schedule_entry TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 

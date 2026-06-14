@@ -128,7 +128,12 @@ export default function SettingsPage() {
       { id: '1', name: '50/50 Split', points: [{ label: 'Advance to begin', pct: 50 }, { label: 'Balance on delivery', pct: 50 }] },
       { id: '2', name: '100% Upfront', points: [{ label: 'Full Payment', pct: 100 }] },
       { id: '3', name: '40/40/20 Split', points: [{ label: 'Advance', pct: 40 }, { label: 'Milestone 1', pct: 40 }, { label: 'Final Delivery', pct: 20 }] }
-    ]
+    ],
+    invoiceTerms: 'Payment is due within 10 days of invoice date.\nLate payments attract 2% per month penalty.\nAccepted: NEFT / IMPS / UPI / Cheque',
+    invoiceNotes: 'Thank you for your business!',
+    invoicePaymentInstructions: 'Please transfer the payment to our bank account or scan the UPI QR code.',
+    invoiceFooter: 'Netgain Studio | mail.netgain@gmail.com | 9347102347',
+    invoiceAdditionalText: ''
   })
 
   // Load saved settings on mount
@@ -341,6 +346,28 @@ export default function SettingsPage() {
               <FieldRow label="Additional Custom Terms" hint="One term per line. These will appear as bullet points.">
                 <Textarea className="min-h-32" value={docs.extraTerms} onChange={e => setDocs({ ...docs, extraTerms: e.target.value })} placeholder="Intellectual property will be transferred upon final payment.&#10;Support covers bug fixes for 30 days post-launch." />
               </FieldRow>
+              <Separator />
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base font-semibold text-gold">Invoice PDF Template Config</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Configure the custom content rendered specifically on Invoice PDFs.</p>
+                </div>
+                <FieldRow label="Invoice Terms & Conditions" hint="One term per line. Replaces default payment policy.">
+                  <Textarea className="min-h-24" value={(docs as any).invoiceTerms || ''} onChange={e => setDocs({ ...docs, invoiceTerms: e.target.value })} placeholder="Payment is due within 10 days..." />
+                </FieldRow>
+                <FieldRow label="Default Invoice Notes" hint="Pre-filled when creating new invoices.">
+                  <Textarea className="resize-none h-16" value={(docs as any).invoiceNotes || ''} onChange={e => setDocs({ ...docs, invoiceNotes: e.target.value })} placeholder="Thank you for your business!" />
+                </FieldRow>
+                <FieldRow label="Payment Instructions" hint="E.g. banking instructions, UPI details.">
+                  <Textarea className="resize-none h-16" value={(docs as any).invoicePaymentInstructions || ''} onChange={e => setDocs({ ...docs, invoicePaymentInstructions: e.target.value })} placeholder="Please transfer the payment to our bank account..." />
+                </FieldRow>
+                <FieldRow label="Invoice Footer Override" hint="Appears at the bottom of invoice pages.">
+                  <Input value={(docs as any).invoiceFooter || ''} onChange={e => setDocs({ ...docs, invoiceFooter: e.target.value })} placeholder="Netgain Studio | hello@netgain.studio" />
+                </FieldRow>
+                <FieldRow label="Additional Invoice Text" hint="Optional text block rendered on the invoice.">
+                  <Textarea className="min-h-20" value={(docs as any).invoiceAdditionalText || ''} onChange={e => setDocs({ ...docs, invoiceAdditionalText: e.target.value })} placeholder="E.g. GST registration details..." />
+                </FieldRow>
+              </div>
               <Separator />
               <div className="space-y-4">
                 <div>

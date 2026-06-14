@@ -121,11 +121,18 @@ export interface PdfPayload {
     paymentTermsMonthly?: string
     gstRate?: string
     extraTerms?: string
+    invoiceTerms?: string
+    invoiceNotes?: string
+    invoicePaymentInstructions?: string
+    invoiceFooter?: string
+    invoiceAdditionalText?: string
   }
   items?: PdfItem[]
   subtotal?: number
   discountTotal?: number
   grandTotal?: number
+  fullProjectTotal?: number
+  fullSubtotal?: number
   paymentScheduleObj?: { name: string, points: { label: string, pct: number }[] } | null
   content?: string           // Markdown-lite body text
 }
@@ -167,21 +174,28 @@ function Header({ docType, docRef, company, tagline }: { docType: string; docRef
 }
 
 // ── Footer fixed component ─────────────────────────────────────────────────
-function Footer({ company, tagline }: { company: PdfPayload['companySettings']; tagline: string }) {
+function Footer({ company, tagline, docType, invoiceFooter }: { company: PdfPayload['companySettings']; tagline: string; docType?: string; invoiceFooter?: string }) {
+  const isCustomInvoiceFooter = docType === 'Invoice' && invoiceFooter && invoiceFooter.trim()
   return (
     <View style={s.footer} fixed>
       <View style={s.footerLine} />
       <View style={s.footerRow}>
-        <View>
-          <Text style={s.footerBrand}>{company?.name || 'NETGAIN'}</Text>
-          {company?.phone && <Text style={s.footerText}>Phone / WhatsApp: {company.phone}</Text>}
-          {(company?.email || company?.website) && (
-            <Text style={s.footerText}>
-              {company.email || ''}{company.email && company.website ? '   | ' : ''}{company.website || ''}
-            </Text>
+        <View style={{ flex: 1 }}>
+          {isCustomInvoiceFooter ? (
+            <Text style={s.footerText}>{invoiceFooter}</Text>
+          ) : (
+            <>
+              <Text style={s.footerBrand}>{company?.name || 'NETGAIN'}</Text>
+              {company?.phone && <Text style={s.footerText}>Phone / WhatsApp: {company.phone}</Text>}
+              {(company?.email || company?.website) && (
+                <Text style={s.footerText}>
+                  {company.email || ''}{company.email && company.website ? '   | ' : ''}{company.website || ''}
+                </Text>
+              )}
+            </>
           )}
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
+        <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
           <Text style={s.footerText}>{tagline}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} style={s.footerText} />
         </View>
@@ -236,7 +250,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
     <Document>
       <Page size="A4" style={s.page}>
         <Header docType={data.docType} docRef={docRef} company={co} tagline={tagline} />
-        <Footer company={co} tagline={tagline} />
+        <Footer company={co} tagline={tagline} docType={data.docType} invoiceFooter={docs.invoiceFooter} />
 
         {/* ── Project Title ── */}
         <View style={s.spacer8} />
@@ -436,7 +450,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
                         {data.paymentScheduleObj.points.map((pt, i) => (
                           <View key={i} style={s.invRow}>
                             <Text style={s.invLabel}>{pt.label} ({pt.pct}%)</Text>
-                            <Text style={i === 0 ? [s.invValue, { color: '#22c55e' }] : s.invValue}>INR {Math.round(data.grandTotal! * (pt.pct / 100)).toLocaleString('en-IN')}</Text>
+                            <Text style={i === 0 ? [s.invValue, { color: '#22c55e' }] : s.invValue}>INR {Math.round((data.fullProjectTotal ?? data.grandTotal!) * (pt.pct / 100)).toLocaleString('en-IN')}</Text>
                           </View>
                         ))}
                         {monthly.length > 0 && <View style={s.invDivider} />}
@@ -472,20 +486,26 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
 
             {/* Terms & Conditions — driven by docsSettings */}
             <Text style={s.h2}>TERMS & CONDITIONS</Text>
-            {[
-              `Quotation valid for ${validityDays} days from issue date.`,
-              `One-time services: ${ptOneTime}.`,
-              `Monthly recurring services: ${ptMonthly}.`,
-              'Hosting, domain, ad spend & third-party API fees billed at actuals.',
-              `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`,
-              ...(data.docType === 'Quotation' ? [
-                'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions.',
-                'The final Scope of Work (SOW) and Service Agreement will be shared and approved before project commencement.'
-              ] : []),
-              ...extraTerms,
-            ].map((t, i) => (
-              <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-            ))}
+            {(data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim()) ? (
+              docs.invoiceTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
+                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
+              ))
+            ) : (
+              [
+                `Quotation valid for ${validityDays} days from issue date.`,
+                `One-time services: ${ptOneTime}.`,
+                `Monthly recurring services: ${ptMonthly}.`,
+                'Hosting, domain, ad spend & third-party API fees billed at actuals.',
+                `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`,
+                ...(data.docType === 'Quotation' ? [
+                  'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions.',
+                  'The final Scope of Work (SOW) and Service Agreement will be shared and approved before project commencement.'
+                ] : []),
+                ...extraTerms,
+              ].map((t, i) => (
+                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
+              ))
+            )}
           </>
         )}
       </Page>

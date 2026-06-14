@@ -88,6 +88,11 @@ export async function POST(request: NextRequest) {
       gstRate:             saved?.docs?.gstRate             || '18',
       extraTerms:          saved?.docs?.extraTerms          || '',
       paymentSchedule:     saved?.docs?.paymentSchedule     || '- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST',
+      invoiceTerms:        saved?.docs?.invoiceTerms        || '',
+      invoiceNotes:        saved?.docs?.invoiceNotes        || '',
+      invoicePaymentInstructions: saved?.docs?.invoicePaymentInstructions || '',
+      invoiceFooter:       saved?.docs?.invoiceFooter       || '',
+      invoiceAdditionalText: saved?.docs?.invoiceAdditionalText || '',
       ...(payload.docsSettings || {}),
     }
 
