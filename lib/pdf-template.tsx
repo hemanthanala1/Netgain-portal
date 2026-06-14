@@ -419,7 +419,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
             )}
 
             {/* Payment schedule breakdown */}
-            {items.length > 0 && data.docType === 'Quotation' && (() => {
+            {items.length > 0 && ['Quotation', 'Invoice'].includes(data.docType) && (() => {
               const oneTime = items.filter(i => i.pricing_model !== 'monthly')
               const monthly = items.filter(i => i.pricing_model === 'monthly')
               const oneTimeSub = oneTime.reduce((a, i) => a + i.finalPrice, 0)

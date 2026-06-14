@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     created DATE DEFAULT CURRENT_DATE,
     valid DATE,
     history JSONB DEFAULT '[]'::JSONB,
+    payment_schedule_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
@@ -124,6 +125,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     created DATE DEFAULT CURRENT_DATE,
     due DATE,
     history JSONB DEFAULT '[]'::JSONB,
+    payment_schedule_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 

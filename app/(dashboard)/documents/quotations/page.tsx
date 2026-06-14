@@ -32,6 +32,7 @@ type Quote = {
   serviceIds: string[]; discountPct: number; gstPct: number; notes: string
   amount: number; status: string; created: string; valid: string
   history: { date: string; action: string; canDownload?: boolean }[]
+  paymentScheduleId?: string;
 }
 
 const INITIAL: Quote[] = []

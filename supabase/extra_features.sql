@@ -151,10 +151,9 @@ AS $$
 BEGIN
   -- Try to set profile_id by matching email if profile exists
   IF NEW.email IS NOT NULL THEN
-    UPDATE public.team_members t
-    SET profile_id = p.id
-    FROM public.profiles p
-    WHERE t.email = p.email AND t.id = NEW.id;
+    SELECT id INTO NEW.profile_id
+    FROM public.profiles
+    WHERE email = NEW.email;
   END IF;
   RETURN NEW;
 END;
@@ -162,7 +161,7 @@ $$;
 
 DROP TRIGGER IF EXISTS trigger_sync_team_member_profile_id ON public.team_members;
 CREATE TRIGGER trigger_sync_team_member_profile_id
-AFTER INSERT OR UPDATE ON public.team_members
+BEFORE INSERT OR UPDATE ON public.team_members
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_team_member_profile_id();
 

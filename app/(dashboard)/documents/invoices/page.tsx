@@ -28,17 +28,19 @@ type Invoice = {
   businessType: string; gst: string; serviceIds: string[]; discountType: 'percentage' | 'fixed'; discountValue: number; gstPct: number
   notes: string; amount: number; status: string; created: string; due: string
   history: { date: string; action: string; canDownload?: boolean }[]
+  paymentScheduleId?: string;
 }
 
 const INITIAL: Invoice[] = []
 
 function blankForm() {
-  return { client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', gst: '', selectedIds: [] as string[], discountType: 'percentage' as 'percentage'|'fixed', discountValue: 0, gstPct: 18, notes: '' }
+  return { client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', gst: '', selectedIds: [] as string[], discountType: 'percentage' as 'percentage'|'fixed', discountValue: 0, gstPct: 18, notes: '', paymentScheduleId: '' }
 }
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
+  const [paymentSchedules, setPaymentSchedules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -54,10 +56,11 @@ export default function InvoicesPage() {
   const [form, setForm] = useState(blankForm())
 
   useEffect(() => {
-    const cached = getCachedData<{ invoices: Invoice[], servicesData: any[] }>('invoices')
+    const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[] }>('invoices')
     if (cached) {
       setInvoices(cached.invoices)
       setServicesData(cached.servicesData)
+      if (cached.paymentSchedules) setPaymentSchedules(cached.paymentSchedules)
       setLoading(false)
     }
 
@@ -65,13 +68,20 @@ export default function InvoicesPage() {
       if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const [invRes, sRes] = await Promise.all([
+          const [invRes, sRes, cRes] = await Promise.all([
             supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false })
+            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false }),
+            supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
           if (invRes.error) throw invRes.error
           if (sRes.error) throw sRes.error
+
+          let schedules = []
+          if (cRes.data && cRes.data.docs?.paymentSchedules) {
+            schedules = cRes.data.docs.paymentSchedules
+            setPaymentSchedules(schedules)
+          }
 
           let mappedSvcs: any[] = []
           if (sRes.data) {
@@ -109,18 +119,19 @@ export default function InvoicesPage() {
               status: i.status || 'draft',
               created: i.created,
               due: i.due,
-              history: Array.isArray(i.history) ? i.history : []
+              history: Array.isArray(i.history) ? i.history : [],
+              paymentScheduleId: i.payment_schedule_id || ''
             }))
             setInvoices(mappedInvoices)
           }
 
-          setCachedData('invoices', { invoices: mappedInvoices, servicesData: mappedSvcs })
+          setCachedData('invoices', { invoices: mappedInvoices, servicesData: mappedSvcs, paymentSchedules: schedules })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setInvoices(INITIAL)
-        setCachedData('invoices', { invoices: INITIAL, servicesData: [] })
+        setCachedData('invoices', { invoices: INITIAL, servicesData: [], paymentSchedules: [] })
       }
       setLoading(false)
     }
@@ -161,14 +172,14 @@ export default function InvoicesPage() {
 
   function openEdit(inv: Invoice) {
     setEditInvoice(inv)
-    setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes })
+    setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes, paymentScheduleId: inv.paymentScheduleId || '' })
   }
 
   function toggleSvc(id: string) {
     setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
   }
 
-  async function buildAndDownloadPdf(inv: Invoice, svcIds: string[], discType: 'percentage'|'fixed', discVal: number, gst: number, docId: string) {
+  async function buildAndDownloadPdf(inv: Invoice, svcIds: string[], discType: 'percentage'|'fixed', discVal: number, gst: number, docId: string, paymentScheduleId?: string) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     const sub = svcs.reduce((a, s) => a + s.price, 0)
     const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
@@ -211,6 +222,7 @@ export default function InvoicesPage() {
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
+      paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),
       },
@@ -227,7 +239,7 @@ export default function InvoicesPage() {
   async function handleDownload(inv: Invoice) {
     setDownloadingId(inv.id)
     try {
-      await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId)
+      await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId, inv.paymentScheduleId)
       toast({ title: `✅ ${inv.docId} downloaded` })
     } catch (e: any) { toast({ title: 'Download failed', description: e.message, variant: 'destructive' }) }
     finally { setDownloadingId(null) }
@@ -262,10 +274,11 @@ export default function InvoicesPage() {
         status: 'draft', 
         created: targetCreated, 
         due: targetDue, 
-        history: targetHistory 
+        history: targetHistory,
+        paymentScheduleId: form.paymentScheduleId
       }
 
-      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId)
+      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId)
 
       if (isSupabaseConfigured()) {
         const { error } = await supabase.from('invoices').insert([{
@@ -286,7 +299,8 @@ export default function InvoicesPage() {
           status: 'draft',
           created: targetCreated,
           due: targetDue,
-          history: targetHistory
+          history: targetHistory,
+          payment_schedule_id: form.paymentScheduleId
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -297,7 +311,7 @@ export default function InvoicesPage() {
 
       const updatedInvoices = [newInv, ...invoices]
       setInvoices(updatedInvoices)
-      setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+      setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
       invalidateCache('dashboard')
       setShowCreate(false); setForm(blankForm())
       toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
@@ -324,7 +338,8 @@ export default function InvoicesPage() {
       gstPct: form.gstPct,
       notes: form.notes,
       amount: grandTotal,
-      history: targetHistory
+      history: targetHistory,
+      paymentScheduleId: form.paymentScheduleId
     }
 
     if (isSupabaseConfigured()) {
@@ -342,7 +357,8 @@ export default function InvoicesPage() {
           gst_pct: form.gstPct,
           notes: form.notes,
           amount: grandTotal,
-          history: targetHistory
+          history: targetHistory,
+          payment_schedule_id: form.paymentScheduleId
         }).eq('id', editInvoice.id)
 
         if (error) {
@@ -359,7 +375,7 @@ export default function InvoicesPage() {
 
     const updatedInvoices = invoices.map(i => i.id === editInvoice.id ? updated : i)
     setInvoices(updatedInvoices)
-    setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
     invalidateCache('dashboard')
     setEditInvoice(null); setForm(blankForm())
     toast({ title: '✅ Invoice updated' })
@@ -468,7 +484,7 @@ export default function InvoicesPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}>
                         {downloadingId === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditInvoice(inv); setForm({ client: inv.client, contact: inv.contact, email: inv.email, phone: inv.phone, businessType: inv.businessType, gst: inv.gst, selectedIds: inv.serviceIds, discountType: inv.discountType, discountValue: inv.discountValue, gstPct: inv.gstPct, notes: inv.notes }) }}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => openEdit(inv)}><Pencil className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: inv.id, title: `${inv.docId} - ${inv.client}` })}><Send className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(inv.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
@@ -565,6 +581,30 @@ export default function InvoicesPage() {
                 </div>
               </div>
             )}
+            {paymentSchedules && paymentSchedules.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
+                <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+                  <SelectContent>
+                    {paymentSchedules.map(ps => (
+                      <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {form.paymentScheduleId && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                  <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
+                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
+                        <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
@@ -659,6 +699,30 @@ export default function InvoicesPage() {
                   {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
                   <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Total Payable</span><span>{formatCurrency(grandTotal)}</span></div>
                 </div>
+              </div>
+            )}
+            {paymentSchedules && paymentSchedules.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
+                <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+                  <SelectContent>
+                    {paymentSchedules.map(ps => (
+                      <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {form.paymentScheduleId && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                  <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
+                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
+                        <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
