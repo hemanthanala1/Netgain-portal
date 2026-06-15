@@ -1112,7 +1112,43 @@ export default function InvoicesPage() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
-          if (shareDoc) updateStatus(shareDoc.id, 'sent')
+          if (!shareDoc) return
+          const invObj = invoices.find(i => i.id === shareDoc.id)
+          if (!invObj) throw new Error('Invoice not found')
+
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+
+          for (const method of methods) {
+            let recipient = ''
+            let message = ''
+            let subject = ''
+
+            if (method === 'email') {
+              recipient = invObj.email
+              subject = `Invoice ${invObj.docId} from Netgain Studio`
+              message = `Dear ${invObj.client},\n\nPlease find your Invoice (${invObj.docId}) as per our engagement.\n\nAmount Due: ${formatCurrency(invObj.amount)}\nDue Date: ${formatDate(invObj.due)}\n\nKindly process the payment at your earliest convenience. Please feel free to reach out for any queries.\n\nThank you for your business!\n\nBest regards,\nNetgain Team`
+            } else if (method === 'whatsapp' || method === 'sms') {
+              recipient = invObj.phone
+              message = `Dear ${invObj.client}, Invoice ${invObj.docId} of ${formatCurrency(invObj.amount)} is due on ${formatDate(invObj.due)}. Please check your email for details. - Netgain Team`
+            }
+
+            if (!recipient) throw new Error(`Recipient contact details not found for ${method}`)
+
+            const res = await fetch('/api/meetings/send', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ channel: method, recipient, message, subject: method === 'email' ? subject : undefined })
+            })
+            if (!res.ok) {
+              const err = await res.json()
+              throw new Error(err.error || `Failed to send via ${method}`)
+            }
+          }
+
+          updateStatus(shareDoc.id, 'sent')
         }}
       />
     </div>

@@ -8,7 +8,7 @@ import { useUser } from '@/components/user-provider'
 import {
   LayoutDashboard, Users, Briefcase, FileText, Receipt, ClipboardList, HandshakeIcon,
   FolderOpen, Cpu, TrendingUp, MessageSquare, UserCog, Settings, ChevronLeft,
-  ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign
+  ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar
 } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -44,6 +44,7 @@ const navItems = [
     label: 'Operations',
     items: [
       { href: '/finance', icon: DollarSign, label: 'Finance' },
+      { href: '/meetings', icon: Calendar, label: 'Meetings' },
       { href: '/communications', icon: MessageSquare, label: 'Communications' },
       { href: '/team', icon: UserCog, label: 'Team' },
       { href: '/settings', icon: Settings, label: 'Settings' },

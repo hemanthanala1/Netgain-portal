@@ -840,7 +840,54 @@ export default function QuotationsPage() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
-          if (shareDoc) updateStatus(shareDoc.id, 'sent')
+          if (!shareDoc) return
+          
+          const quoteObj = quotes.find(q => q.id === shareDoc.id)
+          if (!quoteObj) throw new Error('Quotation not found')
+
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`
+          }
+
+          for (const method of methods) {
+            let recipient = ''
+            let message = ''
+            let subject = ''
+
+            if (method === 'email') {
+              recipient = quoteObj.email
+              subject = `Quotation Proposal: ${quoteObj.projectTitle || quoteObj.docId}`
+              message = `Dear ${quoteObj.client},\n\nWe are pleased to share our quotation proposal for the project "${quoteObj.projectTitle || 'Services'}" (${quoteObj.docId}).\n\nTotal Estimated Amount: ${formatCurrency(quoteObj.amount)}\n\nYou can view and download all documents in your client vault.\n\nBest regards,\nNetgain Team`
+            } else if (method === 'whatsapp' || method === 'sms') {
+              recipient = quoteObj.phone
+              message = `Dear ${quoteObj.client}, here is your quotation ${quoteObj.docId} for "${quoteObj.projectTitle || 'Services'}" - Total: ${formatCurrency(quoteObj.amount)}. Netgain Team`
+            }
+
+            if (!recipient) {
+              throw new Error(`Recipient contact details not found for ${method}`)
+            }
+
+            const res = await fetch('/api/meetings/send', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                channel: method,
+                recipient,
+                message,
+                subject: method === 'email' ? subject : undefined
+              })
+            })
+
+            if (!res.ok) {
+              const err = await res.json()
+              throw new Error(err.error || `Failed to send via ${method}`)
+            }
+          }
+
+          updateStatus(shareDoc.id, 'sent')
         }}
       />
     </div>

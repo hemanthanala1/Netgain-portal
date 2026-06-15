@@ -20,7 +20,7 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
 
-type SOW = { id: string; docId: string; client: string; contact: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
+type SOW = { id: string; docId: string; client: string; contact: string; email: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
 
 const mockSOWs: SOW[] = []
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
@@ -179,6 +179,7 @@ export default function SOWPage() {
               docId: s.doc_id,
               client: s.client,
               contact: s.contact || '',
+              email: s.email || '',
               phone: s.phone || '',
               project: s.project,
               value: Number(s.value) || 0,
@@ -375,7 +376,8 @@ export default function SOWPage() {
         id: targetId, 
         docId, 
         client: form.client, 
-        contact: form.contact, 
+        contact: form.contact,
+        email: form.email || '',
         phone: form.phone, 
         project: form.project, 
         value: Number(form.value) || 0, 
@@ -399,6 +401,7 @@ export default function SOWPage() {
           doc_id: docId,
           client: form.client,
           contact: form.contact,
+          email: form.email || '',
           phone: form.phone,
           project: form.project,
           value: Number(form.value) || 0,
@@ -629,7 +632,43 @@ export default function SOWPage() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
-          if (shareDoc) updateStatus(shareDoc.id, 'sent')
+          if (!shareDoc) return
+          const sowObj = sows.find(s => s.id === shareDoc.id)
+          if (!sowObj) throw new Error('SOW not found')
+
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (token) headers['Authorization'] = `Bearer ${token}`
+
+          for (const method of methods) {
+            let recipient = ''
+            let message = ''
+            let subject = ''
+
+            if (method === 'email') {
+              recipient = sowObj.email
+              subject = `Scope of Work: ${sowObj.project || sowObj.docId}`
+              message = `Dear ${sowObj.client},\n\nPlease find attached the Scope of Work document (${sowObj.docId}) for your project "${sowObj.project || 'Services'}".\n\nContract Value: ${formatCurrency(sowObj.value)}\nTimeline: ${sowObj.timeline || 'As per discussion'}\n\nKindly review and revert with any questions.\n\nBest regards,\nNetgain Team`
+            } else if (method === 'whatsapp' || method === 'sms') {
+              recipient = sowObj.phone
+              message = `Dear ${sowObj.client}, your Scope of Work ${sowObj.docId} for "${sowObj.project || 'Services'}" - Value: ${formatCurrency(sowObj.value)} is ready. Please check your email for the document. - Netgain Team`
+            }
+
+            if (!recipient) throw new Error(`Recipient contact details not found for ${method}`)
+
+            const res = await fetch('/api/meetings/send', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ channel: method, recipient, message, subject: method === 'email' ? subject : undefined })
+            })
+            if (!res.ok) {
+              const err = await res.json()
+              throw new Error(err.error || `Failed to send via ${method}`)
+            }
+          }
+
+          updateStatus(shareDoc.id, 'sent')
         }}
       />
     </div>

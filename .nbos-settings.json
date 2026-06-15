@@ -18,24 +18,38 @@
     "phone": "9347102347"
   },
   "bank": {
-    "accountName": "Netgain Studio",
-    "accountNumber": "123456789",
-    "ifsc": "HDFC001233475",
-    "bank": "HDFC Bank",
+    "accountName": "Anala Hemanth",
+    "accountNumber": "",
+    "ifsc": "",
+    "bank": "",
     "upiId": "9347102347@ybl"
   },
   "comm": {
+    "waToken": "",
+    "fromName": "Netgain Studio",
     "smtpHost": "",
+    "smtpPass": "",
     "smtpPort": "587",
     "smtpUser": "",
-    "smtpPass": "",
-    "waToken": "",
-    "smsProvider": "MSG91"
+    "fromEmail": "hello@netgainstudio.com",
+    "waPhoneId": "",
+    "waProvider": "meta",
+    "googleEmail": "mock_user@gmail.com",
+    "smsProvider": "MSG91",
+    "twilioWaSid": "",
+    "msg91Authkey": "",
+    "resendApiKey": "dd0b8322864ffe1aa9f10507a60aa3d9:4633da1b9aff123f3f2ded7ad53e87a29607c512d9084b6a760e00cbc45c3aab3e318809499d845f97412e7b9f1818f6",
+    "emailProvider": "resend",
+    "twilioWaToken": "",
+    "sendgridApiKey": "",
+    "textlocalApiKey": "",
+    "twilioAuthToken": "",
+    "twilioAccountSid": ""
   },
   "ai": {
     "claudeKey": "",
-    "openaiKey": "",
     "geminiKey": "",
+    "openaiKey": "",
     "defaultProvider": "claude"
   },
   "docs": {
@@ -43,7 +57,7 @@
     "quotationValidity": "14",
     "paymentTermsOneTime": "50% advance to begin, 50% balance on final delivery",
     "paymentTermsMonthly": "Full monthly fee payable in advance each cycle",
-    "gstRate": "18",
+    "gstRate": "0",
     "extraTerms": "",
     "paymentSchedule": "- 50% advance payment to commence work\n- Remaining balance due upon project completion / monthly for retainers\n- All amounts are exclusive of applicable GST",
     "paymentSchedules": [
@@ -60,8 +74,31 @@
             "label": "Balance on delivery"
           }
         ]
+      },
+      {
+        "id": "1781455471349",
+        "name": "2-3-5 ratio",
+        "points": [
+          {
+            "pct": 20,
+            "label": "Start"
+          },
+          {
+            "pct": 30,
+            "label": "New Milestone"
+          },
+          {
+            "pct": 50,
+            "label": "New Milestone"
+          }
+        ]
       }
-    ]
+    ],
+    "invoiceTerms": "Payment is due within 10 days of invoice date.\nLate payments attract 2% per month penalty.\nAccepted: NEFT / IMPS / UPI / Cheque",
+    "invoiceNotes": "Thank you for your business!",
+    "invoicePaymentInstructions": "Please transfer the payment to our bank account or scan the UPI QR code.",
+    "invoiceFooter": "Netgain Studio | mail.netgain@gmail.com | 9347102347",
+    "invoiceAdditionalText": ""
   },
-  "updatedAt": "2026-06-08T10:15:41.657Z"
+  "updatedAt": "2026-06-15T13:08:12.689Z"
 }

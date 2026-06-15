@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus } from 'lucide-react'
+import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus, Calendar, Link, Unlink } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -72,12 +73,14 @@ const ImageUploader = ({ label, field, company, setCompany, toast }: { label: st
   )
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showKey, setShowKey] = useState<Record<string, boolean>>({})
+  const [defaultTab, setDefaultTab] = useState('company')
 
   const [company, setCompany] = useState({
     name: 'Netgain Studio',
@@ -108,8 +111,16 @@ export default function SettingsPage() {
   })
 
   const [comm, setComm] = useState({
+    emailProvider: 'smtp',
+    fromEmail: '', fromName: 'Netgain Studio',
     smtpHost: '', smtpPort: '587', smtpUser: '', smtpPass: '',
-    waToken: '', smsProvider: 'MSG91',
+    resendApiKey: '', sendgridApiKey: '',
+    waProvider: 'meta',
+    waToken: '', waPhoneId: '',
+    twilioWaSid: '', twilioWaToken: '',
+    smsProvider: 'MSG91',
+    twilioAccountSid: '', twilioAuthToken: '',
+    msg91Authkey: '', textlocalApiKey: '',
   })
 
   const [ai, setAi] = useState({
@@ -136,10 +147,42 @@ export default function SettingsPage() {
     invoiceAdditionalText: ''
   })
 
-  // Load saved settings on mount
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false)
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null)
+  const [testingChannel, setTestingChannel] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  // Load saved settings on mount only - do NOT reload on every auth event
+  // as this causes masked API keys (••••••••) to replace user-entered values
   useEffect(() => {
     loadSettings()
   }, [])
+
+  // Handle URL params from Google OAuth redirect
+  useEffect(() => {
+    const connected = searchParams.get('connected')
+    const error = searchParams.get('error')
+    const tab = searchParams.get('tab')
+
+    if (tab === 'comms') {
+      setDefaultTab('comms')
+    }
+
+    if (connected === 'google') {
+      loadSettings()
+      toast({ title: '✅ Google Calendar Connected!', description: 'Your Google account has been successfully linked.' })
+      window.history.replaceState({}, '', '/settings?tab=comms')
+    }
+
+    if (error === 'google_oauth_not_configured') {
+      toast({
+        title: '⚠️ Google OAuth Not Configured',
+        description: 'Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your environment variables.',
+        variant: 'destructive'
+      })
+      window.history.replaceState({}, '', '/settings?tab=comms')
+    }
+  }, [searchParams])
 
   const loadSettings = async () => {
     try {
@@ -160,10 +203,112 @@ export default function SettingsPage() {
       if (data.comm)     setComm(c => ({ ...c, ...data.comm }))
       if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
       if (data.docs)     setDocs(d => ({ ...d, ...data.docs }))
+      if (data.isGoogleConnected !== undefined) setIsGoogleConnected(data.isGoogleConnected)
+      if (data.googleEmail !== undefined) setGoogleEmail(data.googleEmail)
     } catch (err) {
       console.error('Error loading settings:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleTestConnection = async (channel: 'email' | 'whatsapp' | 'sms') => {
+    setTestingChannel(channel)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      let provider = ''
+      let credentials: Record<string, any> = {}
+
+      if (channel === 'email') {
+        provider = comm.emailProvider || 'smtp'
+        if (provider === 'smtp') {
+          credentials = {
+            smtpHost: comm.smtpHost,
+            smtpPort: comm.smtpPort,
+            smtpUser: comm.smtpUser,
+            smtpPass: comm.smtpPass
+          }
+        } else if (provider === 'resend') {
+          credentials = { resendApiKey: comm.resendApiKey }
+        } else if (provider === 'sendgrid') {
+          credentials = { sendgridApiKey: comm.sendgridApiKey }
+        }
+      } else if (channel === 'whatsapp') {
+        provider = comm.waProvider || 'meta'
+        if (provider === 'meta') {
+          credentials = {
+            waToken: comm.waToken,
+            waPhoneId: comm.waPhoneId
+          }
+        } else if (provider === 'twilio') {
+          credentials = {
+            twilioWaSid: comm.twilioWaSid,
+            twilioWaToken: comm.twilioWaToken
+          }
+        }
+      } else if (channel === 'sms') {
+        provider = (comm.smsProvider || 'MSG91').toLowerCase()
+        if (provider === 'twilio') {
+          credentials = {
+            twilioAccountSid: comm.twilioAccountSid,
+            twilioAuthToken: comm.twilioAuthToken
+          }
+        } else if (provider === 'msg91') {
+          credentials = { msg91Authkey: comm.msg91Authkey }
+        } else if (provider === 'textlocal') {
+          credentials = { textlocalApiKey: comm.textlocalApiKey }
+        }
+      }
+
+      const res = await fetch('/api/settings/test-connection', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ channel, provider, credentials })
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        toast({ title: '✅ Connection Successful!', description: data.message })
+      } else {
+        toast({ title: '❌ Connection Failed', description: data.error, variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Error testing connection', description: err.message, variant: 'destructive' })
+    } finally {
+      setTestingChannel(null)
+    }
+  }
+
+  const handleDisconnectGoogle = async () => {
+    setDisconnecting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const res = await fetch('/api/google/disconnect', { method: 'POST', headers })
+      if (res.ok) {
+        setIsGoogleConnected(false)
+        toast({ title: 'Disconnected', description: 'Google Calendar has been disconnected.' })
+      } else {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to disconnect')
+      }
+    } catch (err: any) {
+      toast({ title: 'Error disconnecting Google', description: err.message, variant: 'destructive' })
+    } finally {
+      setDisconnecting(false)
     }
   }
 
@@ -232,7 +377,7 @@ export default function SettingsPage() {
         <span className="font-semibold text-gold">📄 PDF Integration:</span> Company name, phone, email, and GST filled here are automatically printed on every PDF document (Quotations, Invoices, SOW, Agreements, etc.).
       </div>
 
-      <Tabs defaultValue="company">
+      <Tabs value={defaultTab} onValueChange={setDefaultTab}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="company" className="gap-1.5"><Building2 className="h-3.5 w-3.5" />Company</TabsTrigger>
           <TabsTrigger value="founder" className="gap-1.5"><User className="h-3.5 w-3.5" />Founder</TabsTrigger>
@@ -442,42 +587,370 @@ export default function SettingsPage() {
         {/* ── COMMUNICATIONS ─────────────────────────── */}
         <TabsContent value="comms">
           <Card>
-            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="h-4 w-4 text-gold" />Communication Settings</CardTitle></CardHeader>
-            <CardContent className="space-y-5">
-              <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">Configure SMTP, WhatsApp, and SMS to enable live message sending from the Communications module.</p>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-gold" />
+                  Communication Hub Credentials
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
+                Configure outgoing channels (SMTP/Resend/SendGrid, Meta/Twilio WhatsApp, and SMS) and sync scheduled calendar events.
+              </p>
 
-              <div>
-                <p className="text-xs font-semibold text-gold mb-3">📧 SMTP Email (Outgoing)</p>
+              {/* Email Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                  <p className="text-xs font-semibold text-gold">📧 Email Provider</p>
+                  <Select
+                    value={comm.emailProvider || 'smtp'}
+                    onValueChange={(val) => setComm({ ...comm, emailProvider: val })}
+                  >
+                    <SelectTrigger className="w-40 h-8">
+                      <SelectValue placeholder="Select Email" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="smtp">SMTP Relay</SelectItem>
+                      <SelectItem value="resend">Resend API</SelectItem>
+                      <SelectItem value="sendgrid">SendGrid API</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-3">
-                  <FieldRow label="SMTP Host"><Input placeholder="smtp.gmail.com" value={comm.smtpHost} onChange={e => setComm({ ...comm, smtpHost: e.target.value })} /></FieldRow>
-                  <FieldRow label="SMTP Port"><Input placeholder="587" value={comm.smtpPort} onChange={e => setComm({ ...comm, smtpPort: e.target.value })} /></FieldRow>
-                  <FieldRow label="Username / Email"><Input placeholder="noreply@netgain.studio" value={comm.smtpUser} onChange={e => setComm({ ...comm, smtpUser: e.target.value })} /></FieldRow>
-                  <FieldRow label="App Password"><SecretField id="smtp" value={comm.smtpPass} onChange={v => setComm({ ...comm, smtpPass: v })} placeholder="Gmail app password" showKey={showKey} setShowKey={setShowKey} /></FieldRow>
+                  {/* From Name and From Email apply to all email providers */}
+                  <FieldRow label="From Name" hint="Appears in recipient's inbox">
+                    <Input
+                      placeholder="Netgain Studio"
+                      value={(comm as any).fromName || ''}
+                      onChange={(e) => setComm({ ...comm, fromName: e.target.value } as any)}
+                    />
+                  </FieldRow>
+                  <FieldRow label="From Email" hint={comm.emailProvider === 'resend' ? "Must be from a verified domain in Resend dashboard" : "Sender email address"}>
+                    <Input
+                      type="email"
+                      placeholder="noreply@yourdomain.com"
+                      value={(comm as any).fromEmail || ''}
+                      onChange={(e) => setComm({ ...comm, fromEmail: e.target.value } as any)}
+                    />
+                  </FieldRow>
+                  {comm.emailProvider === 'resend' && (
+                    <div className="text-[11px] text-amber-400/80 bg-amber-500/10 rounded-lg p-2.5 border border-amber-500/20">
+                      ⚠️ <strong>Resend:</strong> The &quot;From Email&quot; must use a domain verified in your <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline text-amber-400">Resend dashboard</a>. For testing, use <code>onboarding@resend.dev</code> to send only to your own email.
+                    </div>
+                  )}
+                  {(comm.emailProvider === 'smtp' || !comm.emailProvider) && (
+                    <>
+                      <FieldRow label="SMTP Host">
+                        <Input
+                          placeholder="smtp.gmail.com"
+                          value={comm.smtpHost || ''}
+                          onChange={(e) => setComm({ ...comm, smtpHost: e.target.value })}
+                        />
+                      </FieldRow>
+                      <FieldRow label="SMTP Port">
+                        <Input
+                          placeholder="587"
+                          value={comm.smtpPort || ''}
+                          onChange={(e) => setComm({ ...comm, smtpPort: e.target.value })}
+                        />
+                      </FieldRow>
+                      <FieldRow label="Username / Email">
+                        <Input
+                          placeholder="noreply@netgain.studio"
+                          value={comm.smtpUser || ''}
+                          onChange={(e) => setComm({ ...comm, smtpUser: e.target.value })}
+                        />
+                      </FieldRow>
+                      <FieldRow label="App Password">
+                        <SecretField
+                          id="smtp"
+                          value={comm.smtpPass || ''}
+                          onChange={(v) => setComm({ ...comm, smtpPass: v })}
+                          placeholder="SMTP password / app credential"
+                          showKey={showKey}
+                          setShowKey={setShowKey}
+                        />
+                      </FieldRow>
+                    </>
+                  )}
+
+                  {comm.emailProvider === 'resend' && (
+                    <FieldRow label="Resend API Key">
+                      <SecretField
+                        id="resend"
+                        value={comm.resendApiKey || ''}
+                        onChange={(v) => setComm({ ...comm, resendApiKey: v })}
+                        placeholder="re_..."
+                        showKey={showKey}
+                        setShowKey={setShowKey}
+                      />
+                    </FieldRow>
+                  )}
+
+                  {comm.emailProvider === 'sendgrid' && (
+                    <FieldRow label="SendGrid API Key">
+                      <SecretField
+                        id="sendgrid"
+                        value={comm.sendgridApiKey || ''}
+                        onChange={(v) => setComm({ ...comm, sendgridApiKey: v })}
+                        placeholder="SG...."
+                        showKey={showKey}
+                        setShowKey={setShowKey}
+                      />
+                    </FieldRow>
+                  )}
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection('email')}
+                      disabled={testingChannel === 'email'}
+                      className="text-xs h-8"
+                    >
+                      {testingChannel === 'email' && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+                      Test Email Connection
+                    </Button>
+                  </div>
                 </div>
               </div>
 
               <Separator />
 
-              <div>
-                <p className="text-xs font-semibold text-gold mb-3">💬 WhatsApp Business API (Meta Cloud)</p>
-                <FieldRow label="Access Token"><SecretField id="wa" value={comm.waToken} onChange={v => setComm({ ...comm, waToken: v })} placeholder="EAAx..." showKey={showKey} setShowKey={setShowKey} /></FieldRow>
+              {/* WhatsApp Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                  <p className="text-xs font-semibold text-gold">💬 WhatsApp Provider</p>
+                  <Select
+                    value={comm.waProvider || 'meta'}
+                    onValueChange={(val) => setComm({ ...comm, waProvider: val })}
+                  >
+                    <SelectTrigger className="w-40 h-8">
+                      <SelectValue placeholder="Select WhatsApp" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="meta">Meta Cloud API</SelectItem>
+                      <SelectItem value="twilio">Twilio WhatsApp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  {(comm.waProvider === 'meta' || !comm.waProvider) && (
+                    <>
+                      <FieldRow label="Access Token" hint="Permanent Meta system user token">
+                        <SecretField
+                          id="wa"
+                          value={comm.waToken || ''}
+                          onChange={(v) => setComm({ ...comm, waToken: v })}
+                          placeholder="EAAx..."
+                          showKey={showKey}
+                          setShowKey={setShowKey}
+                        />
+                      </FieldRow>
+                      <FieldRow label="Phone Number ID">
+                        <Input
+                          placeholder="104856..."
+                          value={comm.waPhoneId || ''}
+                          onChange={(e) => setComm({ ...comm, waPhoneId: e.target.value })}
+                        />
+                      </FieldRow>
+                    </>
+                  )}
+
+                  {comm.waProvider === 'twilio' && (
+                    <>
+                      <FieldRow label="Twilio Account SID">
+                        <Input
+                          placeholder="AC..."
+                          value={(comm as any).twilioWaSid || ''}
+                          onChange={(e) => setComm({ ...comm, twilioWaSid: e.target.value } as any)}
+                        />
+                      </FieldRow>
+                      <FieldRow label="Twilio WhatsApp Token">
+                        <SecretField
+                          id="twilioWaToken"
+                          value={(comm as any).twilioWaToken || ''}
+                          onChange={(v) => setComm({ ...comm, twilioWaToken: v } as any)}
+                          placeholder="Auth Token"
+                          showKey={showKey}
+                          setShowKey={setShowKey}
+                        />
+                      </FieldRow>
+                    </>
+                  )}
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection('whatsapp')}
+                      disabled={testingChannel === 'whatsapp'}
+                      className="text-xs h-8"
+                    >
+                      {testingChannel === 'whatsapp' && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+                      Test WhatsApp Connection
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <Separator />
 
-              <div>
-                <p className="text-xs font-semibold text-gold mb-3">📱 SMS Provider</p>
-                <FieldRow label="Provider">
-                  <Select value={comm.smsProvider} onValueChange={v => setComm({ ...comm, smsProvider: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+              {/* SMS Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                  <p className="text-xs font-semibold text-gold">📱 SMS Provider</p>
+                  <Select
+                    value={comm.smsProvider || 'MSG91'}
+                    onValueChange={(val) => setComm({ ...comm, smsProvider: val })}
+                  >
+                    <SelectTrigger className="w-40 h-8">
+                      <SelectValue placeholder="Select SMS" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MSG91">MSG91</SelectItem>
                       <SelectItem value="Twilio">Twilio</SelectItem>
                       <SelectItem value="TextLocal">TextLocal</SelectItem>
                     </SelectContent>
                   </Select>
-                </FieldRow>
+                </div>
+
+                <div className="space-y-3">
+                  {comm.smsProvider === 'MSG91' && (
+                    <FieldRow label="MSG91 Authkey">
+                      <SecretField
+                        id="msg91"
+                        value={(comm as any).msg91Authkey || ''}
+                        onChange={(v) => setComm({ ...comm, msg91Authkey: v } as any)}
+                        placeholder="Authkey"
+                        showKey={showKey}
+                        setShowKey={setShowKey}
+                      />
+                    </FieldRow>
+                  )}
+
+                  {comm.smsProvider === 'Twilio' && (
+                    <>
+                      <FieldRow label="Account SID">
+                        <Input
+                          placeholder="AC..."
+                          value={(comm as any).twilioAccountSid || ''}
+                          onChange={(e) => setComm({ ...comm, twilioAccountSid: e.target.value } as any)}
+                        />
+                      </FieldRow>
+                      <FieldRow label="Auth Token">
+                        <SecretField
+                          id="twilio"
+                          value={(comm as any).twilioAuthToken || ''}
+                          onChange={(v) => setComm({ ...comm, twilioAuthToken: v } as any)}
+                          placeholder="Auth Token"
+                          showKey={showKey}
+                          setShowKey={setShowKey}
+                        />
+                      </FieldRow>
+                    </>
+                  )}
+
+                  {comm.smsProvider === 'TextLocal' && (
+                    <FieldRow label="TextLocal API Key">
+                      <SecretField
+                        id="textlocal"
+                        value={(comm as any).textlocalApiKey || ''}
+                        onChange={(v) => setComm({ ...comm, textlocalApiKey: v } as any)}
+                        placeholder="API Key"
+                        showKey={showKey}
+                        setShowKey={setShowKey}
+                      />
+                    </FieldRow>
+                  )}
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection('sms')}
+                      disabled={testingChannel === 'sms'}
+                      className="text-xs h-8"
+                    >
+                      {testingChannel === 'sms' && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+                      Test SMS Connection
+                    </Button>
+                  </div>
+                </div>
               </div>
+
+              <Separator />
+
+              {/* Google Workspace Calendar OAuth Card */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                  <p className="text-xs font-semibold text-gold">📅 Google Workspace Calendar Connection</p>
+                  {isGoogleConnected ? (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <CheckCircle2 className="h-3 w-3" /> Connected
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-500/20">
+                      Disconnected
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-muted/10 border border-border/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">Sync Meetings & Schedule Events</p>
+                    <p className="text-[11px] text-muted-foreground max-w-md">
+                      Connect your organization's Google Calendar. This enables bi-directional synchronization of Cal.com appointments, Google Meet generation, and meeting details mapping directly into the dashboard.
+                    </p>
+                    {isGoogleConnected && googleEmail && (
+                      <p className="text-[11px] text-emerald-400/90 font-medium pt-1">
+                        Connected Account: <span className="font-semibold text-emerald-400">{googleEmail}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    {isGoogleConnected ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={disconnecting}
+                        onClick={handleDisconnectGoogle}
+                        className="text-xs text-red-400 hover:text-red-400 h-9 shrink-0 gap-1.5"
+                      >
+                        {disconnecting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Unlink className="h-3.5 w-3.5" />
+                        )}
+                        Disconnect Google
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="gold"
+                        size="sm"
+                        onClick={async () => {
+                          const { data: { session } } = await supabase.auth.getSession()
+                          window.location.href = `/api/google/auth?token=${session?.access_token || ''}`
+                        }}
+                        className="text-xs h-9 shrink-0 gap-1.5 font-medium"
+                      >
+                        <Link className="h-3.5 w-3.5" />
+                        Connect Google Calendar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
             </CardContent>
           </Card>
         </TabsContent>
@@ -532,5 +1005,13 @@ export default function SettingsPage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageContent />
+    </Suspense>
   )
 }

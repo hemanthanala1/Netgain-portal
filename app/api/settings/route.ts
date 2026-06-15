@@ -2,34 +2,55 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
 import fs from 'fs'
+import { encrypt, decrypt } from '@/lib/crypto-helper'
 
 const SETTINGS_PATH = path.join(process.cwd(), '.nbos-settings.json')
 
 // Initialize Supabase client (service role for server-side operations)
 let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-// Normalize URL: handle bare project ref IDs (same logic as lib/supabase.ts)
+// Normalize URL: handle bare project ref IDs
 if (supabaseUrl && !supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
   supabaseUrl = `https://${supabaseUrl}.supabase.co`
 }
 const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
 
+const SENSITIVE_FIELDS = {
+  comm: ['smtpPass', 'waToken', 'resendApiKey', 'sendgridApiKey', 'twilioAuthToken', 'msg91Authkey', 'textlocalApiKey', 'twilioWaToken', 'googleAccessToken', 'googleRefreshToken'],
+  ai: ['claudeKey', 'openaiKey', 'geminiKey']
+}
+
+function maskSensitiveData(comm: any, ai: any) {
+  const safeComm = { ...comm }
+  SENSITIVE_FIELDS.comm.forEach(field => {
+    if (safeComm[field]) {
+      safeComm[field] = '••••••••'
+    }
+  })
+
+  const safeAi = { ...ai }
+  SENSITIVE_FIELDS.ai.forEach(field => {
+    if (safeAi[field]) {
+      safeAi[field] = '••••••••'
+    }
+  })
+
+  return { comm: safeComm, ai: safeAi }
+}
+
 // GET — load settings
 export async function GET(request: NextRequest) {
   try {
-    // Try to get auth token from request
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '')
 
     if (supabase && token) {
-      // Verify user and fetch their settings from Supabase
       const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
       if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      // Fetch settings from company_settings table
       const { data, error } = await supabase
         .from('company_settings')
         .select('*')
@@ -37,28 +58,38 @@ export async function GET(request: NextRequest) {
         .maybeSingle()
 
       if (error && error.code !== 'PGRST116') {
-        // PGRST116 means no rows found, which is ok
         console.error('Supabase fetch error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
       if (data) {
+        const masked = maskSensitiveData(data.comm || {}, data.ai || {})
         return NextResponse.json({
           company: data.company,
           founder: data.founder,
           bank: data.bank,
-          comm: data.comm,
-          ai: data.ai,
+          comm: { ...data.comm, ...masked.comm },
+          ai: { ...data.ai, ...masked.ai },
           docs: data.docs,
+          isGoogleConnected: !!(data.comm?.googleRefreshToken || data.comm?.googleAccessToken || (data as any).google_oauth),
+          googleEmail: data.comm?.googleEmail || null,
           updatedAt: data.updated_at
         })
       }
     }
 
-    // Fallback: load from local JSON file if Supabase is not configured
+    // Fallback: load from local JSON file
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8')
-      return NextResponse.json(JSON.parse(raw))
+      const parsed = JSON.parse(raw)
+      const masked = maskSensitiveData(parsed.comm || {}, parsed.ai || {})
+      return NextResponse.json({
+        ...parsed,
+        comm: { ...parsed.comm, ...masked.comm },
+        ai: { ...parsed.ai, ...masked.ai },
+        isGoogleConnected: !!(parsed.comm?.googleRefreshToken || parsed.comm?.googleAccessToken || parsed.google_oauth),
+        googleEmail: parsed.comm?.googleEmail || null
+      })
     }
 
     return NextResponse.json({})
@@ -74,19 +105,54 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { company, founder, bank, comm, ai, docs } = body
 
-    // Try to save to Supabase
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '')
 
+    let existingComm: any = {}
+    let existingAi: any = {}
+
     if (supabase && token) {
-      // Verify user
       const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
       if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      // Upsert settings to company_settings table
+      const { data: existingData } = await supabase
+        .from('company_settings')
+        .select('comm, ai')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (existingData) {
+        existingComm = existingData.comm || {}
+        existingAi = existingData.ai || {}
+      }
+
+      // Process comm fields, merging with existing to preserve keys like Google tokens
+      const processedComm = { ...existingComm, ...comm }
+      SENSITIVE_FIELDS.comm.forEach(field => {
+        if (comm[field] === '••••••••') {
+          processedComm[field] = existingComm[field] || ''
+        } else if (comm[field]) {
+          processedComm[field] = encrypt(comm[field])
+        } else if (comm[field] === '') {
+          processedComm[field] = ''
+        }
+      })
+
+      // Process ai fields
+      const processedAi = { ...existingAi, ...ai }
+      SENSITIVE_FIELDS.ai.forEach(field => {
+        if (ai[field] === '••••••••') {
+          processedAi[field] = existingAi[field] || ''
+        } else if (ai[field]) {
+          processedAi[field] = encrypt(ai[field])
+        } else if (ai[field] === '') {
+          processedAi[field] = ''
+        }
+      })
+
       const { error } = await supabase
         .from('company_settings')
         .upsert({
@@ -94,8 +160,8 @@ export async function POST(request: NextRequest) {
           company: company || {},
           founder: founder || {},
           bank: bank || {},
-          comm: comm || {},
-          ai: ai || {},
+          comm: processedComm,
+          ai: processedAi,
           docs: docs || {},
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' })
@@ -105,10 +171,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      // Sync founder details with public.profiles and team_members table if they are provided
+      // Sync founder details
       if (founder) {
         try {
-          // Find the user with role = 'Founder' in profiles table
           const { data: founderProfile } = await supabase
             .from('profiles')
             .select('id, settings')
@@ -131,7 +196,6 @@ export async function POST(request: NextRequest) {
               })
               .eq('id', founderProfile.id)
 
-            // Also update team_members for backward compatibility
             await supabase
               .from('team_members')
               .update({
@@ -141,13 +205,21 @@ export async function POST(request: NextRequest) {
               .eq('email', founder.email)
           }
         } catch (syncErr) {
-          console.error('Error syncing founder settings to profiles:', syncErr)
+          console.error('Error syncing founder settings:', syncErr)
         }
       }
 
-      // Also mirror to local file so the PDF generator always has fresh settings
+      // Mirror to local file (with encrypted credentials so local operations stay secure)
       try {
-        const mirror = { company: company || {}, founder: founder || {}, bank: bank || {}, comm: comm || {}, ai: ai || {}, docs: docs || {}, updatedAt: new Date().toISOString() }
+        const mirror = { 
+          company: company || {}, 
+          founder: founder || {}, 
+          bank: bank || {}, 
+          comm: processedComm, 
+          ai: processedAi, 
+          docs: docs || {}, 
+          updatedAt: new Date().toISOString() 
+        }
         fs.writeFileSync(SETTINGS_PATH, JSON.stringify(mirror, null, 2), 'utf-8')
       } catch (mirrorErr) {
         console.warn('Could not mirror settings to local file:', mirrorErr)
@@ -159,9 +231,47 @@ export async function POST(request: NextRequest) {
     // Fallback: save to local JSON file
     let existing: any = {}
     if (fs.existsSync(SETTINGS_PATH)) {
-      existing = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
+      try {
+        existing = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
+        existingComm = existing.comm || {}
+        existingAi = existing.ai || {}
+      } catch (_) {}
     }
-    const merged = { ...existing, company, founder, bank, comm, ai, docs, updatedAt: new Date().toISOString() }
+
+    // Process comm fields
+    const processedComm = { ...existingComm, ...comm }
+    SENSITIVE_FIELDS.comm.forEach(field => {
+      if (comm[field] === '••••••••') {
+        processedComm[field] = existingComm[field] || ''
+      } else if (comm[field]) {
+        processedComm[field] = encrypt(comm[field])
+      } else if (comm[field] === '') {
+        processedComm[field] = ''
+      }
+    })
+
+    // Process ai fields
+    const processedAi = { ...existingAi, ...ai }
+    SENSITIVE_FIELDS.ai.forEach(field => {
+      if (ai[field] === '••••••••') {
+        processedAi[field] = existingAi[field] || ''
+      } else if (ai[field]) {
+        processedAi[field] = encrypt(ai[field])
+      } else if (ai[field] === '') {
+        processedAi[field] = ''
+      }
+    })
+
+    const merged = { 
+      ...existing, 
+      company, 
+      founder, 
+      bank, 
+      comm: processedComm, 
+      ai: processedAi, 
+      docs, 
+      updatedAt: new Date().toISOString() 
+    }
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2), 'utf-8')
     return NextResponse.json({ ok: true, source: 'local' })
   } catch (err: any) {

@@ -35,6 +35,7 @@ const breadcrumbMap: Record<string, string> = {
   '/prd': 'PRD Engine',
   '/marketing': 'Marketing Reports',
   '/communications': 'Communications',
+  '/meetings': 'Meetings Hub',
   '/team': 'Team Management',
   '/settings': 'Settings',
   '/profile': 'My Profile',
