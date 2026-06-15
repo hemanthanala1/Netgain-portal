@@ -126,6 +126,7 @@ export interface PdfPayload {
     invoicePaymentInstructions?: string
     invoiceFooter?: string
     invoiceAdditionalText?: string
+    customTerms?: string
   }
   items?: PdfItem[]
   subtotal?: number
@@ -486,13 +487,17 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
 
             {/* Terms & Conditions — driven by docsSettings */}
             <Text style={s.h2}>TERMS & CONDITIONS</Text>
-            {(data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim()) ? (
+            {docs.customTerms && docs.customTerms.trim() ? (
+              docs.customTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
+                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
+              ))
+            ) : (data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim()) ? (
               docs.invoiceTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
                 <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
               ))
             ) : (
               [
-                `Quotation valid for ${validityDays} days from issue date.`,
+                ...(data.docType === 'Quotation' ? [`Quotation valid for ${validityDays} days from issue date.`] : []),
                 `One-time services: ${ptOneTime}.`,
                 `Monthly recurring services: ${ptMonthly}.`,
                 'Hosting, domain, ad spend & third-party API fees billed at actuals.',

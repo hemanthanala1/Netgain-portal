@@ -29,12 +29,36 @@ type Agreement = {
   ip: string; cancellation: string; jurisdiction: string
   status: string; created: string
   history: { date: string; action: string; canDownload?: boolean }[]
+  customTerms?: string;
 }
 
 const INITIAL: Agreement[] = []
 
-function blank(): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> {
-  return { client: '', contact: '', phone: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft' }
+function compileDefaultAgreementTerms(companyDocs?: any) {
+  const paymentTermsOneTime = companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = companyDocs?.extraTerms || ''
+  const gstRate = 18
+  const lines = [
+    `One-time services: ${paymentTermsOneTime}.`,
+    `Monthly recurring services: ${paymentTermsMonthly}.`,
+    'Hosting, domain, ad spend & third-party API fees billed at actuals.',
+    `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`
+  ]
+  if (extraTerms) {
+    extraTerms.split('\n').map((t: string) => t.trim()).filter(Boolean).forEach((t: string) => lines.push(t))
+  }
+  return lines.join('\n')
+}
+
+function getAgreementTerms(agr: Agreement | any, companyDocs?: any) {
+  if (agr.customTerms) return agr.customTerms
+  if (agr.custom_terms) return agr.custom_terms
+  return compileDefaultAgreementTerms(companyDocs)
+}
+
+function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> {
+  return { client: '', contact: '', phone: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs) }
 }
 
 export default function AgreementsPage() {
@@ -51,14 +75,53 @@ export default function AgreementsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Agreement | null>(null)
+  const [companyDocs, setCompanyDocs] = useState<any>(null)
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
+  function resetForm(agr?: Agreement | null, docs?: any) {
+    if (agr) {
+      setForm({
+        client: agr.client,
+        contact: agr.contact,
+        phone: agr.phone,
+        type: agr.type,
+        value: agr.value,
+        duration: agr.duration,
+        services: agr.services,
+        ip: agr.ip,
+        cancellation: agr.cancellation,
+        jurisdiction: agr.jurisdiction,
+        status: agr.status,
+        customTerms: getAgreementTerms(agr, docs)
+      } as any)
+    } else {
+      setForm({
+        client: '',
+        contact: '',
+        phone: '',
+        type: 'Service Agreement',
+        value: 0,
+        duration: '',
+        services: '',
+        ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.',
+        cancellation: '30 days written notice required from either party to terminate this agreement.',
+        jurisdiction: 'Hyderabad, Telangana, India',
+        status: 'draft',
+        customTerms: compileDefaultAgreementTerms(docs)
+      } as any)
+    }
+  }
+
   useEffect(() => {
-    const cached = getCachedData<{ agreements: Agreement[], sourceDocs: any[], servicesMap: Record<string, any> }>('agreements')
+    const cached = getCachedData<{ agreements: Agreement[], sourceDocs: any[], servicesMap: Record<string, any>, companyDocs?: any }>('agreements')
     if (cached) {
       setAgreements(cached.agreements)
       setSourceDocs(cached.sourceDocs)
       setServicesMap(cached.servicesMap)
+      if (cached.companyDocs) {
+        setCompanyDocs(cached.companyDocs)
+        setForm(blank(cached.companyDocs))
+      }
       setLoading(false)
     }
 
@@ -66,11 +129,12 @@ export default function AgreementsPage() {
       if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const [aRes, qRes, iRes, svRes] = await Promise.all([
+          const [aRes, qRes, iRes, svRes, cRes] = await Promise.all([
             supabase.from('agreements').select('*').order('created_at', { ascending: false }),
             supabase.from('quotations').select('*').order('created_at', { ascending: false }),
             supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('id, name, deliverables')
+            supabase.from('services').select('id, name, deliverables'),
+            supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
           if (aRes.error) throw aRes.error
@@ -80,6 +144,13 @@ export default function AgreementsPage() {
             mappedSvMap = {}
             svRes.data.forEach((s: any) => mappedSvMap[s.id] = s)
             setServicesMap(mappedSvMap)
+          }
+
+          let docsSettings = null
+          if (cRes.data && cRes.data.docs) {
+            docsSettings = cRes.data.docs
+            setCompanyDocs(docsSettings)
+            setForm(blank(docsSettings))
           }
 
           const docs: any[] = []
@@ -108,18 +179,19 @@ export default function AgreementsPage() {
               jurisdiction: a.jurisdiction || '',
               status: a.status || 'draft',
               created: a.created,
-              history: Array.isArray(a.history) ? a.history : []
+              history: Array.isArray(a.history) ? a.history : [],
+              customTerms: a.custom_terms || '',
             }))
             setAgreements(mappedAgreements)
           }
 
-          setCachedData('agreements', { agreements: mappedAgreements, sourceDocs: docs, servicesMap: mappedSvMap })
+          setCachedData('agreements', { agreements: mappedAgreements, sourceDocs: docs, servicesMap: mappedSvMap, companyDocs: docsSettings })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setAgreements(INITIAL)
-        setCachedData('agreements', { agreements: INITIAL, sourceDocs: [], servicesMap: {} })
+        setCachedData('agreements', { agreements: INITIAL, sourceDocs: [], servicesMap: {}, companyDocs: null })
       }
       setLoading(false)
     }
@@ -217,6 +289,9 @@ export default function AgreementsPage() {
       subtotal: agr.value,
       discountTotal: 0,
       grandTotal: agr.value,
+      docsSettings: {
+        customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
+      }
     }
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
@@ -261,7 +336,8 @@ export default function AgreementsPage() {
           jurisdiction: form.jurisdiction,
           status: form.status,
           created: targetCreated,
-          history: targetHistory
+          history: targetHistory,
+          custom_terms: form.customTerms
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -272,9 +348,9 @@ export default function AgreementsPage() {
 
       const updatedList = [newAgr, ...agreements]
       setAgreements(updatedList)
-      setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+      setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
       invalidateCache('dashboard')
-      setShowCreate(false); setForm(blank())
+      setShowCreate(false); resetForm(null, companyDocs)
       toast({ title: '✅ Agreement Generated!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
@@ -300,7 +376,8 @@ export default function AgreementsPage() {
           cancellation: form.cancellation,
           jurisdiction: form.jurisdiction,
           status: form.status,
-          history: targetHistory
+          history: targetHistory,
+          custom_terms: form.customTerms
         }).eq('id', editItem.id)
 
         if (error) {
@@ -315,9 +392,9 @@ export default function AgreementsPage() {
 
     const updatedList = agreements.map(a => a.id === editItem.id ? updated : a)
     setAgreements(updatedList)
-    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
     invalidateCache('dashboard')
-    setEditItem(null); setForm(blank())
+    setEditItem(null); resetForm(null, companyDocs)
     toast({ title: '✅ Agreement updated' })
   }
 
@@ -378,7 +455,7 @@ export default function AgreementsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Client Agreements</h1><p className="text-muted-foreground text-sm mt-0.5">Generate legally structured client agreements.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blank()); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Agreement</Button>
+        <Button variant="gold" size="sm" onClick={() => { resetForm(null, companyDocs); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Agreement</Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -414,7 +491,7 @@ export default function AgreementsPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
                         {downloadingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); setForm({ client: a.client, contact: a.contact, phone: a.phone, type: a.type, value: a.value, duration: a.duration, services: a.services, ip: a.ip, cancellation: a.cancellation, jurisdiction: a.jurisdiction, status: a.status }) }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs) }}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}>
@@ -491,6 +568,10 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>IP Ownership</Label><Textarea className="h-14 resize-none" value={form.ip} onChange={e => setForm({ ...form, ip: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Cancellation Policy</Label><Textarea className="h-14 resize-none" value={form.cancellation} onChange={e => setForm({ ...form, cancellation: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Terms & Conditions Bottom Block (One per line)</Label>
+                  <Textarea className="h-28 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
               </div>
             </div>
           </div>
@@ -541,6 +622,10 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>IP Ownership</Label><Textarea className="h-14 resize-none" value={form.ip} onChange={e => setForm({ ...form, ip: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Cancellation Policy</Label><Textarea className="h-14 resize-none" value={form.cancellation} onChange={e => setForm({ ...form, cancellation: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Terms & Conditions Bottom Block (One per line)</Label>
+                  <Textarea className="h-28 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
               </div>
             </div>
           </div>

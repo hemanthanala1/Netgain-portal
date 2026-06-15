@@ -33,12 +33,71 @@ type Quote = {
   amount: number; status: string; created: string; valid: string
   history: { date: string; action: string; canDownload?: boolean }[]
   paymentScheduleId?: string;
+  validityDays?: number;
+  paymentTermsOneTime?: string;
+  paymentTermsMonthly?: string;
+  extraTerms?: string;
+  customTerms?: string;
 }
 
 const INITIAL: Quote[] = []
 
-function blankForm() {
-  return { projectTitle: '', client: '', contact: '', email: '', phone: '', businessType: 'E-Commerce', industry: '', gst: '', selectedIds: [] as string[], discountPct: 0, gstPct: 18, notes: '', paymentScheduleId: '' }
+function compileDefaultQuotationTerms(validityDays: number, ptOneTime: string, ptMonthly: string, gstPct: number, extraTerms: string) {
+  const lines = [
+    `Quotation valid for ${validityDays} days from issue date.`,
+    `One-time services: ${ptOneTime}.`,
+    `Monthly recurring services: ${ptMonthly}.`,
+    'Hosting, domain, ad spend & third-party API fees billed at actuals.',
+    `All prices are in Indian Rupees (INR). GST @ ${gstPct}% extra as applicable.`,
+    'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions.',
+    'The final Scope of Work (SOW) and Service Agreement will be shared and approved before project commencement.'
+  ]
+  if (extraTerms) {
+    extraTerms.split('\n').map(t => t.trim()).filter(Boolean).forEach(t => lines.push(t))
+  }
+  return lines.join('\n')
+}
+
+function getQuotationTerms(q: Quote | any, companyDocs?: any) {
+  if (q.customTerms) return q.customTerms
+  if (q.custom_terms) return q.custom_terms
+  
+  const validityDays = q.validityDays !== undefined && q.validityDays !== null ? q.validityDays : (companyDocs?.quotationValidity ? Number(companyDocs.quotationValidity) : 14)
+  const paymentTermsOneTime = q.paymentTermsOneTime || companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = q.paymentTermsMonthly || companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = q.extraTerms || companyDocs?.extraTerms || ''
+  const gstPct = q.gstPct !== undefined && q.gstPct !== null ? q.gstPct : 18
+  
+  return compileDefaultQuotationTerms(validityDays, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
+}
+
+function blankForm(initialDocs?: any) {
+  const validityDays = initialDocs?.quotationValidity ? Number(initialDocs.quotationValidity) : 14
+  const paymentTermsOneTime = initialDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = initialDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = initialDocs?.extraTerms || ''
+  const gstPct = 18
+
+  return {
+    projectTitle: '',
+    client: '',
+    contact: '',
+    email: '',
+    phone: '',
+    businessType: 'E-Commerce',
+    industry: '',
+    gst: '',
+    selectedIds: [] as string[],
+    discountPct: 0,
+    gstPct,
+    notes: '',
+    paymentScheduleId: '',
+    validityDays,
+    paymentTermsOneTime,
+    paymentTermsMonthly,
+    extraTerms,
+    customTerms: compileDefaultQuotationTerms(validityDays, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
+  }
 }
 
 // FormBody component - extracted outside to prevent recreation and preserve input focus
@@ -160,6 +219,16 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
       </div>
     )}
 
+    <div>
+      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Terms & Conditions (One per line)</p>
+      <Textarea
+        className="h-32 font-mono text-xs"
+        placeholder="Enter each term on a new line..."
+        value={form.customTerms}
+        onChange={e => setForm({ ...form, customTerms: e.target.value })}
+      />
+    </div>
+
     <div className="space-y-1">
       <Label>Additional Notes</Label>
       <Textarea className="resize-none h-16" placeholder="Special terms, conditions, custom requirements..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -182,15 +251,20 @@ export default function QuotationsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Quote | null>(null)
+  const [companyDocs, setCompanyDocs] = useState<any>(null)
 
-  const [form, setForm] = useState(blankForm())
+  const [form, setForm] = useState(() => blankForm())
 
   useEffect(() => {
-    const cached = getCachedData<{ quotes: Quote[], servicesData: any[], paymentSchedules: any[] }>('quotations')
+    const cached = getCachedData<{ quotes: Quote[], servicesData: any[], paymentSchedules: any[], companyDocs?: any }>('quotations')
     if (cached) {
       setQuotes(cached.quotes)
       setServicesData(cached.servicesData)
       if (cached.paymentSchedules) setPaymentSchedules(cached.paymentSchedules)
+      if (cached.companyDocs) {
+        setCompanyDocs(cached.companyDocs)
+        setForm(blankForm(cached.companyDocs))
+      }
       setLoading(false)
     }
 
@@ -208,9 +282,15 @@ export default function QuotationsPage() {
           if (sRes.error) throw sRes.error
 
           let schedules = []
-          if (cRes.data && cRes.data.docs?.paymentSchedules) {
-            schedules = cRes.data.docs.paymentSchedules
-            setPaymentSchedules(schedules)
+          let docsSettings = null
+          if (cRes.data && cRes.data.docs) {
+            docsSettings = cRes.data.docs
+            setCompanyDocs(docsSettings)
+            setForm(blankForm(docsSettings))
+            if (cRes.data.docs.paymentSchedules) {
+              schedules = cRes.data.docs.paymentSchedules
+              setPaymentSchedules(schedules)
+            }
           }
 
           let mappedSvcs: any[] = []
@@ -251,18 +331,23 @@ export default function QuotationsPage() {
               created: q.created,
               valid: q.valid,
               history: Array.isArray(q.history) ? q.history : [],
-              paymentScheduleId: q.payment_schedule_id || ''
+              paymentScheduleId: q.payment_schedule_id || '',
+              validityDays: q.validity_days,
+              paymentTermsOneTime: q.payment_terms_one_time,
+              paymentTermsMonthly: q.payment_terms_monthly,
+              extraTerms: q.extra_terms,
+              customTerms: q.custom_terms || ''
             }))
             setQuotes(mappedQuotes)
           }
 
-          setCachedData('quotations', { quotes: mappedQuotes, servicesData: mappedSvcs, paymentSchedules: schedules })
+          setCachedData('quotations', { quotes: mappedQuotes, servicesData: mappedSvcs, paymentSchedules: schedules, companyDocs: docsSettings })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setQuotes(INITIAL)
-        setCachedData('quotations', { quotes: INITIAL, servicesData: [], paymentSchedules: [] })
+        setCachedData('quotations', { quotes: INITIAL, servicesData: [], paymentSchedules: [], companyDocs: null })
       }
       setLoading(false)
     }
@@ -302,7 +387,26 @@ export default function QuotationsPage() {
 
   function openEdit(q: Quote) {
     setEditQuote(q)
-    setForm({ projectTitle: q.projectTitle, client: q.client, contact: q.contact, email: q.email, phone: q.phone, businessType: q.businessType, industry: q.industry, gst: q.gst, selectedIds: q.serviceIds, discountPct: q.discountPct, gstPct: q.gstPct, notes: q.notes, paymentScheduleId: (q as any).paymentScheduleId || '' })
+    setForm({
+      projectTitle: q.projectTitle,
+      client: q.client,
+      contact: q.contact,
+      email: q.email,
+      phone: q.phone,
+      businessType: q.businessType,
+      industry: q.industry,
+      gst: q.gst,
+      selectedIds: q.serviceIds,
+      discountPct: q.discountPct,
+      gstPct: q.gstPct,
+      notes: q.notes,
+      paymentScheduleId: (q as any).paymentScheduleId || '',
+      validityDays: q.validityDays !== undefined && q.validityDays !== null ? q.validityDays : (companyDocs?.quotationValidity ? Number(companyDocs.quotationValidity) : 14),
+      paymentTermsOneTime: q.paymentTermsOneTime || companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery',
+      paymentTermsMonthly: q.paymentTermsMonthly || companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle',
+      extraTerms: q.extraTerms || companyDocs?.extraTerms || '',
+      customTerms: getQuotationTerms(q, companyDocs)
+    })
   }
 
   function toggleSvc(id: string) {
@@ -333,6 +437,11 @@ export default function QuotationsPage() {
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),
+        quotationValidity: String(data.validityDays !== undefined && data.validityDays !== null ? data.validityDays : (companyDocs?.quotationValidity || '14')),
+        paymentTermsOneTime: data.paymentTermsOneTime || companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery',
+        paymentTermsMonthly: data.paymentTermsMonthly || companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle',
+        extraTerms: data.extraTerms || companyDocs?.extraTerms || '',
+        customTerms: data.customTerms || getQuotationTerms(data, companyDocs),
       },
     }
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -360,7 +469,33 @@ export default function QuotationsPage() {
       const docId = generateDocId('NG-QUO')
       const createdDate = new Date().toISOString().slice(0,10)
       const validDate = new Date(Date.now()+14*864e5).toISOString().slice(0,10)
-      const newQ: Quote = { id: String(Date.now()), docId, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, status: 'draft', created: createdDate, valid: validDate, history: [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }], paymentScheduleId: form.paymentScheduleId } as any
+      const newQ: Quote = { 
+        id: String(Date.now()), 
+        docId, 
+        client: form.client, 
+        contact: form.contact, 
+        email: form.email, 
+        phone: form.phone, 
+        businessType: form.businessType, 
+        industry: form.industry, 
+        gst: form.gst, 
+        projectTitle: form.projectTitle, 
+        serviceIds: form.selectedIds, 
+        discountPct: form.discountPct, 
+        gstPct: form.gstPct, 
+        notes: form.notes, 
+        amount: grandTotal, 
+        status: 'draft', 
+        created: createdDate, 
+        valid: validDate, 
+        history: [{ date: new Date().toISOString().split('T')[0], action: 'Document generated', canDownload: true }], 
+        paymentScheduleId: form.paymentScheduleId,
+        validityDays: form.validityDays,
+        paymentTermsOneTime: form.paymentTermsOneTime,
+        paymentTermsMonthly: form.paymentTermsMonthly,
+        extraTerms: form.extraTerms,
+        customTerms: form.customTerms
+      } as any
 
       if (isSupabaseConfigured()) {
         try {
@@ -384,7 +519,12 @@ export default function QuotationsPage() {
             created: newQ.created,
             valid: newQ.valid,
             history: newQ.history,
-            payment_schedule_id: form.paymentScheduleId
+            payment_schedule_id: form.paymentScheduleId,
+            validity_days: form.validityDays,
+            payment_terms_one_time: form.paymentTermsOneTime,
+            payment_terms_monthly: form.paymentTermsMonthly,
+            extra_terms: form.extraTerms,
+            custom_terms: form.customTerms
           }])
           if (error) {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
@@ -401,10 +541,10 @@ export default function QuotationsPage() {
       await buildAndDownloadPdf(newQ, form.selectedIds, form.discountPct, form.gstPct, form.projectTitle, docId, form.paymentScheduleId)
       const updatedQuotes = [newQ, ...quotes]
       setQuotes(updatedQuotes)
-      setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+      setCachedData('quotations', { quotes: updatedQuotes, servicesData, paymentSchedules, companyDocs })
       invalidateCache('dashboard')
       setShowCreate(false)
-      setForm(blankForm())
+      setForm(blankForm(companyDocs))
       toast({ title: '✅ Quotation Generated!', description: `${docId} downloaded.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
@@ -415,7 +555,29 @@ export default function QuotationsPage() {
     if (!editQuote) return
     setGenerating(true)
     const updatedHistory = [...editQuote.history, { date: new Date().toISOString().split('T')[0], action: 'Document updated', canDownload: true }]
-    const updated = { ...editQuote, client: form.client, contact: form.contact, email: form.email, phone: form.phone, businessType: form.businessType, industry: form.industry, gst: form.gst, projectTitle: form.projectTitle, serviceIds: form.selectedIds, discountPct: form.discountPct, gstPct: form.gstPct, notes: form.notes, amount: grandTotal, history: updatedHistory, paymentScheduleId: form.paymentScheduleId } as any
+    const updated = { 
+      ...editQuote, 
+      client: form.client, 
+      contact: form.contact, 
+      email: form.email, 
+      phone: form.phone, 
+      businessType: form.businessType, 
+      industry: form.industry, 
+      gst: form.gst, 
+      projectTitle: form.projectTitle, 
+      serviceIds: form.selectedIds, 
+      discountPct: form.discountPct, 
+      gstPct: form.gstPct, 
+      notes: form.notes, 
+      amount: grandTotal, 
+      history: updatedHistory, 
+      paymentScheduleId: form.paymentScheduleId,
+      validityDays: form.validityDays,
+      paymentTermsOneTime: form.paymentTermsOneTime,
+      paymentTermsMonthly: form.paymentTermsMonthly,
+      extraTerms: form.extraTerms,
+      customTerms: form.customTerms
+    } as any
 
     if (isSupabaseConfigured()) {
       try {
@@ -434,7 +596,12 @@ export default function QuotationsPage() {
           notes: updated.notes,
           amount: updated.amount,
           history: updated.history,
-          payment_schedule_id: form.paymentScheduleId
+          payment_schedule_id: form.paymentScheduleId,
+          validity_days: form.validityDays,
+          payment_terms_one_time: form.paymentTermsOneTime,
+          payment_terms_monthly: form.paymentTermsMonthly,
+          extra_terms: form.extraTerms,
+          custom_terms: form.customTerms
         }).eq('id', editQuote.id)
         if (error) {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })
@@ -450,10 +617,10 @@ export default function QuotationsPage() {
 
     const updatedQuotes = quotes.map(q => q.id === editQuote.id ? updated : q)
     setQuotes(updatedQuotes)
-    setCachedData('quotations', { quotes: updatedQuotes, servicesData })
+    setCachedData('quotations', { quotes: updatedQuotes, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
     setEditQuote(null)
-    setForm(blankForm())
+    setForm(blankForm(companyDocs))
     toast({ title: '✅ Quotation updated' })
     setGenerating(false)
   }
@@ -514,7 +681,7 @@ export default function QuotationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Quotations</h1><p className="text-muted-foreground text-sm mt-0.5">Generate and manage client quotation proposals.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm()); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Quotation</Button>
+        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm(companyDocs)); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Quotation</Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -595,23 +762,23 @@ export default function QuotationsPage() {
         </div>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); setForm(blankForm()) } }}>
+      <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); setForm(blankForm(companyDocs)) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Quotation</DialogTitle></DialogHeader>
           <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm()) }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
             <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generating...</> : 'Generate PDF'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editQuote} onOpenChange={v => { if (!v) { setEditQuote(null); setForm(blankForm()) } }}>
+      <Dialog open={!!editQuote} onOpenChange={v => { if (!v) { setEditQuote(null); setForm(blankForm(companyDocs)) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Quotation {editQuote?.docId}</DialogTitle></DialogHeader>
           <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditQuote(null); setForm(blankForm()) }} disabled={generating}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditQuote(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
             <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
               {generating ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}
             </Button>
@@ -694,14 +861,14 @@ function buildContentBody(q: Quote, svcs: any[]) {
       '',
     ]),
     '## Payment Terms',
-    '- One-time services: 50% advance to begin, 50% on delivery',
-    '- Monthly retainers: Full month fee payable in advance',
+    `- One-time services: ${q.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'}`,
+    `- Monthly retainers: ${q.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'}`,
     '- Accepted: NEFT / IMPS / UPI / Cheque',
     '',
     q.notes ? `## Additional Notes\n${q.notes}` : '',
     '',
     '## Validity',
-    'This quotation is valid for **14 days** from the date of issue.',
+    `This quotation is valid for **${q.validityDays !== undefined && q.validityDays !== null ? q.validityDays : 14} days** from the date of issue.`,
   ]
   return lines.join('\n')
 }

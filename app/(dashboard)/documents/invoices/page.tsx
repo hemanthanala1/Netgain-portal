@@ -30,11 +30,51 @@ type Invoice = {
   history: { date: string; action: string; canDownload?: boolean }[]
   paymentScheduleId?: string;
   paymentScheduleEntry?: string;
+  invoiceTerms?: string;
+  invoicePaymentInstructions?: string;
+  invoiceFooter?: string;
+  invoiceAdditionalText?: string;
+  customTerms?: string;
 }
 
 const INITIAL: Invoice[] = []
 
+function compileDefaultInvoiceTerms(invoiceTerms: string, ptOneTime: string, ptMonthly: string, gstPct: number, extraTerms: string) {
+  if (invoiceTerms && invoiceTerms.trim()) {
+    return invoiceTerms.trim()
+  }
+  const lines = [
+    `One-time services: ${ptOneTime}.`,
+    `Monthly recurring services: ${ptMonthly}.`,
+    'Hosting, domain, ad spend & third-party API fees billed at actuals.',
+    `All prices are in Indian Rupees (INR). GST @ ${gstPct}% extra as applicable.`
+  ]
+  if (extraTerms) {
+    extraTerms.split('\n').map(t => t.trim()).filter(Boolean).forEach(t => lines.push(t))
+  }
+  return lines.join('\n')
+}
+
+function getInvoiceTerms(inv: Invoice | any, companyDocs?: any) {
+  if (inv.customTerms) return inv.customTerms
+  if (inv.custom_terms) return inv.custom_terms
+  
+  const invoiceTerms = inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || '')
+  const paymentTermsOneTime = companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = companyDocs?.extraTerms || ''
+  const gstPct = inv.gstPct !== undefined && inv.gstPct !== null ? inv.gstPct : 18
+
+  return compileDefaultInvoiceTerms(invoiceTerms, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
+}
+
 function blankForm(initialDocs?: any) {
+  const invoiceTerms = initialDocs?.invoiceTerms || ''
+  const paymentTermsOneTime = initialDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = initialDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = initialDocs?.extraTerms || ''
+  const gstPct = 18
+
   return { 
     client: '', 
     contact: '', 
@@ -45,11 +85,16 @@ function blankForm(initialDocs?: any) {
     selectedIds: [] as string[], 
     discountType: 'percentage' as 'percentage'|'fixed', 
     discountValue: 0, 
-    gstPct: 18, 
+    gstPct, 
     notes: initialDocs?.invoiceNotes || 'Thank you for your business!', 
     paymentScheduleId: '',
     paymentSchedulePointIndex: 'none',
-    due: new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10)
+    due: new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10),
+    invoiceTerms,
+    invoicePaymentInstructions: initialDocs?.invoicePaymentInstructions || '',
+    invoiceFooter: initialDocs?.invoiceFooter || '',
+    invoiceAdditionalText: initialDocs?.invoiceAdditionalText || '',
+    customTerms: compileDefaultInvoiceTerms(invoiceTerms, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
   }
 }
 
@@ -73,11 +118,15 @@ export default function InvoicesPage() {
   const [form, setForm] = useState(() => blankForm())
 
   useEffect(() => {
-    const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[] }>('invoices')
+    const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[], companyDocs?: any }>('invoices')
     if (cached) {
       setInvoices(cached.invoices)
       setServicesData(cached.servicesData)
       if (cached.paymentSchedules) setPaymentSchedules(cached.paymentSchedules)
+      if (cached.companyDocs) {
+        setCompanyDocs(cached.companyDocs)
+        setForm(blankForm(cached.companyDocs))
+      }
       setLoading(false)
     }
 
@@ -95,10 +144,13 @@ export default function InvoicesPage() {
           if (sRes.error) throw sRes.error
 
           let schedules = []
+          let docsSettings = null
           if (cRes.data && cRes.data.docs) {
-            setCompanyDocs(cRes.data.docs)
-            if (cRes.data.docs.paymentSchedules) {
-              schedules = cRes.data.docs.paymentSchedules
+            docsSettings = cRes.data.docs
+            setCompanyDocs(docsSettings)
+            setForm(blankForm(docsSettings))
+            if (docsSettings.paymentSchedules) {
+              schedules = docsSettings.paymentSchedules
               setPaymentSchedules(schedules)
             }
           }
@@ -141,18 +193,23 @@ export default function InvoicesPage() {
               due: i.due,
               history: Array.isArray(i.history) ? i.history : [],
               paymentScheduleId: i.payment_schedule_id || '',
-              paymentScheduleEntry: i.payment_schedule_entry || ''
+              paymentScheduleEntry: i.payment_schedule_entry || '',
+              invoiceTerms: i.invoice_terms,
+              invoicePaymentInstructions: i.invoice_payment_instructions,
+              invoiceFooter: i.invoice_footer,
+              invoiceAdditionalText: i.invoice_additional_text,
+              customTerms: i.custom_terms || '',
             }))
             setInvoices(mappedInvoices)
           }
 
-          setCachedData('invoices', { invoices: mappedInvoices, servicesData: mappedSvcs, paymentSchedules: schedules })
+          setCachedData('invoices', { invoices: mappedInvoices, servicesData: mappedSvcs, paymentSchedules: schedules, companyDocs: docsSettings })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setInvoices(INITIAL)
-        setCachedData('invoices', { invoices: INITIAL, servicesData: [], paymentSchedules: [] })
+        setCachedData('invoices', { invoices: INITIAL, servicesData: [], paymentSchedules: [], companyDocs: null })
       }
       setLoading(false)
     }
@@ -220,7 +277,12 @@ export default function InvoicesPage() {
       notes: inv.notes, 
       paymentScheduleId: inv.paymentScheduleId || '',
       paymentSchedulePointIndex: pointIdx,
-      due: inv.due ? inv.due.slice(0, 10) : new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10)
+      due: inv.due ? inv.due.slice(0, 10) : new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10),
+      invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),
+      invoicePaymentInstructions: inv.invoicePaymentInstructions !== undefined && inv.invoicePaymentInstructions !== null ? inv.invoicePaymentInstructions : (companyDocs?.invoicePaymentInstructions || ''),
+      invoiceFooter: inv.invoiceFooter !== undefined && inv.invoiceFooter !== null ? inv.invoiceFooter : (companyDocs?.invoiceFooter || ''),
+      invoiceAdditionalText: inv.invoiceAdditionalText !== undefined && inv.invoiceAdditionalText !== null ? inv.invoiceAdditionalText : (companyDocs?.invoiceAdditionalText || ''),
+      customTerms: getInvoiceTerms(inv, companyDocs)
     })
   }
 
@@ -303,8 +365,8 @@ export default function InvoicesPage() {
         ]),
         '## Payment Details',
         '__BANK_DETAILS__',
-        ...(companyDocs?.invoicePaymentInstructions ? ['', companyDocs.invoicePaymentInstructions] : []),
-        ...(companyDocs?.invoiceAdditionalText ? ['', '## Additional Details', companyDocs.invoiceAdditionalText] : []),
+        ...(inv.invoicePaymentInstructions ? ['', inv.invoicePaymentInstructions] : (companyDocs?.invoicePaymentInstructions ? ['', companyDocs.invoicePaymentInstructions] : [])),
+        ...(inv.invoiceAdditionalText ? ['', '## Additional Details', inv.invoiceAdditionalText] : (companyDocs?.invoiceAdditionalText ? ['', '## Additional Details', companyDocs.invoiceAdditionalText] : [])),
         ...(inv.notes ? ['', '## Notes', inv.notes] : []),
       ].join('\n'),
       items: scaledItems,
@@ -316,8 +378,9 @@ export default function InvoicesPage() {
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       docsSettings: {
         gstRate: String(gst),
-        invoiceTerms: companyDocs?.invoiceTerms || '',
-        invoiceFooter: companyDocs?.invoiceFooter || '',
+        invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),
+        invoiceFooter: inv.invoiceFooter !== undefined && inv.invoiceFooter !== null ? inv.invoiceFooter : (companyDocs?.invoiceFooter || ''),
+        customTerms: inv.customTerms || getInvoiceTerms(inv, companyDocs),
       },
     }
 
@@ -375,7 +438,12 @@ export default function InvoicesPage() {
         due: targetDue, 
         history: targetHistory,
         paymentScheduleId: form.paymentScheduleId,
-        paymentScheduleEntry: milestoneText
+        paymentScheduleEntry: milestoneText,
+        invoiceTerms: form.invoiceTerms,
+        invoicePaymentInstructions: form.invoicePaymentInstructions,
+        invoiceFooter: form.invoiceFooter,
+        invoiceAdditionalText: form.invoiceAdditionalText,
+        customTerms: form.customTerms
       }
 
       await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
@@ -401,7 +469,12 @@ export default function InvoicesPage() {
           due: targetDue,
           history: targetHistory,
           payment_schedule_id: form.paymentScheduleId,
-          payment_schedule_entry: milestoneText
+          payment_schedule_entry: milestoneText,
+          invoice_terms: form.invoiceTerms,
+          invoice_payment_instructions: form.invoicePaymentInstructions,
+          invoice_footer: form.invoiceFooter,
+          invoice_additional_text: form.invoiceAdditionalText,
+          custom_terms: form.customTerms
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -412,7 +485,7 @@ export default function InvoicesPage() {
 
       const updatedInvoices = [newInv, ...invoices]
       setInvoices(updatedInvoices)
-      setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
+      setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
       invalidateCache('dashboard')
       setShowCreate(false); setForm(blankForm(companyDocs))
       toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
@@ -450,7 +523,12 @@ export default function InvoicesPage() {
       history: targetHistory,
       paymentScheduleId: form.paymentScheduleId,
       paymentScheduleEntry: milestoneText,
-      due: targetDue
+      due: targetDue,
+      invoiceTerms: form.invoiceTerms,
+      invoicePaymentInstructions: form.invoicePaymentInstructions,
+      invoiceFooter: form.invoiceFooter,
+      invoiceAdditionalText: form.invoiceAdditionalText,
+      customTerms: form.customTerms
     }
 
     if (isSupabaseConfigured()) {
@@ -471,7 +549,12 @@ export default function InvoicesPage() {
           history: targetHistory,
           payment_schedule_id: form.paymentScheduleId,
           payment_schedule_entry: milestoneText,
-          due: targetDue
+          due: targetDue,
+          invoice_terms: form.invoiceTerms,
+          invoice_payment_instructions: form.invoicePaymentInstructions,
+          invoice_footer: form.invoiceFooter,
+          invoice_additional_text: form.invoiceAdditionalText,
+          custom_terms: form.customTerms
         }).eq('id', editInvoice.id)
 
         if (error) {
@@ -488,7 +571,7 @@ export default function InvoicesPage() {
 
     const updatedInvoices = invoices.map(i => i.id === editInvoice.id ? updated : i)
     setInvoices(updatedInvoices)
-    setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules })
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
     setEditInvoice(null); setForm(blankForm(companyDocs))
     toast({ title: '✅ Invoice updated' })
@@ -555,7 +638,7 @@ export default function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Invoices</h1><p className="text-muted-foreground text-sm mt-0.5">Create and manage tax invoices for clients.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm()); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Invoice</Button>
+        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm(companyDocs)); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Invoice</Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -756,6 +839,28 @@ export default function InvoicesPage() {
                 )}
               </div>
             )}
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Terms & Conditions Overrides</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/10 p-3 rounded-lg border border-border/50">
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Payment Instructions</Label>
+                  <Textarea className="resize-none h-16" placeholder="Account Name, Bank, IFSC, UPI ID..." value={form.invoicePaymentInstructions} onChange={e => setForm({ ...form, invoicePaymentInstructions: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Terms & Conditions (One per line)</Label>
+                  <Textarea className="h-32 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Footer Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Company contact details, GST, Address..." value={form.invoiceFooter} onChange={e => setForm({ ...form, invoiceFooter: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Additional Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Any extra information..." value={form.invoiceAdditionalText} onChange={e => setForm({ ...form, invoiceAdditionalText: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
@@ -914,6 +1019,28 @@ export default function InvoicesPage() {
                 )}
               </div>
             )}
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Terms & Conditions Overrides</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/10 p-3 rounded-lg border border-border/50">
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Payment Instructions</Label>
+                  <Textarea className="resize-none h-16" placeholder="Account Name, Bank, IFSC, UPI ID..." value={form.invoicePaymentInstructions} onChange={e => setForm({ ...form, invoicePaymentInstructions: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Terms & Conditions (One per line)</Label>
+                  <Textarea className="h-32 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Footer Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Company contact details, GST, Address..." value={form.invoiceFooter} onChange={e => setForm({ ...form, invoiceFooter: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Additional Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Any extra information..." value={form.invoiceAdditionalText} onChange={e => setForm({ ...form, invoiceAdditionalText: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>

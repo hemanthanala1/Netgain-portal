@@ -20,10 +20,33 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
 
-type SOW = { id: string; docId: string; client: string; contact: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[] }
+type SOW = { id: string; docId: string; client: string; contact: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
 
 const mockSOWs: SOW[] = []
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
+
+function compileDefaultSowTerms(companyDocs?: any) {
+  const paymentTermsOneTime = companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
+  const paymentTermsMonthly = companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
+  const extraTerms = companyDocs?.extraTerms || ''
+  const gstRate = 18
+  const lines = [
+    `One-time services: ${paymentTermsOneTime}.`,
+    `Monthly recurring services: ${paymentTermsMonthly}.`,
+    'Hosting, domain, ad spend & third-party API fees billed at actuals.',
+    `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`
+  ]
+  if (extraTerms) {
+    extraTerms.split('\n').map((t: string) => t.trim()).filter(Boolean).forEach((t: string) => lines.push(t))
+  }
+  return lines.join('\n')
+}
+
+function getSowTerms(sow: SOW | any, companyDocs?: any) {
+  if (sow.customTerms) return sow.customTerms
+  if (sow.custom_terms) return sow.custom_terms
+  return compileDefaultSowTerms(companyDocs)
+}
 
 export default function SOWPage() {
   const [sows, setSows] = useState<SOW[]>([])
@@ -39,6 +62,7 @@ export default function SOWPage() {
   const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<SOW | null>(null)
+  const [companyDocs, setCompanyDocs] = useState<any>(null)
 
   const [form, setForm] = useState({
     client: '', contact: '', phone: '', email: '', businessType: 'E-Commerce',
@@ -49,14 +73,65 @@ export default function SOWPage() {
     revisions: '2 rounds of revisions included per deliverable',
     confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.',
     jurisdiction: 'Hyderabad, Telangana, India',
+    customTerms: compileDefaultSowTerms(null)
   })
 
+  function resetForm(sow?: SOW | null, docs?: any) {
+    if (sow) {
+      setForm({
+        client: sow.client,
+        contact: sow.contact,
+        phone: sow.phone,
+        email: '',
+        businessType: '',
+        project: sow.project,
+        value: String(sow.value),
+        timeline: sow.timeline,
+        startDate: '',
+        objectives: sow.objectives,
+        deliverables: sow.deliverables,
+        milestones: sow.milestones,
+        payment: sow.payment,
+        exclusions: sow.exclusions,
+        revisions: sow.revisions,
+        confidentiality: '',
+        jurisdiction: sow.jurisdiction,
+        customTerms: getSowTerms(sow, docs)
+      })
+    } else {
+      setForm({
+        client: '',
+        contact: '',
+        phone: '',
+        email: '',
+        businessType: 'E-Commerce',
+        project: '',
+        value: '',
+        timeline: '',
+        startDate: '',
+        objectives: '',
+        deliverables: '',
+        milestones: '',
+        payment: '50% advance to start, balance on delivery',
+        exclusions: 'Domain registration and renewal, Hosting fees, Third-party API/tool subscriptions, Ad spend',
+        revisions: '2 rounds of revisions included per deliverable',
+        confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.',
+        jurisdiction: 'Hyderabad, Telangana, India',
+        customTerms: compileDefaultSowTerms(docs)
+      })
+    }
+  }
+
   useEffect(() => {
-    const cached = getCachedData<{ sows: SOW[], sourceDocs: any[], servicesMap: Record<string, any> }>('sows')
+    const cached = getCachedData<{ sows: SOW[], sourceDocs: any[], servicesMap: Record<string, any>, companyDocs?: any }>('sows')
     if (cached) {
       setSows(cached.sows)
       setSourceDocs(cached.sourceDocs)
       setServicesMap(cached.servicesMap)
+      if (cached.companyDocs) {
+        setCompanyDocs(cached.companyDocs)
+        setForm(prev => ({ ...prev, customTerms: compileDefaultSowTerms(cached.companyDocs) }))
+      }
       setLoading(false)
     }
 
@@ -64,11 +139,12 @@ export default function SOWPage() {
       if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const [sRes, qRes, iRes, svRes] = await Promise.all([
+          const [sRes, qRes, iRes, svRes, cRes] = await Promise.all([
             supabase.from('sows').select('*').order('created_at', { ascending: false }),
             supabase.from('quotations').select('*').order('created_at', { ascending: false }),
             supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('id, name, deliverables')
+            supabase.from('services').select('id, name, deliverables'),
+            supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
           if (sRes.error) throw sRes.error
@@ -78,6 +154,13 @@ export default function SOWPage() {
             mappedSvMap = {}
             svRes.data.forEach((s: any) => mappedSvMap[s.id] = s)
             setServicesMap(mappedSvMap)
+          }
+
+          let docsSettings: any = null
+          if (cRes.data && cRes.data.docs) {
+            docsSettings = cRes.data.docs
+            setCompanyDocs(docsSettings)
+            setForm(prev => ({ ...prev, customTerms: compileDefaultSowTerms(docsSettings) }))
           }
 
           const docs: any[] = []
@@ -109,18 +192,19 @@ export default function SOWPage() {
               jurisdiction: s.jurisdiction || '',
               status: s.status || 'draft',
               created: s.created,
-              history: Array.isArray(s.history) ? s.history : []
+              history: Array.isArray(s.history) ? s.history : [],
+              customTerms: s.custom_terms || ''
             }))
             setSows(mappedSows)
           }
 
-          setCachedData('sows', { sows: mappedSows, sourceDocs: docs, servicesMap: mappedSvMap })
+          setCachedData('sows', { sows: mappedSows, sourceDocs: docs, servicesMap: mappedSvMap, companyDocs: docsSettings })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
       } else {
         setSows(mockSOWs)
-        setCachedData('sows', { sows: mockSOWs, sourceDocs: [], servicesMap: {} })
+        setCachedData('sows', { sows: mockSOWs, sourceDocs: [], servicesMap: {}, companyDocs: null })
       }
       setLoading(false)
     }
@@ -218,11 +302,14 @@ export default function SOWPage() {
       subtotal: Number(f.value) || 0,
       discountTotal: 0,
       grandTotal: Number(f.value) || 0,
+      docsSettings: {
+        customTerms: f.customTerms || getSowTerms(f, companyDocs)
+      }
     }
   }
 
   async function downloadSowPdf(sow: SOW) {
-    const payload = buildPayload({ ...sow, value: String(sow.value), email: '', businessType: '', startDate: '', confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.' }, sow.client, sow.project, sow.docId)
+    const payload = buildPayload({ ...sow, value: String(sow.value), email: '', businessType: '', startDate: '', confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.', customTerms: sow.customTerms || '' }, sow.client, sow.project, sow.docId)
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
@@ -302,7 +389,8 @@ export default function SOWPage() {
         jurisdiction: form.jurisdiction, 
         status: targetStatus, 
         created: targetCreated, 
-        history: targetHistory 
+        history: targetHistory,
+        customTerms: form.customTerms
       }
 
       if (isSupabaseConfigured()) {
@@ -324,7 +412,8 @@ export default function SOWPage() {
           jurisdiction: form.jurisdiction,
           status: targetStatus,
           created: targetCreated,
-          history: targetHistory
+          history: targetHistory,
+          custom_terms: form.customTerms
         }
 
         const { error } = editItem 
@@ -341,18 +430,19 @@ export default function SOWPage() {
       if (editItem) {
         const updatedList = sows.map(s => s.id === editItem.id ? newSOW : s)
         setSows(updatedList)
-        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
+        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
         toast({ title: '✅ SOW Updated!', description: `${docId} updated and downloaded.` })
       } else {
         const updatedList = [newSOW, ...sows]
         setSows(updatedList)
-        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
+        setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
         toast({ title: '✅ SOW Generated!', description: `${docId} downloaded successfully.` })
       }
       invalidateCache('dashboard')
       
       setShowCreate(false)
       setEditItem(null)
+      resetForm(null, companyDocs)
 
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
@@ -364,7 +454,7 @@ export default function SOWPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Scope of Work</h1><p className="text-muted-foreground text-sm mt-0.5">Generate detailed scope of work documents.</p></div>
-        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New SOW</Button>
+        <Button variant="gold" size="sm" onClick={() => { resetForm(null, companyDocs); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New SOW</Button>
       </div>
       <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       <Card>
@@ -390,7 +480,7 @@ export default function SOWPage() {
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(s)} disabled={downloadingId === s.id}>
                       {downloadingId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); setForm({ client: s.client, contact: s.contact, phone: s.phone, email: '', businessType: '', project: s.project, value: String(s.value), timeline: s.timeline, startDate: '', objectives: s.objectives, deliverables: s.deliverables, milestones: s.milestones, payment: s.payment, exclusions: s.exclusions, revisions: s.revisions, confidentiality: '', jurisdiction: s.jurisdiction }); setShowCreate(true); }}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })}>
@@ -470,6 +560,10 @@ export default function SOWPage() {
                 <div className="space-y-1"><Label>Exclusions (comma-separated)</Label><Textarea className="h-14 resize-none" value={form.exclusions} onChange={e => setForm({ ...form, exclusions: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Revision Policy</Label><Input value={form.revisions} onChange={e => setForm({ ...form, revisions: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Jurisdiction</Label><Input value={form.jurisdiction} onChange={e => setForm({ ...form, jurisdiction: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Terms & Conditions Bottom Block (One per line)</Label>
+                  <Textarea className="h-32 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
               </div>
             </div>
           </div>

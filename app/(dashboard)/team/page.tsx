@@ -410,12 +410,42 @@ export default function TeamPage() {
                       <h3 className="font-semibold">{r.name}</h3>
                       {r.isSystem && <Badge variant="secondary" className="text-[10px] mt-1">System Role</Badge>}
                     </div>
-                    {!r.isSystem && (
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditRoleId(r.id); setRoleForm({ name: r.name, permissions: r.permissions }); setShowRoleCreate(true); }}><Edit className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteRole(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
-                    )}
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => {
+                          setEditRoleId(r.id);
+                          setRoleForm({ name: r.name, permissions: r.permissions });
+                          setShowRoleCreate(true);
+                        }}
+                        title="Edit Role & Permissions"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      {r.name !== 'Founder' && r.name !== 'Admin' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteRole(r)}
+                          title="Delete Role"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground/30 cursor-not-allowed"
+                          disabled
+                          title={`${r.name} role cannot be deleted`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Access Levels</p>
@@ -460,19 +490,65 @@ export default function TeamPage() {
 
       <Dialog open={showRoleCreate} onOpenChange={v => { setShowRoleCreate(v); if (!v) { setEditRoleId(null); setRoleForm({ name: '', permissions: [] }) } }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editRoleId ? 'Edit Custom Role' : 'Create Custom Role'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>
+              {editRoleId ? (roles.find(r => r.id === editRoleId)?.isSystem ? 'Edit System Role' : 'Edit Custom Role') : 'Create Custom Role'}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1"><Label>Role Name *</Label><Input placeholder="e.g. Content Writer" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} /></div>
+            <div className="space-y-1">
+              <Label>Role Name *</Label>
+              <Input
+                placeholder="e.g. Content Writer"
+                value={roleForm.name}
+                onChange={e => setRoleForm({...roleForm, name: e.target.value})}
+                disabled={roles.find(r => r.id === editRoleId)?.isSystem}
+              />
+              {roles.find(r => r.id === editRoleId)?.isSystem && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  System role names cannot be renamed as they are integrated with portal logic and security policies.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
-              <Label>Module Access</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 border border-border rounded-lg bg-muted/20">
-                {MODULES.map(m => (
-                  <label key={m} className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input type="checkbox" checked={roleForm.permissions.includes(m)} onChange={e => setRoleForm({...roleForm, permissions: e.target.checked ? [...roleForm.permissions, m] : roleForm.permissions.filter(p => p !== m)})} className="accent-gold rounded" />
-                    <span className="capitalize">{m}</span>
-                  </label>
-                ))}
+              <div className="flex items-center justify-between">
+                <Label>Module Access</Label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gold">
+                  <input
+                    type="checkbox"
+                    checked={roleForm.permissions.includes('all')}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setRoleForm({ ...roleForm, permissions: ['all'] })
+                      } else {
+                        setRoleForm({ ...roleForm, permissions: [] })
+                      }
+                    }}
+                    className="accent-gold rounded"
+                  />
+                  <span>Full Admin Access</span>
+                </label>
               </div>
+              
+              {!roleForm.permissions.includes('all') ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 border border-border rounded-lg bg-muted/20">
+                  {MODULES.map(m => (
+                    <label key={m} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={roleForm.permissions.includes(m)}
+                        onChange={e => setRoleForm({...roleForm, permissions: e.target.checked ? [...roleForm.permissions, m] : roleForm.permissions.filter(p => p !== m)})}
+                        className="accent-gold rounded"
+                      />
+                      <span className="capitalize">{m}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 border border-border rounded-lg bg-gold/5 text-gold text-xs text-center font-medium">
+                  Full access includes access to all modules and system configuration.
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
