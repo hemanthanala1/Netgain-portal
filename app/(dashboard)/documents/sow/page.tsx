@@ -20,7 +20,7 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
 
-type SOW = { id: string; docId: string; client: string; contact: string; email: string; phone: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
+type SOW = { id: string; docId: string; client: string; contact: string; phone: string; email: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
 
 const mockSOWs: SOW[] = []
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
@@ -179,8 +179,8 @@ export default function SOWPage() {
               docId: s.doc_id,
               client: s.client,
               contact: s.contact || '',
-              email: s.email || '',
               phone: s.phone || '',
+              email: s.email || '',
               project: s.project,
               value: Number(s.value) || 0,
               timeline: s.timeline || '',
@@ -376,9 +376,9 @@ export default function SOWPage() {
         id: targetId, 
         docId, 
         client: form.client, 
-        contact: form.contact,
+        contact: form.contact, 
+        phone: form.phone,
         email: form.email || '',
-        phone: form.phone, 
         project: form.project, 
         value: Number(form.value) || 0, 
         timeline: form.timeline, 
@@ -401,8 +401,8 @@ export default function SOWPage() {
           doc_id: docId,
           client: form.client,
           contact: form.contact,
-          email: form.email || '',
           phone: form.phone,
+          email: form.email || '',
           project: form.project,
           value: Number(form.value) || 0,
           timeline: form.timeline,
@@ -543,6 +543,8 @@ export default function SOWPage() {
                   />
                 </div>
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Project Name *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 8 Weeks from kickoff" value={form.timeline} onChange={e => setForm({ ...form, timeline: e.target.value })} /></div>
@@ -633,8 +635,9 @@ export default function SOWPage() {
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
           if (!shareDoc) return
-          const sowObj = sows.find(s => s.id === shareDoc.id)
-          if (!sowObj) throw new Error('SOW not found')
+
+          const sow = sows.find(s => s.id === shareDoc.id)
+          if (!sow) throw new Error('SOW not found')
 
           const { data: { session } } = await supabase.auth.getSession()
           const token = session?.access_token
@@ -647,21 +650,29 @@ export default function SOWPage() {
             let subject = ''
 
             if (method === 'email') {
-              recipient = sowObj.email
-              subject = `Scope of Work: ${sowObj.project || sowObj.docId}`
-              message = `Dear ${sowObj.client},\n\nPlease find attached the Scope of Work document (${sowObj.docId}) for your project "${sowObj.project || 'Services'}".\n\nContract Value: ${formatCurrency(sowObj.value)}\nTimeline: ${sowObj.timeline || 'As per discussion'}\n\nKindly review and revert with any questions.\n\nBest regards,\nNetgain Team`
+              recipient = sow.email || ''
+              subject = `Scope of Work: ${sow.docId} — ${sow.project || sow.client}`
+              message = `Dear ${sow.client},\n\nPlease find attached the Scope of Work document ${sow.docId} for your project "${sow.project || 'Services'}".\n\nProject Value: ${formatCurrency(sow.value)}\nTimeline: ${sow.timeline || 'As discussed'}\n\nKindly review and revert with your confirmation.\n\nBest regards,\nNetgain Team`
             } else if (method === 'whatsapp' || method === 'sms') {
-              recipient = sowObj.phone
-              message = `Dear ${sowObj.client}, your Scope of Work ${sowObj.docId} for "${sowObj.project || 'Services'}" - Value: ${formatCurrency(sowObj.value)} is ready. Please check your email for the document. - Netgain Team`
+              recipient = sow.phone
+              message = `Dear ${sow.client}, your Scope of Work ${sow.docId} for "${sow.project || 'Services'}" (${formatCurrency(sow.value)}) is ready. Please review and confirm. — Netgain Team`
             }
 
-            if (!recipient) throw new Error(`Recipient contact details not found for ${method}`)
+            if (!recipient) {
+              throw new Error(`No ${method === 'email' ? 'email address' : 'phone number'} found for this client. Please edit the SOW to add contact details.`)
+            }
 
             const res = await fetch('/api/meetings/send', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ channel: method, recipient, message, subject: method === 'email' ? subject : undefined })
+              body: JSON.stringify({
+                channel: method,
+                recipient,
+                message,
+                subject: method === 'email' ? subject : undefined
+              })
             })
+
             if (!res.ok) {
               const err = await res.json()
               throw new Error(err.error || `Failed to send via ${method}`)

@@ -24,7 +24,7 @@ const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance 
 const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
 
 type Agreement = {
-  id: string; docId: string; client: string; contact: string; email: string; phone: string
+  id: string; docId: string; client: string; contact: string; phone: string; email: string
   type: string; value: number; duration: string; services: string
   ip: string; cancellation: string; jurisdiction: string
   status: string; created: string
@@ -58,7 +58,7 @@ function getAgreementTerms(agr: Agreement | any, companyDocs?: any) {
 }
 
 function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> {
-  return { client: '', contact: '', email: '', phone: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs) }
+  return { client: '', contact: '', phone: '', email: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs) }
 }
 
 export default function AgreementsPage() {
@@ -84,6 +84,7 @@ export default function AgreementsPage() {
         client: agr.client,
         contact: agr.contact,
         phone: agr.phone,
+        email: agr.email || '',
         type: agr.type,
         value: agr.value,
         duration: agr.duration,
@@ -99,6 +100,7 @@ export default function AgreementsPage() {
         client: '',
         contact: '',
         phone: '',
+        email: '',
         type: 'Service Agreement',
         value: 0,
         duration: '',
@@ -169,8 +171,8 @@ export default function AgreementsPage() {
               docId: a.doc_id,
               client: a.client,
               contact: a.contact || '',
-              email: a.email || '',
               phone: a.phone || '',
+              email: a.email || '',
               type: a.type || '',
               value: Number(a.value) || 0,
               duration: a.duration || '',
@@ -235,6 +237,7 @@ export default function AgreementsPage() {
       client: doc.client || '',
       contact: doc.contact || '',
       phone: doc.phone || '',
+      email: doc.email || '',
       value: doc.value ? Number(doc.value) : prev.value,
       services: servicesStr.trim() || prev.services
     }))
@@ -327,8 +330,8 @@ export default function AgreementsPage() {
           doc_id: docId,
           client: form.client,
           contact: form.contact,
-          email: (form as any).email || '',
           phone: form.phone,
+          email: (form as any).email || '',
           type: form.type,
           value: form.value,
           duration: form.duration,
@@ -369,8 +372,8 @@ export default function AgreementsPage() {
         const { error } = await supabase.from('agreements').update({
           client: form.client,
           contact: form.contact,
-          email: (form as any).email || '',
           phone: form.phone,
+          email: (form as any).email || '',
           type: form.type,
           value: form.value,
           duration: form.duration,
@@ -562,6 +565,7 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>
@@ -616,6 +620,7 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>
@@ -693,8 +698,9 @@ export default function AgreementsPage() {
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
           if (!shareDoc) return
-          const agrObj = agreements.find(a => a.id === shareDoc.id)
-          if (!agrObj) throw new Error('Agreement not found')
+
+          const agr = agreements.find(a => a.id === shareDoc.id)
+          if (!agr) throw new Error('Agreement not found')
 
           const { data: { session } } = await supabase.auth.getSession()
           const token = session?.access_token
@@ -707,21 +713,29 @@ export default function AgreementsPage() {
             let subject = ''
 
             if (method === 'email') {
-              recipient = agrObj.email
-              subject = `${agrObj.type || 'Agreement'}: ${agrObj.docId} — ${agrObj.client}`
-              message = `Dear ${agrObj.client},\n\nPlease find your ${agrObj.type || 'Service Agreement'} (${agrObj.docId}) ready for your review.\n\nContract Value: ${formatCurrency(agrObj.value)}\nDuration: ${agrObj.duration || 'As per discussion'}\n\nKindly review, sign, and return a copy at your earliest convenience.\n\nBest regards,\nNetgain Team`
+              recipient = agr.email || ''
+              subject = `${agr.type}: ${agr.docId} — ${agr.client}`
+              message = `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
             } else if (method === 'whatsapp' || method === 'sms') {
-              recipient = agrObj.phone
-              message = `Dear ${agrObj.client}, your ${agrObj.type || 'Agreement'} ${agrObj.docId} - Value: ${formatCurrency(agrObj.value)} is ready for signature. Please check your email. - Netgain Team`
+              recipient = agr.phone
+              message = `Dear ${agr.client}, your ${agr.type} ${agr.docId} (${formatCurrency(agr.value)}) is ready for review and signature. — Netgain Team`
             }
 
-            if (!recipient) throw new Error(`Recipient contact details not found for ${method}`)
+            if (!recipient) {
+              throw new Error(`No ${method === 'email' ? 'email address' : 'phone number'} found for this client. Please edit the agreement to add contact details.`)
+            }
 
             const res = await fetch('/api/meetings/send', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ channel: method, recipient, message, subject: method === 'email' ? subject : undefined })
+              body: JSON.stringify({
+                channel: method,
+                recipient,
+                message,
+                subject: method === 'email' ? subject : undefined
+              })
             })
+
             if (!res.ok) {
               const err = await res.json()
               throw new Error(err.error || `Failed to send via ${method}`)

@@ -1113,8 +1113,9 @@ export default function InvoicesPage() {
         title={shareDoc?.title || ''}
         onSend={async (methods) => {
           if (!shareDoc) return
-          const invObj = invoices.find(i => i.id === shareDoc.id)
-          if (!invObj) throw new Error('Invoice not found')
+
+          const inv = invoices.find(i => i.id === shareDoc.id)
+          if (!inv) throw new Error('Invoice not found')
 
           const { data: { session } } = await supabase.auth.getSession()
           const token = session?.access_token
@@ -1127,21 +1128,29 @@ export default function InvoicesPage() {
             let subject = ''
 
             if (method === 'email') {
-              recipient = invObj.email
-              subject = `Invoice ${invObj.docId} from Netgain Studio`
-              message = `Dear ${invObj.client},\n\nPlease find your Invoice (${invObj.docId}) as per our engagement.\n\nAmount Due: ${formatCurrency(invObj.amount)}\nDue Date: ${formatDate(invObj.due)}\n\nKindly process the payment at your earliest convenience. Please feel free to reach out for any queries.\n\nThank you for your business!\n\nBest regards,\nNetgain Team`
+              recipient = inv.email
+              subject = `Invoice: ${inv.docId} — ${inv.client}`
+              message = `Dear ${inv.client},\n\nPlease find your invoice ${inv.docId} for the amount of ${formatCurrency(inv.amount)}.\n\nDue Date: ${formatDate(inv.due)}\n\nKindly process payment at your earliest convenience.\n\nBest regards,\nNetgain Team`
             } else if (method === 'whatsapp' || method === 'sms') {
-              recipient = invObj.phone
-              message = `Dear ${invObj.client}, Invoice ${invObj.docId} of ${formatCurrency(invObj.amount)} is due on ${formatDate(invObj.due)}. Please check your email for details. - Netgain Team`
+              recipient = inv.phone
+              message = `Dear ${inv.client}, your invoice ${inv.docId} for ${formatCurrency(inv.amount)} is due on ${formatDate(inv.due)}. Please process payment at your earliest convenience. — Netgain Team`
             }
 
-            if (!recipient) throw new Error(`Recipient contact details not found for ${method}`)
+            if (!recipient) {
+              throw new Error(`No ${method === 'email' ? 'email address' : 'phone number'} found for this client. Please edit the invoice to add contact details.`)
+            }
 
             const res = await fetch('/api/meetings/send', {
               method: 'POST',
               headers,
-              body: JSON.stringify({ channel: method, recipient, message, subject: method === 'email' ? subject : undefined })
+              body: JSON.stringify({
+                channel: method,
+                recipient,
+                message,
+                subject: method === 'email' ? subject : undefined
+              })
             })
+
             if (!res.ok) {
               const err = await res.json()
               throw new Error(err.error || `Failed to send via ${method}`)
