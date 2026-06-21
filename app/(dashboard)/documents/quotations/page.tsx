@@ -839,7 +839,14 @@ export default function QuotationsPage() {
         open={!!shareDoc}
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
-        onSend={async (methods) => {
+        initialEmail={shareDoc ? quotes.find(q => q.id === shareDoc.id)?.email || '' : ''}
+        initialSubject={shareDoc ? `Quotation Proposal: ${quotes.find(q => q.id === shareDoc.id)?.projectTitle || quotes.find(q => q.id === shareDoc.id)?.docId}` : ''}
+        initialMessage={shareDoc ? (() => {
+          const q = quotes.find(x => x.id === shareDoc.id)
+          if (!q) return ''
+          return `Dear ${q.client},\n\nWe are pleased to share our quotation proposal for the project "${q.projectTitle || 'Services'}" (${q.docId}).\n\nTotal Estimated Amount: ${formatCurrency(q.amount)}\n\nYou can view and download all documents in your client vault.\n\nBest regards,\nNetgain Team`
+        })() : ''}
+        onSend={async (methods, emailDetails) => {
           if (!shareDoc) return
           
           const quoteObj = quotes.find(q => q.id === shareDoc.id)
@@ -856,11 +863,44 @@ export default function QuotationsPage() {
             let recipient = ''
             let message = ''
             let subject = ''
+            let pdfPayload: any = undefined
 
             if (method === 'email') {
-              recipient = quoteObj.email
-              subject = `Quotation Proposal: ${quoteObj.projectTitle || quoteObj.docId}`
-              message = `Dear ${quoteObj.client},\n\nWe are pleased to share our quotation proposal for the project "${quoteObj.projectTitle || 'Services'}" (${quoteObj.docId}).\n\nTotal Estimated Amount: ${formatCurrency(quoteObj.amount)}\n\nYou can view and download all documents in your client vault.\n\nBest regards,\nNetgain Team`
+              recipient = emailDetails?.recipient || quoteObj.email
+              subject = emailDetails?.subject || `Quotation Proposal: ${quoteObj.projectTitle || quoteObj.docId}`
+              message = emailDetails?.message || `Dear ${quoteObj.client},\n\nWe are pleased to share our quotation proposal for the project "${quoteObj.projectTitle || 'Services'}" (${quoteObj.docId}).\n\nTotal Estimated Amount: ${formatCurrency(quoteObj.amount)}\n\nYou can view and download all documents in your client vault.\n\nBest regards,\nNetgain Team`
+              
+              // Generate matching PDF payload on the fly
+              const svcs = servicesData.filter(s => quoteObj.serviceIds.includes(s.id))
+              const sub = svcs.reduce((a, s) => a + s.price, 0)
+              const dAmt = Math.round(sub * quoteObj.discountPct / 100)
+              const aft = sub - dAmt
+              const gAmt = Math.round(aft * quoteObj.gstPct / 100)
+              const tot = aft + gAmt
+
+              pdfPayload = {
+                docType: 'Quotation',
+                clientName: quoteObj.contact || quoteObj.client,
+                projectTitle: quoteObj.projectTitle || `Quotation — ${quoteObj.client}`,
+                companyName: quoteObj.client,
+                clientInfo: { business: quoteObj.businessType, industry: quoteObj.industry, mobile: quoteObj.phone, gst: quoteObj.gst },
+                content: buildContentBody(quoteObj, svcs),
+                items: svcs.map(s => ({ serviceName: s.name, finalPrice: s.price, price: s.price, quantity: 1, category: s.category, timeline: s.timeline, pricing_model: s.model, deliverables: s.deliverables })),
+                subtotal: sub,
+                discountTotal: dAmt,
+                grandTotal: tot,
+                fullProjectTotal: tot,
+                fullSubtotal: sub,
+                paymentScheduleObj: quoteObj.paymentScheduleId ? paymentSchedules.find(p => p.id === quoteObj.paymentScheduleId) : null,
+                docsSettings: {
+                  gstRate: String(quoteObj.gstPct),
+                  quotationValidity: String(quoteObj.validityDays !== undefined && quoteObj.validityDays !== null ? quoteObj.validityDays : (companyDocs?.quotationValidity || '14')),
+                  paymentTermsOneTime: quoteObj.paymentTermsOneTime || companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery',
+                  paymentTermsMonthly: quoteObj.paymentTermsMonthly || companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle',
+                  extraTerms: quoteObj.extraTerms || companyDocs?.extraTerms || '',
+                  customTerms: quoteObj.customTerms || getQuotationTerms(quoteObj, companyDocs),
+                },
+              }
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = quoteObj.phone
               message = `Dear ${quoteObj.client}, here is your quotation ${quoteObj.docId} for "${quoteObj.projectTitle || 'Services'}" - Total: ${formatCurrency(quoteObj.amount)}. Netgain Team`
@@ -877,7 +917,8 @@ export default function QuotationsPage() {
                 channel: method,
                 recipient,
                 message,
-                subject: method === 'email' ? subject : undefined
+                subject: method === 'email' ? subject : undefined,
+                pdfPayload
               })
             })
 

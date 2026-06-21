@@ -1111,7 +1111,14 @@ export default function InvoicesPage() {
         open={!!shareDoc}
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
-        onSend={async (methods) => {
+        initialEmail={shareDoc ? invoices.find(i => i.id === shareDoc.id)?.email || '' : ''}
+        initialSubject={shareDoc ? `Invoice: ${invoices.find(i => i.id === shareDoc.id)?.docId} — ${invoices.find(i => i.id === shareDoc.id)?.client}` : ''}
+        initialMessage={shareDoc ? (() => {
+          const inv = invoices.find(i => i.id === shareDoc.id)
+          if (!inv) return ''
+          return `Dear ${inv.client},\n\nPlease find your invoice ${inv.docId} for the amount of ${formatCurrency(inv.amount)}.\n\nDue Date: ${formatDate(inv.due)}\n\nKindly process payment at your earliest convenience.\n\nBest regards,\nNetgain Team`
+        })() : ''}
+        onSend={async (methods, emailDetails) => {
           if (!shareDoc) return
 
           const inv = invoices.find(i => i.id === shareDoc.id)
@@ -1126,11 +1133,96 @@ export default function InvoicesPage() {
             let recipient = ''
             let message = ''
             let subject = ''
+            let pdfPayload: any = undefined
 
             if (method === 'email') {
-              recipient = inv.email
-              subject = `Invoice: ${inv.docId} — ${inv.client}`
-              message = `Dear ${inv.client},\n\nPlease find your invoice ${inv.docId} for the amount of ${formatCurrency(inv.amount)}.\n\nDue Date: ${formatDate(inv.due)}\n\nKindly process payment at your earliest convenience.\n\nBest regards,\nNetgain Team`
+              recipient = emailDetails?.recipient || inv.email
+              subject = emailDetails?.subject || `Invoice: ${inv.docId} — ${inv.client}`
+              message = emailDetails?.message || `Dear ${inv.client},\n\nPlease find your invoice ${inv.docId} for the amount of ${formatCurrency(inv.amount)}.\n\nDue Date: ${formatDate(inv.due)}\n\nKindly process payment at your earliest convenience.\n\nBest regards,\nNetgain Team`
+              
+              // Generate matching PDF payload on the fly
+              const svcs = servicesData.filter(s => inv.serviceIds.includes(s.id))
+              const sub = svcs.reduce((a, s) => a + s.price, 0)
+              const dAmt = inv.discountType === 'percentage' ? Math.round(sub * inv.discountValue / 100) : inv.discountValue
+              const aft = Math.max(0, sub - dAmt)
+              const gAmt = Math.round(aft * inv.gstPct / 100)
+              const tot = aft + gAmt
+
+              let pct = 100
+              if (inv.paymentScheduleEntry) {
+                const match = inv.paymentScheduleEntry.match(/\((\d+)%\)/)
+                if (match) {
+                  pct = Number(match[1])
+                }
+              }
+              const scaleFactor = pct / 100
+              const scaledSub = Math.round(sub * scaleFactor)
+              const scaledDAmt = Math.round(dAmt * scaleFactor)
+              const scaledAft = Math.max(0, scaledSub - scaledDAmt)
+              const scaledGAmt = Math.round(scaledAft * inv.gstPct / 100)
+              const scaledTot = scaledAft + scaledGAmt
+
+              const scaledItems = svcs.map(s => {
+                const scaledPrice = Math.round(s.price * scaleFactor)
+                let customName = s.name
+                if (inv.paymentScheduleEntry) {
+                  customName = `${s.name} - ${inv.paymentScheduleEntry}`
+                }
+                return { 
+                  serviceName: customName, 
+                  finalPrice: scaledPrice, 
+                  price: scaledPrice, 
+                  quantity: 1, 
+                  category: s.category, 
+                  pricing_model: s.model, 
+                  deliverables: s.deliverables 
+                }
+              })
+
+              const todayStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+              const dueFormatted = inv.due
+                ? new Date(inv.due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                : new Date(Date.now() + 10 * 864e5).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+
+              pdfPayload = {
+                docType: 'Invoice',
+                clientName: inv.contact || inv.client,
+                projectTitle: `Invoice — ${inv.docId}`,
+                companyName: inv.client,
+                clientInfo: { business: inv.businessType, mobile: inv.phone, gst: inv.gst },
+                content: [
+                  `## Invoice Details`,
+                  `**Invoice Date:** ${todayStr}  |  **Due Date:** ${dueFormatted}`,
+                  `**Invoice Ref:** ${inv.docId}`,
+                  `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
+                  '',
+                  '## Services Rendered',
+                  ...scaledItems.flatMap((s: any, i: number) => [
+                    `### ${i + 1}. ${s.serviceName}`,
+                    `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
+                    ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
+                    '',
+                  ]),
+                  '## Payment Details',
+                  '__BANK_DETAILS__',
+                  ...(inv.invoicePaymentInstructions ? ['', inv.invoicePaymentInstructions] : (companyDocs?.invoicePaymentInstructions ? ['', companyDocs.invoicePaymentInstructions] : [])),
+                  ...(inv.invoiceAdditionalText ? ['', '## Additional Details', inv.invoiceAdditionalText] : (companyDocs?.invoiceAdditionalText ? ['', '## Additional Details', companyDocs.invoiceAdditionalText] : [])),
+                  ...(inv.notes ? ['', '## Notes', inv.notes] : []),
+                ].join('\n'),
+                items: scaledItems,
+                subtotal: scaledSub,
+                discountTotal: scaledDAmt,
+                grandTotal: scaledTot,
+                fullProjectTotal: tot,
+                fullSubtotal: sub,
+                paymentScheduleObj: inv.paymentScheduleId ? paymentSchedules.find(p => p.id === inv.paymentScheduleId) : null,
+                docsSettings: {
+                  gstRate: String(inv.gstPct),
+                  invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),
+                  invoiceFooter: inv.invoiceFooter !== undefined && inv.invoiceFooter !== null ? inv.invoiceFooter : (companyDocs?.invoiceFooter || ''),
+                  customTerms: inv.customTerms || getInvoiceTerms(inv, companyDocs),
+                },
+              }
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = inv.phone
               message = `Dear ${inv.client}, your invoice ${inv.docId} for ${formatCurrency(inv.amount)} is due on ${formatDate(inv.due)}. Please process payment at your earliest convenience. — Netgain Team`
@@ -1147,7 +1239,8 @@ export default function InvoicesPage() {
                 channel: method,
                 recipient,
                 message,
-                subject: method === 'email' ? subject : undefined
+                subject: method === 'email' ? subject : undefined,
+                pdfPayload
               })
             })
 

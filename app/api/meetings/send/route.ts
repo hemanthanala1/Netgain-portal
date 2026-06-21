@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/crypto-helper'
+import { generatePdfBuffer } from '@/lib/pdf-generator-server'
 
 let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { meetingId, channel, recipient, message, subject } = body
+    const { meetingId, channel, recipient, message, subject, pdfPayload } = body
 
     if (!channel || !recipient || !message) {
       return NextResponse.json({ error: 'Channel, recipient, and message are required' }, { status: 400 })
@@ -42,8 +43,45 @@ export async function POST(request: NextRequest) {
     let provider = ''
     let dispatchError = ''
 
-    if (channel === 'email') {
+    let attachment: { content: string; filename: string } | null = null
+    if (channel === 'email' && pdfPayload) {
+      try {
+        const { buffer, filename } = await generatePdfBuffer(pdfPayload, supabase)
+        attachment = {
+          content: buffer.toString('base64'),
+          filename
+        }
+      } catch (err: any) {
+        console.error('[SEND EMAIL ATTACHMENT GENERATION ERROR]', err)
+        dispatchError = `Failed to generate PDF attachment: ${err.message}`
+        status = 'failed'
+      }
+    }
+
+    if (status !== 'failed' && channel === 'email') {
       provider = comm.emailProvider || 'smtp'
+
+      // Style email template with premium Urban Edge dark mode theme
+      const emailHtml = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0A1612; padding: 40px 20px; color: #F8FAFC; max-width: 600px; margin: 0 auto; border-radius: 8px; border: 1px solid #1E3A2F;">
+          <div style="text-align: center; margin-bottom: 30px; border-bottom: 1px solid #D4AF37; padding-bottom: 20px;">
+            <h1 style="color: #D4AF37; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 1px;">NETGAIN STUDIO</h1>
+            <p style="color: #94A3B8; margin: 5px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px;">Your Growth Partner, Powered by AI</p>
+          </div>
+          <div style="background-color: #12241D; border-left: 4px solid #D4AF37; padding: 25px; border-radius: 4px; margin-bottom: 25px; line-height: 1.6; color: #F8FAFC; font-size: 15px;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+          ${attachment ? `
+          <div style="text-align: center; margin-bottom: 30px; padding: 10px; border: 1px dashed #1E3A2F; background-color: #0F1F18; border-radius: 4px;">
+            <p style="color: #D4AF37; font-size: 13px; margin: 0;">📎 Attached: <strong>${attachment.filename}</strong></p>
+          </div>
+          ` : ''}
+          <div style="border-top: 1px solid #1E3A2F; padding-top: 20px; text-align: center; color: #94A3B8; font-size: 11px;">
+            <p style="margin: 0 0 5px 0;">This email was sent on behalf of Netgain Studio.</p>
+            <p style="margin: 0;">Sent via Netgain Business OS</p>
+          </div>
+        </div>
+      `
       
       if (provider === 'resend') {
         const apiKey = decrypt(comm.resendApiKey)
@@ -51,7 +89,7 @@ export async function POST(request: NextRequest) {
           dispatchError = 'Resend API Key is not configured. Please add it in Settings > Communications.'
           status = 'failed'
         } else if (apiKey.startsWith('mock_')) {
-          console.log('[MOCK EMAIL - RESEND] To:', recipient, 'Subject:', subject, 'Message:', message)
+          console.log('[MOCK EMAIL - RESEND] To:', recipient, 'Subject:', subject, 'Message:', message, 'Has Attachment:', !!attachment)
           status = 'sent'
         } else {
           // Use fromEmail from settings (must be verified domain in Resend)
@@ -67,7 +105,11 @@ export async function POST(request: NextRequest) {
               from: `${fromName} <${fromEmail}>`,
               to: recipient,
               subject: subject || 'Meeting Update',
-              html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${message.replace(/\n/g, '<br>')}</p><br><p style="color: #888; font-size: 12px;">Sent via Netgain Business OS</p></div>`
+              html: emailHtml,
+              attachments: attachment ? [{
+                content: attachment.content,
+                filename: attachment.filename
+              }] : undefined
             })
           })
           if (!res.ok) {
@@ -81,7 +123,7 @@ export async function POST(request: NextRequest) {
       } else if (provider === 'sendgrid') {
         const apiKey = decrypt(comm.sendgridApiKey)
         if (!apiKey || apiKey.startsWith('mock_')) {
-          console.log('[MOCK EMAIL - SENDGRID] To:', recipient, 'Subject:', subject, 'Message:', message)
+          console.log('[MOCK EMAIL - SENDGRID] To:', recipient, 'Subject:', subject, 'Message:', message, 'Has Attachment:', !!attachment)
         } else {
           const fromEmail = comm.fromEmail || comm.smtpUser || 'noreply@netgain.studio'
           const fromName = comm.fromName || 'Netgain Studio'
@@ -95,7 +137,13 @@ export async function POST(request: NextRequest) {
               personalizations: [{ to: [{ email: recipient }] }],
               from: { email: fromEmail, name: fromName },
               subject: subject || 'Meeting Update',
-              content: [{ type: 'text/html', value: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><p>${message.replace(/\n/g, '<br>')}</p></div>` }]
+              content: [{ type: 'text/html', value: emailHtml }],
+              attachments: attachment ? [{
+                content: attachment.content,
+                filename: attachment.filename,
+                type: 'application/pdf',
+                disposition: 'attachment'
+              }] : undefined
             })
           })
           if (!res.ok) {
@@ -106,9 +154,11 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // SMTP: simulate since nodemailer is omitted to prevent bundling size inflation
-        console.log('[SIMULATED SMTP EMAIL] To:', recipient, 'Subject:', subject, 'Message:', message)
+        console.log('[SIMULATED SMTP EMAIL] To:', recipient, 'Subject:', subject, 'Message:', message, 'Has Attachment:', !!attachment)
         status = 'sent'
       }
+    } else if (status === 'failed') {
+      // PDF generation failed
     } else if (channel === 'whatsapp') {
       provider = comm.waProvider || 'meta'
 

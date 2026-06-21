@@ -696,7 +696,14 @@ export default function AgreementsPage() {
         open={!!shareDoc}
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
-        onSend={async (methods) => {
+        initialEmail={shareDoc ? agreements.find(a => a.id === shareDoc.id)?.email || '' : ''}
+        initialSubject={shareDoc ? `${agreements.find(a => a.id === shareDoc.id)?.type}: ${agreements.find(a => a.id === shareDoc.id)?.docId} — ${agreements.find(a => a.id === shareDoc.id)?.client}` : ''}
+        initialMessage={shareDoc ? (() => {
+          const agr = agreements.find(a => a.id === shareDoc.id)
+          if (!agr) return ''
+          return `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
+        })() : ''}
+        onSend={async (methods, emailDetails) => {
           if (!shareDoc) return
 
           const agr = agreements.find(a => a.id === shareDoc.id)
@@ -711,11 +718,29 @@ export default function AgreementsPage() {
             let recipient = ''
             let message = ''
             let subject = ''
+            let pdfPayload: any = undefined
 
             if (method === 'email') {
-              recipient = agr.email || ''
-              subject = `${agr.type}: ${agr.docId} — ${agr.client}`
-              message = `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
+              recipient = emailDetails?.recipient || agr.email || ''
+              subject = emailDetails?.subject || `${agr.type}: ${agr.docId} — ${agr.client}`
+              message = emailDetails?.message || `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
+              
+              // Generate matching PDF payload on the fly
+              pdfPayload = {
+                docType: 'Agreement',
+                clientName: agr.contact || agr.client,
+                projectTitle: `${agr.type} — ${agr.client}`,
+                companyName: agr.client,
+                clientInfo: { business: agr.type, mobile: agr.phone },
+                content: buildContent({ ...agr, value: agr.value }, agr.client),
+                items: [],
+                subtotal: agr.value,
+                discountTotal: 0,
+                grandTotal: agr.value,
+                docsSettings: {
+                  customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
+                }
+              }
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = agr.phone
               message = `Dear ${agr.client}, your ${agr.type} ${agr.docId} (${formatCurrency(agr.value)}) is ready for review and signature. — Netgain Team`
@@ -732,7 +757,8 @@ export default function AgreementsPage() {
                 channel: method,
                 recipient,
                 message,
-                subject: method === 'email' ? subject : undefined
+                subject: method === 'email' ? subject : undefined,
+                pdfPayload
               })
             })
 

@@ -633,7 +633,14 @@ export default function SOWPage() {
         open={!!shareDoc}
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
-        onSend={async (methods) => {
+        initialEmail={shareDoc ? sows.find(s => s.id === shareDoc.id)?.email || '' : ''}
+        initialSubject={shareDoc ? `Scope of Work: ${sows.find(s => s.id === shareDoc.id)?.docId} — ${sows.find(s => s.id === shareDoc.id)?.project || sows.find(s => s.id === shareDoc.id)?.client}` : ''}
+        initialMessage={shareDoc ? (() => {
+          const sow = sows.find(s => s.id === shareDoc.id)
+          if (!sow) return ''
+          return `Dear ${sow.client},\n\nPlease find attached the Scope of Work document ${sow.docId} for your project "${sow.project || 'Services'}".\n\nProject Value: ${formatCurrency(sow.value)}\nTimeline: ${sow.timeline || 'As discussed'}\n\nKindly review and revert with your confirmation.\n\nBest regards,\nNetgain Team`
+        })() : ''}
+        onSend={async (methods, emailDetails) => {
           if (!shareDoc) return
 
           const sow = sows.find(s => s.id === shareDoc.id)
@@ -648,11 +655,23 @@ export default function SOWPage() {
             let recipient = ''
             let message = ''
             let subject = ''
+            let pdfPayload: any = undefined
 
             if (method === 'email') {
-              recipient = sow.email || ''
-              subject = `Scope of Work: ${sow.docId} — ${sow.project || sow.client}`
-              message = `Dear ${sow.client},\n\nPlease find attached the Scope of Work document ${sow.docId} for your project "${sow.project || 'Services'}".\n\nProject Value: ${formatCurrency(sow.value)}\nTimeline: ${sow.timeline || 'As discussed'}\n\nKindly review and revert with your confirmation.\n\nBest regards,\nNetgain Team`
+              recipient = emailDetails?.recipient || sow.email || ''
+              subject = emailDetails?.subject || `Scope of Work: ${sow.docId} — ${sow.project || sow.client}`
+              message = emailDetails?.message || `Dear ${sow.client},\n\nPlease find attached the Scope of Work document ${sow.docId} for your project "${sow.project || 'Services'}".\n\nProject Value: ${formatCurrency(sow.value)}\nTimeline: ${sow.timeline || 'As discussed'}\n\nKindly review and revert with your confirmation.\n\nBest regards,\nNetgain Team`
+              
+              // Generate matching PDF payload on the fly
+              pdfPayload = buildPayload({
+                ...sow,
+                value: String(sow.value),
+                email: sow.email || '',
+                businessType: '',
+                startDate: '',
+                confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.',
+                customTerms: sow.customTerms || ''
+              } as any, sow.client, sow.project, sow.docId)
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = sow.phone
               message = `Dear ${sow.client}, your Scope of Work ${sow.docId} for "${sow.project || 'Services'}" (${formatCurrency(sow.value)}) is ready. Please review and confirm. — Netgain Team`
@@ -669,7 +688,8 @@ export default function SOWPage() {
                 channel: method,
                 recipient,
                 message,
-                subject: method === 'email' ? subject : undefined
+                subject: method === 'email' ? subject : undefined,
+                pdfPayload
               })
             })
 

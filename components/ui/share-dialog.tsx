@@ -1,8 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { Mail, MessageSquare, Phone, Send, Loader2 } from 'lucide-react'
 
@@ -10,13 +12,36 @@ interface ShareDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
-  onSend: (methods: string[]) => Promise<void>
+  onSend: (methods: string[], emailDetails?: { recipient: string; subject: string; message: string }) => Promise<void>
+  initialEmail?: string
+  initialSubject?: string
+  initialMessage?: string
 }
 
-export function ShareDialog({ open, onOpenChange, title, onSend }: ShareDialogProps) {
+export function ShareDialog({
+  open,
+  onOpenChange,
+  title,
+  onSend,
+  initialEmail = '',
+  initialSubject = '',
+  initialMessage = ''
+}: ShareDialogProps) {
   const [methods, setMethods] = useState<string[]>(['email'])
   const [sending, setSending] = useState(false)
   const { toast } = useToast()
+
+  const [recipient, setRecipient] = useState('')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (open) {
+      setRecipient(initialEmail)
+      setSubject(initialSubject)
+      setMessage(initialMessage)
+    }
+  }, [open, initialEmail, initialSubject, initialMessage])
 
   const toggleMethod = (method: string) => {
     setMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method])
@@ -29,7 +54,8 @@ export function ShareDialog({ open, onOpenChange, title, onSend }: ShareDialogPr
     }
     setSending(true)
     try {
-      await onSend(methods)
+      const emailDetails = methods.includes('email') ? { recipient, subject, message } : undefined
+      await onSend(methods, emailDetails)
       toast({ title: '✅ Document Shared Successfully', description: `Sent via ${methods.join(', ')}` })
       onOpenChange(false)
     } catch (e: any) {
@@ -41,7 +67,7 @@ export function ShareDialog({ open, onOpenChange, title, onSend }: ShareDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Share Document</DialogTitle>
           <DialogDescription>
@@ -60,6 +86,43 @@ export function ShareDialog({ open, onOpenChange, title, onSend }: ShareDialogPr
               <p className="text-xs text-muted-foreground">Send PDF attachment to client email.</p>
             </div>
           </button>
+
+          {/* Email Composer Fields */}
+          {methods.includes('email') && (
+            <div className="p-4 rounded-xl border border-border bg-card/30 space-y-3 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <h4 className="text-sm font-semibold text-gold">Email Details</h4>
+              <div className="space-y-1">
+                <Label htmlFor="email-recipient" className="text-xs text-muted-foreground">Recipient Email</Label>
+                <Input
+                  id="email-recipient"
+                  value={recipient}
+                  onChange={e => setRecipient(e.target.value)}
+                  placeholder="client@example.com"
+                  className="bg-black/20 border-border text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="email-subject" className="text-xs text-muted-foreground">Subject</Label>
+                <Input
+                  id="email-subject"
+                  value={subject}
+                  onChange={e => setSubject(e.target.value)}
+                  placeholder="Email Subject"
+                  className="bg-black/20 border-border text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="email-message" className="text-xs text-muted-foreground">Message</Label>
+                <Textarea
+                  id="email-message"
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  placeholder="Write your message..."
+                  className="bg-black/20 border-border text-sm min-h-[120px] resize-y"
+                />
+              </div>
+            </div>
+          )}
 
           <button
             onClick={() => toggleMethod('whatsapp')}
@@ -95,3 +158,4 @@ export function ShareDialog({ open, onOpenChange, title, onSend }: ShareDialogPr
     </Dialog>
   )
 }
+
