@@ -93,12 +93,8 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
       setMeeting(meetingData)
       setNotes(meetingData.notes || '')
       
-      // Prefill recipient based on default tab
-      if (activeTab === 'email') {
-        setRecipient(meetingData.client_email || '')
-      } else {
-        setRecipient(meetingData.client_phone || '')
-      }
+      // Prefill recipient based on default tab (email) on initial fetch
+      setRecipient(meetingData.client_email || '')
 
       // Fetch communication logs
       const { data: logsData, error: logsError } = await supabase
@@ -119,7 +115,7 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
     } finally {
       setLoading(false)
     }
-  }, [id, activeTab, router, toast])
+  }, [id, router, toast])
 
   useEffect(() => {
     fetchMeetingDetails()

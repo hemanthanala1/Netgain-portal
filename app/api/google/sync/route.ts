@@ -187,8 +187,16 @@ export async function POST(request: NextRequest) {
       const endDate = item.end?.dateTime || item.end?.date ? new Date(item.end.dateTime || item.end.date) : startDate
       const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60)) || 30
 
-      const dateStr = start.split('T')[0]
-      const timeStr = start.includes('T') ? start.split('T')[1].slice(0, 8) : '00:00:00'
+      let dateStr = ''
+      let timeStr = '00:00:00'
+
+      if (start.includes('T')) {
+        const eventTimezone = item.start?.timeZone || 'Asia/Kolkata'
+        dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: eventTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(startDate)
+        timeStr = new Intl.DateTimeFormat('en-GB', { timeZone: eventTimezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(startDate)
+      } else {
+        dateStr = start
+      }
 
       // Clean/determine status
       let status = 'upcoming'
@@ -198,12 +206,43 @@ export async function POST(request: NextRequest) {
         status = 'completed'
       }
 
-      const meetingData = {
+      // Try to find an existing meeting to merge and avoid duplicates
+      let existingMeeting = null
+      const { data: byEventId } = await supabase
+        .from('meetings')
+        .select('id, client_phone, cal_booking_uid')
+        .eq('calendar_event_id', item.id)
+        .maybeSingle()
+
+      if (byEventId) {
+        existingMeeting = byEventId
+      } else {
+        const { data: byEmailAndTime } = await supabase
+          .from('meetings')
+          .select('id, client_phone, cal_booking_uid')
+          .eq('client_email', client.email || 'guest@example.com')
+          .eq('meeting_date', dateStr)
+          .eq('meeting_time', timeStr)
+          .maybeSingle()
+        if (byEmailAndTime) {
+          existingMeeting = byEmailAndTime
+        }
+      }
+
+      let clientPhone = existingMeeting?.client_phone || ''
+      if (!clientPhone && item.description) {
+        const phoneMatch = item.description.match(/(?:Phone|Mobile|Contact|Tel|Number):\s*([+\d\s-()]{10,18})/i)
+        if (phoneMatch) {
+          clientPhone = phoneMatch[1].trim()
+        }
+      }
+
+      const meetingData: any = {
         calendar_event_id: item.id,
         event_type: item.summary || 'Google Meet',
         client_name: client.displayName || client.email?.split('@')[0] || 'Google Calendar Guest',
         client_email: client.email || 'guest@example.com',
-        client_phone: '',
+        client_phone: clientPhone,
         meeting_date: dateStr,
         meeting_time: timeStr,
         meeting_duration: durationMinutes,
@@ -213,9 +252,16 @@ export async function POST(request: NextRequest) {
         notes: item.description || ''
       }
 
+      if (existingMeeting) {
+        meetingData.id = existingMeeting.id
+        if (existingMeeting.cal_booking_uid) {
+          meetingData.cal_booking_uid = existingMeeting.cal_booking_uid
+        }
+      }
+
       const { error } = await supabase
         .from('meetings')
-        .upsert(meetingData, { onConflict: 'calendar_event_id' })
+        .upsert(meetingData, { onConflict: 'id' })
 
       if (!error) syncCount++
     }

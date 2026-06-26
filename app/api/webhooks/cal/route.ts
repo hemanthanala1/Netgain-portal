@@ -40,8 +40,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Start time is missing' }, { status: 400 })
     }
     const startDateObj = new Date(startTime)
-    const dateStr = startTime.split('T')[0]
-    const timeStr = startTime.includes('T') ? startTime.split('T')[1].slice(0, 8) : '00:00:00'
+    let dateStr = ''
+    let timeStr = '00:00:00'
+
+    if (startTime.includes('T')) {
+      const eventTimezone = payload.timezone || attendee.timeZone || 'Asia/Kolkata'
+      dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: eventTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(startDateObj)
+      timeStr = new Intl.DateTimeFormat('en-GB', { timeZone: eventTimezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(startDateObj)
+    } else {
+      dateStr = startTime
+    }
 
     // Duration in minutes
     let duration = Number(payload.length)
