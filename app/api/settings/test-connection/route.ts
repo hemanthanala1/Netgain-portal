@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       if (provider === 'msg91') {
         const key = getCredValue(credentials.msg91Authkey, 'msg91Authkey')
         if (!key) return NextResponse.json({ success: false, error: 'MSG91 Authkey is required' })
-        const res = await fetch('https://control.msg91.com/api/v5/balance', {
+        const res = await fetch('https://control.msg91.com/api/v1/account', {
           headers: { authkey: key }
         })
         if (!res.ok) {
