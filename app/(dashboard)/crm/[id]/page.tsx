@@ -26,11 +26,11 @@ const statusLabels: Record<string, string> = {
 
 const mockClient = { id: '1', name: 'Aaron Shah', business: 'Urban Edge Co.', type: 'E-Commerce', email: 'aaron@urbanedge.in', phone: '9876543210', gst: '29AABCU9603R1ZM', website: 'urbanedge.in', address: 'Andheri East, Mumbai — 400069', city: 'Mumbai', status: 'quotation_sent', revenue: 47998, joined: '2024-05-15' }
 
-const timeline = [
-  { event: 'Quotation NG-QUO-2024-1123 sent via email', date: '2024-06-04', type: 'quotation' },
-  { event: 'Introductory call — 30 min. Interested in E-Commerce + SEO bundle.', date: '2024-06-01', type: 'call' },
-  { event: 'Client added to CRM', date: '2024-05-15', type: 'new' },
-]
+const safeTimestamp = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 0
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? 0 : d.getTime()
+}
 
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
   const [client, setClient] = useState<any>(null)
@@ -38,6 +38,59 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [editClient, setEditClient] = useState<any | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
+
+  const [notes, setNotes] = useState<any[]>([])
+  const [newNote, setNewNote] = useState('')
+  const [activities, setActivities] = useState<any[]>([])
+  const [newActivityDescription, setNewActivityDescription] = useState('')
+  const [newActivityType, setNewActivityType] = useState('call')
+  const [documents, setDocuments] = useState<any[]>([])
+  const [meetings, setMeetings] = useState<any[]>([])
+
+  async function fetchDocumentsAndMeetings(clientInfo: any) {
+    if (!isSupabaseConfigured() || !clientInfo) return
+
+    try {
+      // 1. Fetch quotations
+      const { data: quotes } = await supabase.from('quotations').select('*')
+      const filteredQuotes = quotes?.filter(q => q.client === clientInfo.name || q.client === clientInfo.business) || []
+
+      // 2. Fetch invoices
+      const { data: invs } = await supabase.from('invoices').select('*')
+      const filteredInvs = invs?.filter(i => i.client === clientInfo.name || i.client === clientInfo.business) || []
+
+      // 3. Fetch SOWs
+      const { data: sws } = await supabase.from('sows').select('*')
+      const filteredSws = sws?.filter(s => s.client === clientInfo.name || s.client === clientInfo.business || s.project?.includes(clientInfo.business)) || []
+
+      // 4. Fetch Agreements
+      const { data: agrs } = await supabase.from('agreements').select('*')
+      const filteredAgrs = agrs?.filter(a => a.client === clientInfo.name || a.client === clientInfo.business) || []
+
+      const allDocs: any[] = [
+        ...filteredQuotes.map(q => ({ id: q.id, doc_id: q.doc_id, type: 'Quotation', amount: q.amount, status: q.status, date: q.created || q.created_at?.slice(0, 10) })),
+        ...filteredInvs.map(i => ({ id: i.id, doc_id: i.doc_id, type: 'Invoice', amount: i.amount, status: i.status, date: i.created || i.created_at?.slice(0, 10) })),
+        ...filteredSws.map(s => ({ id: s.id, doc_id: s.doc_id, type: 'SOW', amount: s.value, status: s.status, date: s.created || s.created_at?.slice(0, 10) })),
+        ...filteredAgrs.map(a => ({ id: a.id, doc_id: a.doc_id, type: 'Agreement', amount: a.value, status: a.status, date: a.created || a.created_at?.slice(0, 10) }))
+      ]
+      
+      setDocuments(allDocs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
+
+      // 5. Fetch meetings
+      if (clientInfo.email) {
+        const { data: meets } = await supabase
+          .from('meetings')
+          .select('*')
+          .eq('client_email', clientInfo.email)
+          .order('meeting_date', { ascending: false })
+        if (meets) {
+          setMeetings(meets)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching documents/meetings:', err)
+    }
+  }
 
   useEffect(() => {
     async function fetchClient() {
@@ -74,6 +127,224 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     }
     fetchClient()
   }, [params.id])
+
+  useEffect(() => {
+    if (!client) return
+
+    let active = true
+
+    async function fetchAllData() {
+      if (isSupabaseConfigured()) {
+        // Fetch Notes
+        const { data: nData } = await supabase
+          .from('crm_notes')
+          .select('*')
+          .eq('client_id', params.id)
+          .order('created_at', { ascending: false })
+        if (active && nData) setNotes(nData)
+
+        // Fetch Activities
+        const { data: aData } = await supabase
+          .from('crm_activities')
+          .select('*')
+          .eq('client_id', params.id)
+          .order('created_at', { ascending: false })
+        if (active && aData) setActivities(aData)
+
+        // Fetch Documents & Meetings
+        await fetchDocumentsAndMeetings(client)
+      } else {
+        // Fallback Mock Data
+        setNotes([
+          { id: 'n1', content: 'Met with client to review the service roadmap. They requested details on SEO optimization pricing.', author: 'Staff Member', created_at: '2024-06-05T11:00:00Z' }
+        ])
+        setActivities([
+          { id: 'a1', type: 'call', description: 'Log introductory call. Discussed project deliverables and initial invoice.', activity_date: '2024-06-01', created_at: '2024-06-01T14:00:00Z' }
+        ])
+        setDocuments([
+          { id: 'd1', doc_id: 'NG-QUO-2024-1123', type: 'Quotation', amount: 47998, status: 'sent', date: '2024-06-04' }
+        ])
+      }
+    }
+
+    fetchAllData()
+
+    // Real-time Supabase subscriptions
+    let notesChannel: any = null
+    let activitiesChannel: any = null
+    let meetingsChannel: any = null
+    let docsChannels: any[] = []
+
+    if (isSupabaseConfigured()) {
+      // Notes channel subscription
+      notesChannel = supabase
+        .channel(`crm_notes_${params.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'crm_notes', filter: `client_id=eq.${params.id}` },
+          (payload: any) => {
+            if (!active) return
+            const { eventType, new: newRec, old: oldRec } = payload
+            if (eventType === 'INSERT') {
+              setNotes(prev => [newRec, ...prev])
+            } else if (eventType === 'UPDATE') {
+              setNotes(prev => prev.map(n => n.id === newRec.id ? newRec : n))
+            } else if (eventType === 'DELETE') {
+              setNotes(prev => prev.filter(n => n.id !== oldRec.id))
+            }
+          }
+        )
+        .subscribe()
+
+      // Activities channel subscription
+      activitiesChannel = supabase
+        .channel(`crm_activities_${params.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'crm_activities', filter: `client_id=eq.${params.id}` },
+          (payload: any) => {
+            if (!active) return
+            const { eventType, new: newRec, old: oldRec } = payload
+            if (eventType === 'INSERT') {
+              setActivities(prev => [newRec, ...prev])
+            } else if (eventType === 'UPDATE') {
+              setActivities(prev => prev.map(a => a.id === newRec.id ? newRec : a))
+            } else if (eventType === 'DELETE') {
+              setActivities(prev => prev.filter(a => a.id !== oldRec.id))
+            }
+          }
+        )
+        .subscribe()
+
+      // Meetings channel subscription
+      if (client.email) {
+        meetingsChannel = supabase
+          .channel(`crm_meetings_${params.id}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'meetings', filter: `client_email=eq.${client.email}` },
+            () => {
+              if (active) fetchDocumentsAndMeetings(client)
+            }
+          )
+          .subscribe()
+      }
+
+      // Documents channel subscriptions
+      const tables = ['quotations', 'invoices', 'sows', 'agreements']
+      tables.forEach(table => {
+        const channel = supabase
+          .channel(`crm_docs_${table}_${params.id}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table },
+            () => {
+              if (active) fetchDocumentsAndMeetings(client)
+            }
+          )
+          .subscribe()
+        docsChannels.push(channel)
+      })
+    }
+
+    return () => {
+      active = false
+      if (notesChannel) supabase.removeChannel(notesChannel)
+      if (activitiesChannel) supabase.removeChannel(activitiesChannel)
+      if (meetingsChannel) supabase.removeChannel(meetingsChannel)
+      docsChannels.forEach(ch => supabase.removeChannel(ch))
+    }
+  }, [client, params.id])
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('crm_notes').insert([
+          {
+            client_id: params.id,
+            content: newNote.trim(),
+            author: 'Staff Member'
+          }
+        ])
+
+        if (error) {
+          toast({ title: 'Error adding note', description: error.message, variant: 'destructive' })
+        } else {
+          setNewNote('')
+          toast({ title: 'Note Added', description: 'Your note has been added successfully.' })
+          
+          // Log to activities as well
+          await supabase.from('crm_activities').insert([
+            {
+              client_id: params.id,
+              type: 'note',
+              description: `Added a note: "${newNote.trim().substring(0, 60)}${newNote.trim().length > 60 ? '...' : ''}"`
+            }
+          ])
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      const mockNewNote = {
+        id: Math.random().toString(),
+        client_id: params.id,
+        content: newNote.trim(),
+        author: 'Staff Member',
+        created_at: new Date().toISOString()
+      }
+      setNotes(prev => [mockNewNote, ...prev])
+      
+      const mockAct = {
+        id: Math.random().toString(),
+        client_id: params.id,
+        type: 'note',
+        description: `Added a note: "${newNote.trim()}"`,
+        created_at: new Date().toISOString()
+      }
+      setActivities(prev => [mockAct, ...prev])
+      setNewNote('')
+    }
+    setSubmitting(false)
+  }
+
+  const handleAddActivity = async () => {
+    if (!newActivityDescription.trim()) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('crm_activities').insert([
+          {
+            client_id: params.id,
+            type: newActivityType,
+            description: newActivityDescription.trim()
+          }
+        ])
+
+        if (error) {
+          toast({ title: 'Error logging activity', description: error.message, variant: 'destructive' })
+        } else {
+          setNewActivityDescription('')
+          toast({ title: 'Activity Logged', description: 'Activity logged successfully.' })
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      const mockAct = {
+        id: Math.random().toString(),
+        client_id: params.id,
+        type: newActivityType,
+        description: newActivityDescription.trim(),
+        created_at: new Date().toISOString()
+      }
+      setActivities(prev => [mockAct, ...prev])
+      setNewActivityDescription('')
+    }
+    setSubmitting(false)
+  }
 
   const handleEditSubmit = async () => {
     if (!editClient || !editClient.name || !editClient.email) return
@@ -116,6 +387,68 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setSubmitting(false)
   }
 
+  const getTimelineItems = () => {
+    const items: any[] = []
+
+    // 1. Add custom activities
+    activities.forEach(a => {
+      items.push({
+        event: a.description,
+        date: a.activity_date || (a.created_at ? a.created_at.slice(0, 10) : ''),
+        type: a.type,
+        timestamp: safeTimestamp(a.created_at || a.activity_date)
+      })
+    })
+
+    // 2. Add meetings
+    meetings.forEach(m => {
+      items.push({
+        event: `Scheduled meeting: ${m.event_type} (${m.status})`,
+        date: m.meeting_date,
+        type: 'meeting',
+        timestamp: safeTimestamp(`${m.meeting_date}T${m.meeting_time || '00:00:00'}`)
+      })
+    })
+
+    // 3. Add documents
+    documents.forEach(d => {
+      items.push({
+        event: `${d.type} ${d.doc_id} created (${d.status}) - ${formatCurrency(d.amount)}`,
+        date: d.date,
+        type: d.type.toLowerCase(),
+        timestamp: safeTimestamp(d.date)
+      })
+    })
+
+    // 4. Default "Client added to CRM"
+    if (client) {
+      items.push({
+        event: 'Client added to CRM',
+        date: client.joined || (client.created_at ? client.created_at.slice(0, 10) : ''),
+        type: 'new',
+        timestamp: safeTimestamp(client.joined || client.created_at)
+      })
+    }
+
+    return items.sort((a, b) => b.timestamp - a.timestamp)
+  }
+
+  const getTimelineIcon = (type: string) => {
+    switch (type) {
+      case 'call': return <Phone className="h-3 w-3 text-gold" />
+      case 'email': return <Mail className="h-3 w-3 text-gold" />
+      case 'meeting': return <Calendar className="h-3 w-3 text-gold" />
+      case 'task': return <ClipboardList className="h-3 w-3 text-gold" />
+      case 'note': return <MessageSquare className="h-3 w-3 text-gold" />
+      case 'quotation':
+      case 'invoice':
+      case 'sow':
+      case 'agreement':
+        return <FileText className="h-3 w-3 text-gold" />
+      default: return <Building2 className="h-3 w-3 text-gold" />
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -132,6 +465,18 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       </div>
     )
   }
+
+  const numQuotes = documents.filter(d => d.type === 'Quotation').length
+  const numSows = documents.filter(d => d.type === 'SOW').length
+  const numInvoices = documents.filter(d => d.type === 'Invoice').length
+  const numAgreements = documents.filter(d => d.type === 'Agreement').length
+  const docBreakdown = [
+    numQuotes && `${numQuotes} Quotation${numQuotes > 1 ? 's' : ''}`,
+    numSows && `${numSows} SOW${numSows > 1 ? 's' : ''}`,
+    numInvoices && `${numInvoices} Invoice${numInvoices > 1 ? 's' : ''}`,
+    numAgreements && `${numAgreements} Agreement${numAgreements > 1 ? 's' : ''}`
+  ].filter(Boolean).join(', ')
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -173,7 +518,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <CardContent className="p-5">
               <h3 className="text-sm font-semibold mb-3">Quick Stats</h3>
               <div className="space-y-3">
-                {[{ label: 'Total Revenue', val: formatCurrency(client.revenue), color: 'text-gold' }, { label: 'Client Since', val: formatDate(client.joined), color: '' }, { label: 'Documents', val: '3 (1 Quotation, 1 SOW, 1 Agreement)', color: '' }].map(s => (
+                {[{ label: 'Total Revenue', val: formatCurrency(client.revenue), color: 'text-gold' }, { label: 'Client Since', val: formatDate(client.joined), color: '' }, { label: 'Documents', val: `${documents.length} (${docBreakdown || 'None'})`, color: '' }].map(s => (
                   <div key={s.label}><p className="text-xs text-muted-foreground">{s.label}</p><p className={`text-sm font-semibold mt-0.5 ${s.color}`}>{s.val}</p></div>
                 ))}
               </div>
@@ -188,25 +533,129 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         <div className="lg:col-span-2">
           <Tabs defaultValue="timeline">
             <TabsList><TabsTrigger value="timeline">Timeline</TabsTrigger><TabsTrigger value="documents">Documents</TabsTrigger><TabsTrigger value="notes">Notes</TabsTrigger></TabsList>
+            
             <TabsContent value="timeline" className="space-y-3 mt-4">
-              {timeline.map((t, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className="h-2 w-2 rounded-full bg-gold mt-1.5 shrink-0" />
-                    {i < timeline.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+              <Card className="mb-4">
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Log Activity</h4>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Select value={newActivityType} onValueChange={setNewActivityType}>
+                      <SelectTrigger className="w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="call">Call</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="meeting">Meeting</SelectItem>
+                        <SelectItem value="task">Task</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex-1 flex gap-2">
+                      <Input 
+                        placeholder="Log what happened (e.g. Discussed website wireframes...)" 
+                        value={newActivityDescription} 
+                        onChange={e => setNewActivityDescription(e.target.value)} 
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddActivity() }}
+                      />
+                      <Button variant="gold" onClick={handleAddActivity} disabled={submitting}>Log</Button>
+                    </div>
                   </div>
-                  <div className="pb-4 flex-1">
-                    <p className="text-sm">{t.event}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatDate(t.date)}</p>
-                  </div>
-                </div>
-              ))}
+                </CardContent>
+              </Card>
+
+              <div className="mt-6 space-y-1">
+                {getTimelineItems().length === 0 ? (
+                  <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No activities recorded yet.</CardContent></Card>
+                ) : (
+                  getTimelineItems().map((t, i) => (
+                    <div key={i} className="flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className="h-7 w-7 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                          {getTimelineIcon(t.type)}
+                        </div>
+                        {i < getTimelineItems().length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+                      </div>
+                      <div className="pb-6 flex-1 pt-1">
+                        <p className="text-sm font-medium">{t.event}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(t.date)}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </TabsContent>
+            
             <TabsContent value="documents" className="mt-4">
-              <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No documents yet. Generate a quotation or invoice to see them here.</CardContent></Card>
+              {documents.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No documents yet. Generate a quotation or invoice to see them here.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {documents.map((d, i) => {
+                    const docLink = d.type === 'Quotation' ? '/documents/quotations' :
+                                    d.type === 'Invoice' ? '/documents/invoices' :
+                                    d.type === 'SOW' ? '/documents/sow' :
+                                    '/documents/agreements'
+                    return (
+                      <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
+                        <CardContent className="p-4 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-sm">{d.doc_id}</h4>
+                              <p className="text-xs text-muted-foreground">{d.type} · {formatDate(d.date)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
+                            <Badge variant={d.status === 'paid' || d.status === 'signed' || d.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">
+                              {d.status}
+                            </Badge>
+                            <Link href={docLink}>
+                              <Button variant="ghost" size="sm" className="h-8">View</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
             </TabsContent>
-            <TabsContent value="notes" className="mt-4">
-              <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No notes yet. Add notes after client meetings or calls.</CardContent></Card>
+            
+            <TabsContent value="notes" className="space-y-4 mt-4">
+              <div className="space-y-3">
+                <Textarea 
+                  placeholder="Type a new client note here..." 
+                  value={newNote} 
+                  onChange={e => setNewNote(e.target.value)}
+                  className="min-h-[100px] resize-none"
+                />
+                <Button variant="gold" onClick={handleAddNote} disabled={submitting || !newNote.trim()}>
+                  Add Note
+                </Button>
+              </div>
+
+              <div className="space-y-3 mt-6">
+                <h4 className="text-sm font-semibold">Previous Notes</h4>
+                {notes.length === 0 ? (
+                  <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No notes yet. Add notes after client meetings or calls.</CardContent></Card>
+                ) : (
+                  <div className="space-y-3">
+                    {notes.map((n, i) => (
+                      <Card key={n.id || i}>
+                        <CardContent className="p-4 space-y-1">
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <span>Added by {n.author}</span>
+                            <span>{formatDate(n.created_at)}</span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed mt-1 text-foreground/90">{n.content}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -246,7 +695,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditClient(null)} disabled={submitting}>Cancel</Button>
-            <Button variant="gold" onClick={handleEditSubmit} disabled={submitting} className="gap-2">
+            <Button variant="gold" onClick={handleEditSubmit} disabled={submitting} className="gold-gradient text-white border-0 gap-2">
               {submitting ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Saving...</>
               ) : (
