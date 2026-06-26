@@ -72,12 +72,76 @@ export async function POST(request: NextRequest) {
       status = 'completed'
     }
 
-    const meetingData = {
+    // Try to find an existing meeting to merge and avoid duplicates
+    let existingMeeting = null
+    let duplicateIdToDelete = null
+
+    const { data: byBookingUid } = await supabase
+      .from('meetings')
+      .select('id, calendar_event_id, client_phone')
+      .eq('cal_booking_uid', uid)
+      .maybeSingle()
+
+    const { data: byEmailAndTime } = await supabase
+      .from('meetings')
+      .select('id, calendar_event_id, client_phone')
+      .eq('client_email', clientEmail)
+      .eq('meeting_date', dateStr)
+      .eq('meeting_time', timeStr)
+      .maybeSingle()
+
+    if (byBookingUid && byEmailAndTime) {
+      if (byBookingUid.id === byEmailAndTime.id) {
+        existingMeeting = byBookingUid
+      } else {
+        // Different rows! This is a duplicate.
+        // We prefer the one that already has a calendar_event_id (so we retain the link to Google Calendar),
+        // or we default to byBookingUid.
+        if (byEmailAndTime.calendar_event_id) {
+          existingMeeting = byEmailAndTime
+          duplicateIdToDelete = byBookingUid.id
+        } else {
+          existingMeeting = byBookingUid
+          duplicateIdToDelete = byEmailAndTime.id
+        }
+      }
+    } else if (byBookingUid) {
+      existingMeeting = byBookingUid
+    } else if (byEmailAndTime) {
+      existingMeeting = byEmailAndTime
+    }
+
+    if (duplicateIdToDelete && existingMeeting) {
+      // Move any communication logs to the one we keep
+      await supabase
+        .from('communication_logs')
+        .update({ meeting_id: existingMeeting.id })
+        .eq('meeting_id', duplicateIdToDelete)
+
+      // Delete the duplicate row
+      await supabase
+        .from('meetings')
+        .delete()
+        .eq('id', duplicateIdToDelete)
+    }
+
+    let mergedCalendarEventId = ''
+    let mergedClientPhone = clientPhone
+
+    if (byBookingUid && byEmailAndTime) {
+      mergedCalendarEventId = byBookingUid.calendar_event_id || byEmailAndTime.calendar_event_id || ''
+      mergedClientPhone = clientPhone || byBookingUid.client_phone || byEmailAndTime.client_phone || ''
+    } else if (existingMeeting) {
+      mergedCalendarEventId = existingMeeting.calendar_event_id || ''
+      mergedClientPhone = clientPhone || existingMeeting.client_phone || ''
+    }
+
+    const meetingData: any = {
       cal_booking_uid: uid,
       event_type: payload.title || payload.eventTitle || 'Cal.com Booking',
       client_name: clientName,
       client_email: clientEmail,
-      client_phone: clientPhone,
+      client_phone: mergedClientPhone,
       meeting_date: dateStr,
       meeting_time: timeStr,
       meeting_duration: duration,
@@ -88,9 +152,16 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString()
     }
 
+    if (existingMeeting) {
+      meetingData.id = existingMeeting.id
+    }
+    if (mergedCalendarEventId) {
+      meetingData.calendar_event_id = mergedCalendarEventId
+    }
+
     const { data, error } = await supabase
       .from('meetings')
-      .upsert(meetingData, { onConflict: 'cal_booking_uid' })
+      .upsert(meetingData, { onConflict: 'id' })
       .select()
 
     if (error) {

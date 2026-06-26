@@ -208,28 +208,77 @@ export async function POST(request: NextRequest) {
 
       // Try to find an existing meeting to merge and avoid duplicates
       let existingMeeting = null
+      let duplicateIdToDelete = null
+
       const { data: byEventId } = await supabase
         .from('meetings')
-        .select('id, client_phone, cal_booking_uid')
+        .select('id, client_phone, cal_booking_uid, status')
         .eq('calendar_event_id', item.id)
         .maybeSingle()
 
-      if (byEventId) {
+      const { data: byEmailAndTime } = await supabase
+        .from('meetings')
+        .select('id, client_phone, cal_booking_uid, status')
+        .eq('client_email', client.email || 'guest@example.com')
+        .eq('meeting_date', dateStr)
+        .eq('meeting_time', timeStr)
+        .maybeSingle()
+
+      if (byEventId && byEmailAndTime) {
+        if (byEventId.id === byEmailAndTime.id) {
+          existingMeeting = byEventId
+        } else {
+          // Different rows! This is a duplicate.
+          // We prefer the one with cal_booking_uid (usually from Cal.com webhook),
+          // or default to byEmailAndTime.
+          if (byEmailAndTime.cal_booking_uid) {
+            existingMeeting = byEmailAndTime
+            duplicateIdToDelete = byEventId.id
+          } else {
+            existingMeeting = byEventId
+            duplicateIdToDelete = byEmailAndTime.id
+          }
+        }
+      } else if (byEventId) {
         existingMeeting = byEventId
-      } else {
-        const { data: byEmailAndTime } = await supabase
+      } else if (byEmailAndTime) {
+        existingMeeting = byEmailAndTime
+      }
+
+      if (duplicateIdToDelete && existingMeeting) {
+        // Move any communication logs to the one we keep
+        await supabase
+          .from('communication_logs')
+          .update({ meeting_id: existingMeeting.id })
+          .eq('meeting_id', duplicateIdToDelete)
+
+        // Delete the duplicate row
+        await supabase
           .from('meetings')
-          .select('id, client_phone, cal_booking_uid')
-          .eq('client_email', client.email || 'guest@example.com')
-          .eq('meeting_date', dateStr)
-          .eq('meeting_time', timeStr)
-          .maybeSingle()
-        if (byEmailAndTime) {
-          existingMeeting = byEmailAndTime
+          .delete()
+          .eq('id', duplicateIdToDelete)
+      }
+
+      let clientPhone = ''
+      let calBookingUid = ''
+      let mergedStatus = status
+
+      if (byEventId && byEmailAndTime) {
+        clientPhone = byEventId.client_phone || byEmailAndTime.client_phone || ''
+        calBookingUid = byEventId.cal_booking_uid || byEmailAndTime.cal_booking_uid || ''
+        if (byEventId.status === 'cancelled' || byEventId.status === 'no_show') {
+          mergedStatus = byEventId.status
+        } else if (byEmailAndTime.status === 'cancelled' || byEmailAndTime.status === 'no_show') {
+          mergedStatus = byEmailAndTime.status
+        }
+      } else if (existingMeeting) {
+        clientPhone = existingMeeting.client_phone || ''
+        calBookingUid = existingMeeting.cal_booking_uid || ''
+        if (existingMeeting.status === 'cancelled' || existingMeeting.status === 'no_show') {
+          mergedStatus = existingMeeting.status
         }
       }
 
-      let clientPhone = existingMeeting?.client_phone || ''
       if (!clientPhone && item.description) {
         const phoneMatch = item.description.match(/(?:Phone|Mobile|Contact|Tel|Number):\s*([+\d\s-()]{10,18})/i)
         if (phoneMatch) {
@@ -246,7 +295,7 @@ export async function POST(request: NextRequest) {
         meeting_date: dateStr,
         meeting_time: timeStr,
         meeting_duration: durationMinutes,
-        status,
+        status: mergedStatus,
         meet_link: item.hangoutLink || item.location || '',
         timezone: item.start?.timeZone || 'UTC',
         notes: item.description || ''
@@ -254,9 +303,9 @@ export async function POST(request: NextRequest) {
 
       if (existingMeeting) {
         meetingData.id = existingMeeting.id
-        if (existingMeeting.cal_booking_uid) {
-          meetingData.cal_booking_uid = existingMeeting.cal_booking_uid
-        }
+      }
+      if (calBookingUid) {
+        meetingData.cal_booking_uid = calBookingUid
       }
 
       const { error } = await supabase
