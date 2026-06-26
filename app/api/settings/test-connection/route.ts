@@ -53,9 +53,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const isMaskedValue = (val: string) => {
+      if (!val) return false
+      return /^[•\*]+$/.test(val)
+    }
+
     // Helper to resolve credential (from input or decrypted from database if masked)
     const getCredValue = (val: string, field: string) => {
-      if (val === '••••••••') {
+      if (isMaskedValue(val)) {
         const encrypted = existingComm[field] || ''
         return decrypt(encrypted)
       }
@@ -154,11 +159,22 @@ export async function POST(request: NextRequest) {
       if (provider === 'msg91') {
         const key = getCredValue(credentials.msg91Authkey, 'msg91Authkey')
         if (!key) return NextResponse.json({ success: false, error: 'MSG91 Authkey is required' })
-        const res = await fetch('https://control.msg91.com/api/v1/account', {
-          headers: { authkey: key }
+        const res = await fetch('https://control.msg91.com/api/v5/subscriptions/fetchPrepaidBalance', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            authkey: key
+          },
+          body: JSON.stringify({
+            integrated_number: '919999999999',
+            service: 'whatsapp'
+          })
         })
-        if (!res.ok) {
-          return NextResponse.json({ success: false, error: 'Invalid MSG91 Authkey' })
+        if (res.status === 401) {
+          const errData = await res.json().catch(() => ({}))
+          const errMsg = errData.errors || errData.message || 'Unauthorized'
+          console.error('[MSG91 CONNECTION TEST ERROR]', { status: res.status, body: errData })
+          return NextResponse.json({ success: false, error: `Invalid MSG91 Authkey: ${errMsg}` })
         }
         return NextResponse.json({ success: true, message: 'MSG91 credentials are valid!' })
       }

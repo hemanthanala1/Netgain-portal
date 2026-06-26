@@ -120,7 +120,7 @@ function SettingsPageContent() {
     twilioWaSid: '', twilioWaToken: '',
     smsProvider: 'MSG91',
     twilioAccountSid: '', twilioAuthToken: '',
-    msg91Authkey: '', textlocalApiKey: '',
+    msg91Authkey: '', msg91TemplateId: '', textlocalApiKey: '',
   })
 
   const [ai, setAi] = useState({
@@ -823,16 +823,25 @@ function SettingsPageContent() {
 
                 <div className="space-y-3">
                   {comm.smsProvider === 'MSG91' && (
-                    <FieldRow label="MSG91 Authkey">
-                      <SecretField
-                        id="msg91"
-                        value={(comm as any).msg91Authkey || ''}
-                        onChange={(v) => setComm({ ...comm, msg91Authkey: v } as any)}
-                        placeholder="Authkey"
-                        showKey={showKey}
-                        setShowKey={setShowKey}
-                      />
-                    </FieldRow>
+                    <>
+                      <FieldRow label="MSG91 Authkey">
+                        <SecretField
+                          id="msg91"
+                          value={(comm as any).msg91Authkey || ''}
+                          onChange={(v) => setComm({ ...comm, msg91Authkey: v } as any)}
+                          placeholder="Authkey"
+                          showKey={showKey}
+                          setShowKey={setShowKey}
+                        />
+                      </FieldRow>
+                      <FieldRow label="MSG91 Template ID">
+                        <Input
+                          placeholder="Template ID"
+                          value={(comm as any).msg91TemplateId || ''}
+                          onChange={(e) => setComm({ ...comm, msg91TemplateId: e.target.value } as any)}
+                        />
+                      </FieldRow>
+                    </>
                   )}
 
                   {comm.smsProvider === 'Twilio' && (

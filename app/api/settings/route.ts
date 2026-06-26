@@ -20,6 +20,11 @@ const SENSITIVE_FIELDS = {
   ai: ['claudeKey', 'openaiKey', 'geminiKey']
 }
 
+function isMaskedValue(val: string) {
+  if (!val) return false
+  return /^[•\*]+$/.test(val)
+}
+
 function maskSensitiveData(comm: any, ai: any) {
   const safeComm = { ...comm }
   SENSITIVE_FIELDS.comm.forEach(field => {
@@ -132,7 +137,7 @@ export async function POST(request: NextRequest) {
       // Process comm fields, merging with existing to preserve keys like Google tokens
       const processedComm = { ...existingComm, ...comm }
       SENSITIVE_FIELDS.comm.forEach(field => {
-        if (comm[field] === '••••••••') {
+        if (isMaskedValue(comm[field])) {
           processedComm[field] = existingComm[field] || ''
         } else if (comm[field]) {
           processedComm[field] = encrypt(comm[field])
@@ -144,7 +149,7 @@ export async function POST(request: NextRequest) {
       // Process ai fields
       const processedAi = { ...existingAi, ...ai }
       SENSITIVE_FIELDS.ai.forEach(field => {
-        if (ai[field] === '••••••••') {
+        if (isMaskedValue(ai[field])) {
           processedAi[field] = existingAi[field] || ''
         } else if (ai[field]) {
           processedAi[field] = encrypt(ai[field])
@@ -241,7 +246,7 @@ export async function POST(request: NextRequest) {
     // Process comm fields
     const processedComm = { ...existingComm, ...comm }
     SENSITIVE_FIELDS.comm.forEach(field => {
-      if (comm[field] === '••••••••') {
+      if (isMaskedValue(comm[field])) {
         processedComm[field] = existingComm[field] || ''
       } else if (comm[field]) {
         processedComm[field] = encrypt(comm[field])
@@ -253,7 +258,7 @@ export async function POST(request: NextRequest) {
     // Process ai fields
     const processedAi = { ...existingAi, ...ai }
     SENSITIVE_FIELDS.ai.forEach(field => {
-      if (ai[field] === '••••••••') {
+      if (isMaskedValue(ai[field])) {
         processedAi[field] = existingAi[field] || ''
       } else if (ai[field]) {
         processedAi[field] = encrypt(ai[field])

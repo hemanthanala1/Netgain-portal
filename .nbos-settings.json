@@ -37,7 +37,7 @@
     "googleEmail": "mock_user@gmail.com",
     "smsProvider": "MSG91",
     "twilioWaSid": "",
-    "msg91Authkey": "",
+    "msg91Authkey": "c30f83f30a58d9d60f1b5edd7f7afcd1:5486715353b03862a3bb4ac12eadf309e749c9f8fe6b22ef484ff40b2043e98d",
     "resendApiKey": "dd0b8322864ffe1aa9f10507a60aa3d9:4633da1b9aff123f3f2ded7ad53e87a29607c512d9084b6a760e00cbc45c3aab3e318809499d845f97412e7b9f1818f6",
     "emailProvider": "resend",
     "twilioWaToken": "",
@@ -100,5 +100,5 @@
     "invoiceFooter": "Netgain Studio | mail.netgain@gmail.com | 9347102347",
     "invoiceAdditionalText": ""
   },
-  "updatedAt": "2026-06-15T13:08:12.689Z"
+  "updatedAt": "2026-06-26T14:10:05.782Z"
 }

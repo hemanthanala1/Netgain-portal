@@ -114,6 +114,47 @@ async function dispatchMessage(supabaseClient: any, meeting: any, channel: 'emai
             status = 'failed'
           }
         }
+      } else if (provider === 'msg91') {
+        const authKey = decrypt(commSettings.msg91Authkey)
+        if (!authKey) {
+          dispatchError = 'MSG91 Authkey is not configured. Please add it in Settings > Communications.'
+          status = 'failed'
+        } else if (!commSettings.msg91TemplateId) {
+          dispatchError = 'MSG91 Template ID is not configured. Please add it in Settings > Communications.'
+          status = 'failed'
+        } else if (authKey.startsWith('mock_')) {
+          console.log('[CRON MOCK SMS - MSG91] To:', recipient, 'Message:', message)
+        } else {
+          let formattedMobile = recipient.replace(/\+/g, '').replace(/[-\s]/g, '')
+          if (formattedMobile.length === 10) {
+            formattedMobile = '91' + formattedMobile
+          }
+
+          const res = await fetch('https://control.msg91.com/api/v5/flow/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              authkey: authKey
+            },
+            body: JSON.stringify({
+              template_id: commSettings.msg91TemplateId,
+              recipients: [
+                {
+                  mobiles: formattedMobile,
+                  message: message,
+                  msg: message,
+                  var: message,
+                  otp: message
+                }
+              ]
+            })
+          })
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}))
+            dispatchError = errData.message || 'MSG91 dispatch failure'
+            status = 'failed'
+          }
+        }
       }
     }
 

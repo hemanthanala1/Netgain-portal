@@ -241,25 +241,52 @@ export async function POST(request: NextRequest) {
         }
       } else if (provider === 'msg91') {
         const authKey = decrypt(comm.msg91Authkey)
-        if (!authKey || authKey.startsWith('mock_')) {
+        if (!authKey) {
+          dispatchError = 'MSG91 Authkey is not configured. Please add it in Settings > Communications.'
+          status = 'failed'
+        } else if (!comm.msg91TemplateId) {
+          dispatchError = 'MSG91 Template ID is not configured. Please add it in Settings > Communications.'
+          status = 'failed'
+        } else if (authKey.startsWith('mock_')) {
           console.log('[MOCK SMS - MSG91] To:', recipient, 'Message:', message)
         } else {
-          const res = await fetch('https://api.msg91.com/api/v5/sms/send', {
+          let formattedMobile = recipient.replace(/\+/g, '').replace(/[-\s]/g, '')
+          if (formattedMobile.length === 10) {
+            formattedMobile = '91' + formattedMobile
+          }
+
+          const docType = pdfPayload?.docType || 'Document'
+          const clientName = pdfPayload?.clientName || ''
+          const projectTitle = pdfPayload?.projectTitle || ''
+          const amount = pdfPayload?.grandTotal ? String(pdfPayload.grandTotal) : ''
+
+          const res = await fetch('https://control.msg91.com/api/v5/flow/', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               authkey: authKey
             },
             body: JSON.stringify({
-              template_id: comm.msg91TemplateId || '',
-              mobile: recipient,
-              authkey: authKey,
-              // Variables mapping
-              message
+              template_id: comm.msg91TemplateId,
+              recipients: [
+                {
+                  mobiles: formattedMobile,
+                  client: clientName,
+                  doc_type: docType,
+                  project: projectTitle,
+                  amount: amount,
+                  message: message,
+                  msg: message,
+                  var: message,
+                  otp: message
+                }
+              ]
             })
           })
           if (!res.ok) {
-            dispatchError = 'MSG91 dispatch failure'
+            const errData = await res.json().catch(() => ({}))
+            console.error('[MSG91 SEND ERROR]', errData)
+            dispatchError = errData.message || 'MSG91 dispatch failure'
             status = 'failed'
           }
         }
