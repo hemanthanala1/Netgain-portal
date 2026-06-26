@@ -42,6 +42,92 @@ const typeColors: Record<string, string> = {
   Marketing: 'text-amber-400 bg-amber-500/10'
 }
 
+const mapQuotation = (q: any): VaultDoc => ({
+  id: q.id,
+  docId: q.doc_id,
+  type: 'Quotation',
+  client: q.client,
+  title: q.project_title || 'Quotation',
+  amount: Number(q.amount) || 0,
+  status: q.status || 'draft',
+  date: q.created || q.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  tags: ['quotation'],
+  raw: q
+})
+
+const mapInvoice = (i: any): VaultDoc => ({
+  id: i.id,
+  docId: i.doc_id,
+  type: 'Invoice',
+  client: i.client,
+  title: 'Invoice',
+  amount: Number(i.amount) || 0,
+  status: i.status || 'draft',
+  date: i.created || i.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  tags: ['invoice', i.status || 'draft'],
+  raw: i
+})
+
+const mapSow = (s: any): VaultDoc => ({
+  id: s.id,
+  docId: s.doc_id,
+  type: 'SOW',
+  client: s.client,
+  title: s.project || 'Scope of Work',
+  amount: Number(s.value) || 0,
+  status: s.status || 'draft',
+  date: s.created || s.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  tags: ['sow'],
+  raw: s
+})
+
+const mapAgreement = (a: any): VaultDoc => ({
+  id: a.id,
+  docId: a.doc_id,
+  type: 'Agreement',
+  client: a.client,
+  title: a.type || 'Agreement',
+  amount: Number(a.value) || 0,
+  status: a.status || 'draft',
+  date: a.created || a.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  tags: ['agreement'],
+  raw: a
+})
+
+const mapPrd = (p: any): VaultDoc => ({
+  id: p.id,
+  docId: p.doc_id,
+  type: 'PRD',
+  client: p.client,
+  title: p.title || 'Product Requirement Document',
+  amount: 0,
+  status: p.status || 'draft',
+  date: p.created || p.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  tags: ['prd', p.stack || ''].filter(Boolean),
+  raw: p
+})
+
+const mapMarketing = (m: any): VaultDoc => {
+  let extra = { period: 'Monthly', channels: [] as string[] }
+  try {
+    extra = JSON.parse(m.title)
+  } catch (e) {
+    extra.period = m.title || 'Report'
+  }
+  return {
+    id: m.id,
+    docId: m.doc_id,
+    type: 'Marketing',
+    client: m.client,
+    title: `Marketing Report — ${extra.period}`,
+    amount: 0,
+    status: m.status || 'draft',
+    date: m.created || m.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    tags: ['marketing', ...extra.channels],
+    raw: m
+  }
+}
+
 export default function VaultPage() {
   const [docs, setDocs] = useState<VaultDoc[]>([])
   const [services, setServices] = useState<any[]>([])
@@ -115,99 +201,13 @@ export default function VaultPage() {
         }
       }
 
-      const mappedQuos = (quosRes.data || []).map((q: any) => ({
-        id: q.id,
-        docId: q.doc_id,
-        type: 'Quotation' as const,
-        client: q.client,
-        title: q.project_title || 'Quotation',
-        amount: Number(q.amount) || 0,
-        status: q.status || 'draft',
-        date: q.created || q.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        tags: ['quotation'],
-        raw: q
-      }))
-
-      const mappedInvs = (invsRes.data || []).map((i: any) => ({
-        id: i.id,
-        docId: i.doc_id,
-        type: 'Invoice' as const,
-        client: i.client,
-        title: 'Invoice',
-        amount: Number(i.amount) || 0,
-        status: i.status || 'draft',
-        date: i.created || i.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        tags: ['invoice', i.status || 'draft'],
-        raw: i
-      }))
-
-      const mappedSows = (sowsRes.data || []).map((s: any) => ({
-        id: s.id,
-        docId: s.doc_id,
-        type: 'SOW' as const,
-        client: s.client,
-        title: s.project || 'Scope of Work',
-        amount: Number(s.value) || 0,
-        status: s.status || 'draft',
-        date: s.created || s.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        tags: ['sow'],
-        raw: s
-      }))
-
-      const mappedAgrs = (agrsRes.data || []).map((a: any) => ({
-        id: a.id,
-        docId: a.doc_id,
-        type: 'Agreement' as const,
-        client: a.client,
-        title: a.type || 'Agreement',
-        amount: Number(a.value) || 0,
-        status: a.status || 'draft',
-        date: a.created || a.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        tags: ['agreement'],
-        raw: a
-      }))
-
-      const mappedPrds = (prdsRes.data || []).map((p: any) => ({
-        id: p.id,
-        docId: p.doc_id,
-        type: 'PRD' as const,
-        client: p.client,
-        title: p.title || 'Product Requirement Document',
-        amount: 0,
-        status: p.status || 'draft',
-        date: p.created || p.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-        tags: ['prd', p.stack || ''].filter(Boolean),
-        raw: p
-      }))
-
-      const mappedMrkts = (mrktsRes.data || []).map((m: any) => {
-        let extra = { period: 'Monthly', channels: [] as string[] }
-        try {
-          extra = JSON.parse(m.title)
-        } catch (e) {
-          extra.period = m.title || 'Report'
-        }
-        return {
-          id: m.id,
-          docId: m.doc_id,
-          type: 'Marketing' as const,
-          client: m.client,
-          title: `Marketing Report — ${extra.period}`,
-          amount: 0,
-          status: m.status || 'draft',
-          date: m.created || m.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-          tags: ['marketing', ...extra.channels],
-          raw: m
-        }
-      })
-
       const combined = [
-        ...mappedQuos,
-        ...mappedInvs,
-        ...mappedSows,
-        ...mappedAgrs,
-        ...mappedPrds,
-        ...mappedMrkts
+        ...(quosRes.data || []).map(mapQuotation),
+        ...(invsRes.data || []).map(mapInvoice),
+        ...(sowsRes.data || []).map(mapSow),
+        ...(agrsRes.data || []).map(mapAgreement),
+        ...(prdsRes.data || []).map(mapPrd),
+        ...(mrktsRes.data || []).map(mapMarketing)
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
       setDocs(combined)
@@ -216,6 +216,38 @@ export default function VaultPage() {
       toast({ title: 'Error loading documents', description: err.message, variant: 'destructive' })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRealtimeChange = (table: string, eventType: string, newRecord: any, oldRecord: any) => {
+    const mapRecord = (tbl: string, rec: any): VaultDoc | null => {
+      if (!rec) return null
+      switch (tbl) {
+        case 'quotations': return mapQuotation(rec)
+        case 'invoices': return mapInvoice(rec)
+        case 'sows': return mapSow(rec)
+        case 'agreements': return mapAgreement(rec)
+        case 'prds': return mapPrd(rec)
+        case 'marketing_reports': return mapMarketing(rec)
+        default: return null
+      }
+    }
+
+    if (eventType === 'INSERT') {
+      const mapped = mapRecord(table, newRecord)
+      if (mapped) {
+        setDocs(prev => {
+          if (prev.some(d => d.id === mapped.id && d.type === mapped.type)) return prev
+          return [mapped, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        })
+      }
+    } else if (eventType === 'UPDATE') {
+      const mapped = mapRecord(table, newRecord)
+      if (mapped) {
+        setDocs(prev => prev.map(d => d.id === mapped.id && d.type === mapped.type ? mapped : d))
+      }
+    } else if (eventType === 'DELETE') {
+      setDocs(prev => prev.filter(d => !(d.id === oldRecord.id && getTableNameForDocType(d.type) === table)))
     }
   }
 
@@ -228,9 +260,14 @@ export default function VaultPage() {
       activeChannels = tables.map(table => {
         return supabase
           .channel(`vault_${table}_realtime`)
-          .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-            fetchDocuments()
-          })
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table },
+            (payload: any) => {
+              const { eventType, new: newRec, old: oldRec } = payload
+              handleRealtimeChange(table, eventType, newRec, oldRec)
+            }
+          )
           .subscribe()
       })
     }
