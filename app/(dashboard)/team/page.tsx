@@ -27,13 +27,28 @@ const ROLES = [
 
 const initialRoles = [
   { id: 'role-founder', name: 'Founder', isSystem: true, permissions: ['all'] },
-  { id: 'role-admin', name: 'Admin', isSystem: true, permissions: ['crm', 'projects', 'documents', 'team', 'finance', 'marketing'] },
-  { id: 'role-pm', name: 'Project Manager', isSystem: true, permissions: ['crm', 'projects', 'documents'] },
-  { id: 'role-sales', name: 'Sales Executive', isSystem: true, permissions: ['crm', 'marketing'] },
-  { id: 'role-employee', name: 'Employee', isSystem: true, permissions: ['projects'] },
+  { id: 'role-admin', name: 'Admin', isSystem: true, permissions: ['crm', 'services', 'documents', 'projects', 'prd', 'marketing', 'finance', 'meetings', 'communications', 'team', 'settings'] },
+  { id: 'role-pm', name: 'Project Manager', isSystem: true, permissions: ['crm', 'services', 'documents', 'projects', 'prd', 'meetings', 'communications'] },
+  { id: 'role-sales', name: 'Sales Executive', isSystem: true, permissions: ['crm', 'meetings', 'communications', 'marketing'] },
+  { id: 'role-employee', name: 'Employee', isSystem: true, permissions: ['projects', 'prd', 'meetings'] },
 ]
 
-const MODULES = ['crm', 'projects', 'documents', 'marketing', 'team', 'finance', 'settings']
+const MODULES = ['crm', 'services', 'documents', 'projects', 'prd', 'marketing', 'finance', 'meetings', 'communications', 'team', 'settings']
+
+const MODULE_LABELS: Record<string, string> = {
+  crm: 'CRM Hub',
+  services: 'Services Library',
+  documents: 'Documents Vault',
+  projects: 'Projects Engine',
+  prd: 'PRD Engine',
+  marketing: 'Marketing Reports',
+  finance: 'Finance Module',
+  meetings: 'Meetings Hub',
+  communications: 'Communication Center',
+  team: 'Team Management',
+  settings: 'Portal Settings'
+}
+
 
 const roleColors: Record<string, string> = {
   Founder: 'bg-gold/10 text-gold border-gold/20',
@@ -540,7 +555,7 @@ export default function TeamPage() {
                         onChange={e => setRoleForm({...roleForm, permissions: e.target.checked ? [...roleForm.permissions, m] : roleForm.permissions.filter(p => p !== m)})}
                         className="accent-gold rounded"
                       />
-                      <span className="capitalize">{m}</span>
+                      <span>{MODULE_LABELS[m] || m}</span>
                     </label>
                   ))}
                 </div>
