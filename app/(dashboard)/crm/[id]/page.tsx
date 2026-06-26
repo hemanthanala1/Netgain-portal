@@ -7,9 +7,22 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { getInitials, formatDate, formatCurrency, getLeadStatusColor } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { invalidateCache } from '@/lib/data-cache'
+
+const LEAD_STATUSES = ['new', 'contacted', 'proposal_sent', 'quotation_sent', 'negotiation', 'won', 'lost', 'active']
+const statusLabels: Record<string, string> = {
+  new: 'New', contacted: 'Contacted', proposal_sent: 'Proposal Sent',
+  quotation_sent: 'Quotation Sent', negotiation: 'Negotiation',
+  won: 'Won', lost: 'Lost', active: 'Active Client',
+}
 
 const mockClient = { id: '1', name: 'Aaron Shah', business: 'Urban Edge Co.', type: 'E-Commerce', email: 'aaron@urbanedge.in', phone: '9876543210', gst: '29AABCU9603R1ZM', website: 'urbanedge.in', address: 'Andheri East, Mumbai — 400069', city: 'Mumbai', status: 'quotation_sent', revenue: 47998, joined: '2024-05-15' }
 
@@ -22,6 +35,8 @@ const timeline = [
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [editClient, setEditClient] = useState<any | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -60,6 +75,47 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     fetchClient()
   }, [params.id])
 
+  const handleEditSubmit = async () => {
+    if (!editClient || !editClient.name || !editClient.email) return
+    setSubmitting(true)
+
+    if (isSupabaseConfigured()) {
+      try {
+        const dbData = {
+          name: editClient.name,
+          business: editClient.business,
+          type: editClient.type,
+          email: editClient.email,
+          phone: editClient.phone,
+          status: editClient.status,
+          revenue: editClient.revenue,
+          last_contact: editClient.lastContact || new Date().toISOString().slice(0, 10),
+          city: editClient.city,
+          gst: editClient.gst,
+          address: editClient.address,
+          website: editClient.website
+        }
+        const { error } = await supabase.from('crm_clients').update(dbData).eq('id', editClient.id)
+        if (error) {
+          toast({ title: 'Error updating client', description: error.message, variant: 'destructive' })
+          setSubmitting(false)
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        setSubmitting(false)
+        return
+      }
+    }
+
+    setClient(editClient)
+    invalidateCache('crm_clients')
+    invalidateCache('dashboard')
+    setEditClient(null)
+    toast({ title: 'Client Updated', description: `${editClient.name} has been updated successfully.` })
+    setSubmitting(false)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -89,7 +145,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">Rep: {client.name} · {client.city}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5 self-start sm:self-auto"><Edit className="h-3.5 w-3.5" />Edit</Button>
+        <Button variant="outline" size="sm" className="gap-1.5 self-start sm:self-auto" onClick={() => setEditClient({ ...client })}><Edit className="h-3.5 w-3.5" />Edit</Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -155,6 +211,51 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           </Tabs>
         </div>
       </div>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={!!editClient} onOpenChange={(open) => !open && setEditClient(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Client Details</DialogTitle>
+          </DialogHeader>
+          {editClient && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+              <div className="space-y-1"><Label>Client Name *</Label><Input placeholder="John Doe" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Business Name</Label><Input placeholder="Company LLC" value={editClient.business} onChange={e => setEditClient({ ...editClient, business: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={editClient.phone} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} /></div>
+              <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={editClient.city} onChange={e => setEditClient({ ...editClient, city: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Industry Type</Label>
+                <Select value={editClient.type} onValueChange={v => setEditClient({ ...editClient, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Lead Status</Label>
+                <Select value={editClient.status} onValueChange={v => setEditClient({...editClient, status: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LEAD_STATUSES.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({...editClient, gst: e.target.value})} /></div>
+              <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({...editClient, address: e.target.value})} /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditClient(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" onClick={handleEditSubmit} disabled={submitting} className="gap-2">
+              {submitting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Saving...</>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
