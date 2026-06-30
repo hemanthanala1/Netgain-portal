@@ -35,6 +35,11 @@ type Invoice = {
   invoiceFooter?: string;
   invoiceAdditionalText?: string;
   customTerms?: string;
+  adBudget?: number;
+  adBudgetPct?: number;
+  adBudgetFixed?: number;
+  adBudgetOverride?: boolean;
+  adBudgetBillThrough?: boolean;
 }
 
 const INITIAL: Invoice[] = []
@@ -94,7 +99,12 @@ function blankForm(initialDocs?: any) {
     invoicePaymentInstructions: initialDocs?.invoicePaymentInstructions || '',
     invoiceFooter: initialDocs?.invoiceFooter || '',
     invoiceAdditionalText: initialDocs?.invoiceAdditionalText || '',
-    customTerms: compileDefaultInvoiceTerms(invoiceTerms, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
+    customTerms: compileDefaultInvoiceTerms(invoiceTerms, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms),
+    adBudget: 0,
+    adBudgetPct: 15,
+    adBudgetFixed: 0,
+    adBudgetOverride: false,
+    adBudgetBillThrough: false,
   }
 }
 
@@ -165,6 +175,7 @@ export default function InvoicesPage() {
               priceMax: s.price_max ? Number(s.price_max) : undefined,
               timeline: s.timeline || 'TBD',
               category: 'Service',
+              catId: s.cat_id,
               model: s.pricing || 'fixed',
               deliverables: s.deliverables || []
             }))
@@ -199,6 +210,11 @@ export default function InvoicesPage() {
               invoiceFooter: i.invoice_footer,
               invoiceAdditionalText: i.invoice_additional_text,
               customTerms: i.custom_terms || '',
+              adBudget: i.ad_budget ? Number(i.ad_budget) : 0,
+              adBudgetPct: i.ad_budget_pct ? Number(i.ad_budget_pct) : 15,
+              adBudgetFixed: i.ad_budget_fixed ? Number(i.ad_budget_fixed) : 0,
+              adBudgetOverride: i.ad_budget_override || false,
+              adBudgetBillThrough: i.ad_budget_bill_through || false,
             }))
             setInvoices(mappedInvoices)
           }
@@ -234,7 +250,20 @@ export default function InvoicesPage() {
   }, [showCreate])
 
   const selSvcs = servicesData.filter(s => form.selectedIds.includes(s.id))
-  const subtotal = selSvcs.reduce((a, s) => a + s.price, 0)
+  
+  // Calculate dynamic price for Paid Advertising services (catId === '3')
+  const adBudgetFee = form.adBudgetOverride 
+    ? (form.adBudgetFixed || 0) 
+    : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+
+  const computedSub = selSvcs.reduce((sum, s) => {
+    if (s.catId === '3') {
+      return sum + s.price + adBudgetFee
+    }
+    return sum + s.price
+  }, 0)
+
+  const subtotal = computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
   const discAmt = form.discountType === 'percentage' 
     ? Math.round(subtotal * form.discountValue / 100) 
     : form.discountValue
@@ -282,7 +311,12 @@ export default function InvoicesPage() {
       invoicePaymentInstructions: inv.invoicePaymentInstructions !== undefined && inv.invoicePaymentInstructions !== null ? inv.invoicePaymentInstructions : (companyDocs?.invoicePaymentInstructions || ''),
       invoiceFooter: inv.invoiceFooter !== undefined && inv.invoiceFooter !== null ? inv.invoiceFooter : (companyDocs?.invoiceFooter || ''),
       invoiceAdditionalText: inv.invoiceAdditionalText !== undefined && inv.invoiceAdditionalText !== null ? inv.invoiceAdditionalText : (companyDocs?.invoiceAdditionalText || ''),
-      customTerms: getInvoiceTerms(inv, companyDocs)
+      customTerms: getInvoiceTerms(inv, companyDocs),
+      adBudget: inv.adBudget || 0,
+      adBudgetPct: inv.adBudgetPct || 15,
+      adBudgetFixed: inv.adBudgetFixed || 0,
+      adBudgetOverride: inv.adBudgetOverride || false,
+      adBudgetBillThrough: inv.adBudgetBillThrough || false,
     })
   }
 
@@ -302,9 +336,22 @@ export default function InvoicesPage() {
     dueDate?: string
   ) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
-    const sub = svcs.reduce((a, s) => a + s.price, 0)
-    const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
-    const aft = Math.max(0, sub - dAmt)
+    
+    // Calculate dynamic price for Paid Advertising services (catId === '3')
+    const adBudgetFee = inv.adBudgetOverride 
+      ? (inv.adBudgetFixed || 0) 
+      : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
+
+    const computedSub = svcs.reduce((sum, s) => {
+      if (s.catId === '3') {
+        return sum + s.price + adBudgetFee
+      }
+      return sum + s.price
+    }, 0)
+
+    const baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
+    const dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
+    const aft = Math.max(0, baseSub - dAmt)
     const gAmt = Math.round(aft * gst / 100)
     const tot = aft + gAmt
 
@@ -316,28 +363,68 @@ export default function InvoicesPage() {
       }
     }
     const scaleFactor = pct / 100
-    const scaledSub = Math.round(sub * scaleFactor)
+    const scaledSub = Math.round(baseSub * scaleFactor)
     const scaledDAmt = Math.round(dAmt * scaleFactor)
     const scaledAft = Math.max(0, scaledSub - scaledDAmt)
     const scaledGAmt = Math.round(scaledAft * gst / 100)
     const scaledTot = scaledAft + scaledGAmt
 
-    const scaledItems = svcs.map(s => {
-      const scaledPrice = Math.round(s.price * scaleFactor)
-      let customName = s.name
-      if (paymentScheduleEntry) {
-        customName = `${s.name} - ${paymentScheduleEntry}`
-      }
-      return { 
-        serviceName: customName, 
-        finalPrice: scaledPrice, 
-        price: scaledPrice, 
-        quantity: 1, 
-        category: s.category, 
-        pricing_model: s.model, 
-        deliverables: s.deliverables 
+    const scaledItems: any[] = []
+    svcs.forEach(s => {
+      if (s.catId === '3') {
+        // 1. One-time Setup Cost
+        const scaledSetup = Math.round(s.price * scaleFactor)
+        scaledItems.push({
+          serviceName: paymentScheduleEntry ? `${s.name} - Setup Cost - ${paymentScheduleEntry}` : `${s.name} - Setup Cost`,
+          finalPrice: scaledSetup,
+          price: scaledSetup,
+          quantity: 1,
+          category: s.category,
+          pricing_model: 'fixed',
+          deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+        })
+        // 2. Monthly Service Fee
+        const scaledFee = Math.round(adBudgetFee * scaleFactor)
+        scaledItems.push({
+          serviceName: paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
+          finalPrice: scaledFee,
+          price: scaledFee,
+          quantity: 1,
+          category: s.category,
+          pricing_model: 'monthly',
+          deliverables: s.deliverables
+        })
+      } else {
+        const scaledPrice = Math.round(s.price * scaleFactor)
+        let customName = s.name
+        if (paymentScheduleEntry) {
+          customName = `${s.name} - ${paymentScheduleEntry}`
+        }
+        scaledItems.push({
+          serviceName: customName,
+          finalPrice: scaledPrice,
+          price: scaledPrice,
+          quantity: 1,
+          category: s.category,
+          pricing_model: s.model,
+          deliverables: s.deliverables
+        })
       }
     })
+
+    // If ad budget is billed through Netgain, append it as a line item in PDF
+    if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
+      const scaledBudget = Math.round(inv.adBudget * scaleFactor)
+      scaledItems.push({
+        serviceName: paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
+        finalPrice: scaledBudget,
+        price: scaledBudget,
+        quantity: 1,
+        category: "Ad Spend",
+        pricing_model: "monthly",
+        deliverables: ["Advertising spend budget on Google/Meta networks"]
+      })
+    }
 
     const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     const dueFormatted = dueDate
@@ -374,8 +461,13 @@ export default function InvoicesPage() {
       discountTotal: scaledDAmt,
       grandTotal: scaledTot,
       fullProjectTotal: tot,
-      fullSubtotal: sub,
+      fullSubtotal: baseSub,
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
+      adBudget: inv.adBudget,
+      adBudgetPct: inv.adBudgetPct,
+      adBudgetFixed: inv.adBudgetFixed,
+      adBudgetOverride: inv.adBudgetOverride,
+      adBudgetBillThrough: inv.adBudgetBillThrough,
       docsSettings: {
         gstRate: String(gst),
         invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),
@@ -443,7 +535,12 @@ export default function InvoicesPage() {
         invoicePaymentInstructions: form.invoicePaymentInstructions,
         invoiceFooter: form.invoiceFooter,
         invoiceAdditionalText: form.invoiceAdditionalText,
-        customTerms: form.customTerms
+        customTerms: form.customTerms,
+        adBudget: form.adBudget,
+        adBudgetPct: form.adBudgetPct,
+        adBudgetFixed: form.adBudgetFixed,
+        adBudgetOverride: form.adBudgetOverride,
+        adBudgetBillThrough: form.adBudgetBillThrough,
       }
 
       await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
@@ -474,7 +571,12 @@ export default function InvoicesPage() {
           invoice_payment_instructions: form.invoicePaymentInstructions,
           invoice_footer: form.invoiceFooter,
           invoice_additional_text: form.invoiceAdditionalText,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          ad_budget: form.adBudget,
+          ad_budget_pct: form.adBudgetPct,
+          ad_budget_fixed: form.adBudgetFixed,
+          ad_budget_override: form.adBudgetOverride,
+          ad_budget_bill_through: form.adBudgetBillThrough,
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -528,7 +630,12 @@ export default function InvoicesPage() {
       invoicePaymentInstructions: form.invoicePaymentInstructions,
       invoiceFooter: form.invoiceFooter,
       invoiceAdditionalText: form.invoiceAdditionalText,
-      customTerms: form.customTerms
+      customTerms: form.customTerms,
+      adBudget: form.adBudget,
+      adBudgetPct: form.adBudgetPct,
+      adBudgetFixed: form.adBudgetFixed,
+      adBudgetOverride: form.adBudgetOverride,
+      adBudgetBillThrough: form.adBudgetBillThrough,
     }
 
     if (isSupabaseConfigured()) {
@@ -554,7 +661,12 @@ export default function InvoicesPage() {
           invoice_payment_instructions: form.invoicePaymentInstructions,
           invoice_footer: form.invoiceFooter,
           invoice_additional_text: form.invoiceAdditionalText,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          ad_budget: form.adBudget,
+          ad_budget_pct: form.adBudgetPct,
+          ad_budget_fixed: form.adBudgetFixed,
+          ad_budget_override: form.adBudgetOverride,
+          ad_budget_bill_through: form.adBudgetBillThrough,
         }).eq('id', editInvoice.id)
 
         if (error) {
@@ -737,9 +849,19 @@ export default function InvoicesPage() {
               <div className="space-y-2">
                 {servicesData.map(svc => {
                   const sel = form.selectedIds.includes(svc.id)
-                  const priceStr = svc.priceMin && svc.priceMax
-                    ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                    : formatCurrency(svc.price)
+                  let priceVal = svc.price
+                  let isCalculated = false
+                  if (svc.catId === '3') {
+                    priceVal = form.adBudgetOverride 
+                      ? (form.adBudgetFixed || 0) 
+                      : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+                    isCalculated = true
+                  }
+                  const priceStr = isCalculated 
+                    ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
+                    : (svc.priceMin && svc.priceMax
+                        ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                        : formatCurrency(svc.price))
                   return (
                     <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
                       <div className="flex items-center gap-3">
@@ -749,14 +871,93 @@ export default function InvoicesPage() {
                         <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
                       </div>
                       <div className="text-right shrink-0 ml-4">
-                        <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
-                        {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                        <span className="text-sm font-bold text-gold">{priceStr}</span>
+                        {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                        {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
                       </div>
                     </button>
                   )
                 })}
               </div>
             </div>
+
+            {selSvcs.some(s => s.catId === '3') && (
+              <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wide flex items-center gap-1.5">
+                  💰 Paid Advertising Settings
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Monthly Ad Budget (INR) *</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 100000" 
+                      value={form.adBudget || ''} 
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        setForm({ ...form, adBudget: val });
+                      }} 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Service Fee Model</Label>
+                    <div className="flex gap-1 bg-muted/40 p-1 rounded-md border border-border">
+                      {[10, 15, 20].map(pct => (
+                        <Button 
+                          key={pct} 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setForm({ ...form, adBudgetOverride: false, adBudgetPct: pct })} 
+                          className={`flex-1 h-7 text-xs ${(!form.adBudgetOverride && form.adBudgetPct === pct) ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                        >
+                          {pct}%
+                        </Button>
+                      ))}
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setForm({ ...form, adBudgetOverride: true })} 
+                        className={`flex-1 h-7 text-xs ${form.adBudgetOverride ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                      >
+                        Custom Fee
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {form.adBudgetOverride ? (
+                  <div className="space-y-1 max-w-sm">
+                    <Label>Custom Service Fee (INR)</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 15000" 
+                      value={form.adBudgetFixed || ''} 
+                      onChange={e => setForm({ ...form, adBudgetFixed: Number(e.target.value) })} 
+                    />
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                  <div>
+                    <Label className="text-sm font-medium">Bill Ad Budget through Netgain</Label>
+                    <p className="text-xs text-muted-foreground">Include the ad spend itself in the total payable invoice amount.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, adBudgetBillThrough: !form.adBudgetBillThrough })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${form.adBudgetBillThrough ? 'bg-gold' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${form.adBudgetBillThrough ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+            )}
             {selSvcs.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
@@ -917,9 +1118,19 @@ export default function InvoicesPage() {
               <div className="space-y-2">
                 {servicesData.map(svc => {
                   const sel = form.selectedIds.includes(svc.id)
-                  const priceStr = svc.priceMin && svc.priceMax
-                    ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                    : formatCurrency(svc.price)
+                  let priceVal = svc.price
+                  let isCalculated = false
+                  if (svc.catId === '3') {
+                    priceVal = form.adBudgetOverride 
+                      ? (form.adBudgetFixed || 0) 
+                      : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+                    isCalculated = true
+                  }
+                  const priceStr = isCalculated 
+                    ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
+                    : (svc.priceMin && svc.priceMax
+                        ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                        : formatCurrency(svc.price))
                   return (
                     <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
                       <div className="flex items-center gap-3">
@@ -929,14 +1140,93 @@ export default function InvoicesPage() {
                         <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
                       </div>
                       <div className="text-right shrink-0 ml-4">
-                        <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
-                        {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                        <span className="text-sm font-bold text-gold">{priceStr}</span>
+                        {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                        {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
                       </div>
                     </button>
                   )
                 })}
               </div>
             </div>
+
+            {selSvcs.some(s => s.catId === '3') && (
+              <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wide flex items-center gap-1.5">
+                  💰 Paid Advertising Settings
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Monthly Ad Budget (INR) *</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 100000" 
+                      value={form.adBudget || ''} 
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        setForm({ ...form, adBudget: val });
+                      }} 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Service Fee Model</Label>
+                    <div className="flex gap-1 bg-muted/40 p-1 rounded-md border border-border">
+                      {[10, 15, 20].map(pct => (
+                        <Button 
+                          key={pct} 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setForm({ ...form, adBudgetOverride: false, adBudgetPct: pct })} 
+                          className={`flex-1 h-7 text-xs ${(!form.adBudgetOverride && form.adBudgetPct === pct) ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                        >
+                          {pct}%
+                        </Button>
+                      ))}
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setForm({ ...form, adBudgetOverride: true })} 
+                        className={`flex-1 h-7 text-xs ${form.adBudgetOverride ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                      >
+                        Custom Fee
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {form.adBudgetOverride ? (
+                  <div className="space-y-1 max-w-sm">
+                    <Label>Custom Service Fee (INR)</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 15000" 
+                      value={form.adBudgetFixed || ''} 
+                      onChange={e => setForm({ ...form, adBudgetFixed: Number(e.target.value) })} 
+                    />
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                  <div>
+                    <Label className="text-sm font-medium">Bill Ad Budget through Netgain</Label>
+                    <p className="text-xs text-muted-foreground">Include the ad spend itself in the total payable invoice amount.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, adBudgetBillThrough: !form.adBudgetBillThrough })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${form.adBudgetBillThrough ? 'bg-gold' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${form.adBudgetBillThrough ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+            )}
             {selSvcs.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
@@ -1142,9 +1432,22 @@ export default function InvoicesPage() {
               
               // Generate matching PDF payload on the fly
               const svcs = servicesData.filter(s => inv.serviceIds.includes(s.id))
-              const sub = svcs.reduce((a, s) => a + s.price, 0)
-              const dAmt = inv.discountType === 'percentage' ? Math.round(sub * inv.discountValue / 100) : inv.discountValue
-              const aft = Math.max(0, sub - dAmt)
+              
+              // Calculate dynamic price for Paid Advertising services (catId === '3')
+              const adBudgetFee = inv.adBudgetOverride 
+                ? (inv.adBudgetFixed || 0) 
+                : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
+
+              const computedSub = svcs.reduce((sum, s) => {
+                if (s.catId === '3') {
+                  return sum + s.price + adBudgetFee
+                }
+                return sum + s.price
+              }, 0)
+
+              const baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
+              const dAmt = inv.discountType === 'percentage' ? Math.round(baseSub * inv.discountValue / 100) : inv.discountValue
+              const aft = Math.max(0, baseSub - dAmt)
               const gAmt = Math.round(aft * inv.gstPct / 100)
               const tot = aft + gAmt
 
@@ -1156,28 +1459,68 @@ export default function InvoicesPage() {
                 }
               }
               const scaleFactor = pct / 100
-              const scaledSub = Math.round(sub * scaleFactor)
+              const scaledSub = Math.round(baseSub * scaleFactor)
               const scaledDAmt = Math.round(dAmt * scaleFactor)
               const scaledAft = Math.max(0, scaledSub - scaledDAmt)
               const scaledGAmt = Math.round(scaledAft * inv.gstPct / 100)
               const scaledTot = scaledAft + scaledGAmt
 
-              const scaledItems = svcs.map(s => {
-                const scaledPrice = Math.round(s.price * scaleFactor)
-                let customName = s.name
-                if (inv.paymentScheduleEntry) {
-                  customName = `${s.name} - ${inv.paymentScheduleEntry}`
-                }
-                return { 
-                  serviceName: customName, 
-                  finalPrice: scaledPrice, 
-                  price: scaledPrice, 
-                  quantity: 1, 
-                  category: s.category, 
-                  pricing_model: s.model, 
-                  deliverables: s.deliverables 
+              const scaledItems: any[] = []
+              svcs.forEach(s => {
+                if (s.catId === '3') {
+                  // 1. One-time Setup Cost
+                  const scaledSetup = Math.round(s.price * scaleFactor)
+                  scaledItems.push({
+                    serviceName: inv.paymentScheduleEntry ? `${s.name} - Setup Cost - ${inv.paymentScheduleEntry}` : `${s.name} - Setup Cost`,
+                    finalPrice: scaledSetup,
+                    price: scaledSetup,
+                    quantity: 1,
+                    category: s.category,
+                    pricing_model: 'fixed',
+                    deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+                  })
+                  // 2. Monthly Service Fee
+                  const scaledFee = Math.round(adBudgetFee * scaleFactor)
+                  scaledItems.push({
+                    serviceName: inv.paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${inv.paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
+                    finalPrice: scaledFee,
+                    price: scaledFee,
+                    quantity: 1,
+                    category: s.category,
+                    pricing_model: 'monthly',
+                    deliverables: s.deliverables
+                  })
+                } else {
+                  const scaledPrice = Math.round(s.price * scaleFactor)
+                  let customName = s.name
+                  if (inv.paymentScheduleEntry) {
+                    customName = `${s.name} - ${inv.paymentScheduleEntry}`
+                  }
+                  scaledItems.push({
+                    serviceName: customName,
+                    finalPrice: scaledPrice,
+                    price: scaledPrice,
+                    quantity: 1,
+                    category: s.category,
+                    pricing_model: s.model,
+                    deliverables: s.deliverables
+                  })
                 }
               })
+
+              // Append ad budget to items list if billed through
+              if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
+                const scaledBudget = Math.round(inv.adBudget * scaleFactor)
+                scaledItems.push({
+                  serviceName: inv.paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${inv.paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
+                  finalPrice: scaledBudget,
+                  price: scaledBudget,
+                  quantity: 1,
+                  category: "Ad Spend",
+                  pricing_model: "monthly",
+                  deliverables: ["Advertising spend budget on Google/Meta networks"]
+                })
+              }
 
               const todayStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
               const dueFormatted = inv.due
@@ -1214,8 +1557,13 @@ export default function InvoicesPage() {
                 discountTotal: scaledDAmt,
                 grandTotal: scaledTot,
                 fullProjectTotal: tot,
-                fullSubtotal: sub,
+                fullSubtotal: baseSub,
                 paymentScheduleObj: inv.paymentScheduleId ? paymentSchedules.find(p => p.id === inv.paymentScheduleId) : null,
+                adBudget: inv.adBudget,
+                adBudgetPct: inv.adBudgetPct,
+                adBudgetFixed: inv.adBudgetFixed,
+                adBudgetOverride: inv.adBudgetOverride,
+                adBudgetBillThrough: inv.adBudgetBillThrough,
                 docsSettings: {
                   gstRate: String(inv.gstPct),
                   invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),

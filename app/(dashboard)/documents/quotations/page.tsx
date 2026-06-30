@@ -38,6 +38,11 @@ type Quote = {
   paymentTermsMonthly?: string;
   extraTerms?: string;
   customTerms?: string;
+  adBudget?: number;
+  adBudgetPct?: number;
+  adBudgetFixed?: number;
+  adBudgetOverride?: boolean;
+  adBudgetBillThrough?: boolean;
 }
 
 const INITIAL: Quote[] = []
@@ -96,7 +101,12 @@ function blankForm(initialDocs?: any) {
     paymentTermsOneTime,
     paymentTermsMonthly,
     extraTerms,
-    customTerms: compileDefaultQuotationTerms(validityDays, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms)
+    customTerms: compileDefaultQuotationTerms(validityDays, paymentTermsOneTime, paymentTermsMonthly, gstPct, extraTerms),
+    adBudget: 0,
+    adBudgetPct: 15,
+    adBudgetFixed: 0,
+    adBudgetOverride: false,
+    adBudgetBillThrough: false,
   }
 }
 
@@ -159,9 +169,19 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
       <div className="space-y-2">
         {allSvcs.map(svc => {
           const sel = form.selectedIds.includes(svc.id)
-          const priceStr = svc.priceMin && svc.priceMax
-            ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-            : formatCurrency(svc.price)
+          let priceVal = svc.price
+          let isCalculated = false
+          if (svc.catId === '3') {
+            priceVal = form.adBudgetOverride 
+              ? (form.adBudgetFixed || 0) 
+              : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+            isCalculated = true
+          }
+          const priceStr = isCalculated 
+            ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
+            : (svc.priceMin && svc.priceMax
+                ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                : formatCurrency(svc.price))
           return (
             <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
               <div className="flex items-center gap-3">
@@ -171,14 +191,93 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
                 <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
               </div>
               <div className="text-right shrink-0 ml-4">
-                <span className="text-sm font-bold text-gold">{priceStr}{svc.model === 'monthly' ? '/mo' : ''}</span>
-                {(svc.priceMin && svc.priceMax) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                <span className="text-sm font-bold text-gold">{priceStr}</span>
+                {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
               </div>
             </button>
           )
         })}
       </div>
     </div>
+
+    {selSvcs.some(s => s.catId === '3') && (
+      <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
+        <p className="text-xs font-semibold text-gold uppercase tracking-wide flex items-center gap-1.5">
+          💰 Paid Advertising Settings
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Monthly Ad Budget (INR) *</Label>
+            <Input 
+              type="number" 
+              placeholder="e.g. 100000" 
+              value={form.adBudget || ''} 
+              onChange={e => {
+                const val = Number(e.target.value);
+                setForm({ ...form, adBudget: val });
+              }} 
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Service Fee Model</Label>
+            <div className="flex gap-1 bg-muted/40 p-1 rounded-md border border-border">
+              {[10, 15, 20].map(pct => (
+                <Button 
+                  key={pct} 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setForm({ ...form, adBudgetOverride: false, adBudgetPct: pct })} 
+                  className={`flex-1 h-7 text-xs ${(!form.adBudgetOverride && form.adBudgetPct === pct) ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                >
+                  {pct}%
+                </Button>
+              ))}
+              <Button 
+                type="button" 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setForm({ ...form, adBudgetOverride: true })} 
+                className={`flex-1 h-7 text-xs ${form.adBudgetOverride ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+              >
+                Custom Fee
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {form.adBudgetOverride ? (
+          <div className="space-y-1 max-w-sm">
+            <Label>Custom Service Fee (INR)</Label>
+            <Input 
+              type="number" 
+              placeholder="e.g. 15000" 
+              value={form.adBudgetFixed || ''} 
+              onChange={e => setForm({ ...form, adBudgetFixed: Number(e.target.value) })} 
+            />
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+          </div>
+        )}
+
+        <div className="flex items-center justify-between border-t border-border/50 pt-3">
+          <div>
+            <Label className="text-sm font-medium">Bill Ad Budget through Netgain</Label>
+            <p className="text-xs text-muted-foreground">Include the ad spend itself in the total payable quotation amount.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, adBudgetBillThrough: !form.adBudgetBillThrough })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${form.adBudgetBillThrough ? 'bg-gold' : 'bg-muted-foreground/30'}`}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${form.adBudgetBillThrough ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </div>
+    )}
     {selSvcs.length > 0 && (
       <div>
         <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing & Totals</p>
@@ -303,6 +402,7 @@ export default function QuotationsPage() {
               priceMax: s.price_max ? Number(s.price_max) : undefined,
               timeline: s.timeline || 'TBD',
               category: 'Service',
+              catId: s.cat_id,
               model: s.pricing || 'fixed',
               deliverables: s.deliverables || []
             }))
@@ -336,7 +436,12 @@ export default function QuotationsPage() {
               paymentTermsOneTime: q.payment_terms_one_time,
               paymentTermsMonthly: q.payment_terms_monthly,
               extraTerms: q.extra_terms,
-              customTerms: q.custom_terms || ''
+              customTerms: q.custom_terms || '',
+              adBudget: q.ad_budget ? Number(q.ad_budget) : 0,
+              adBudgetPct: q.ad_budget_pct ? Number(q.ad_budget_pct) : 15,
+              adBudgetFixed: q.ad_budget_fixed ? Number(q.ad_budget_fixed) : 0,
+              adBudgetOverride: q.ad_budget_override || false,
+              adBudgetBillThrough: q.ad_budget_bill_through || false,
             }))
             setQuotes(mappedQuotes)
           }
@@ -373,7 +478,20 @@ export default function QuotationsPage() {
 
   // Derived
   const selSvcs = servicesData.filter(s => form.selectedIds.includes(s.id))
-  const subtotal = selSvcs.reduce((a, s) => a + s.price, 0)
+  
+  // Calculate dynamic price for Paid Advertising services (catId === '3')
+  const adBudgetFee = form.adBudgetOverride 
+    ? (form.adBudgetFixed || 0) 
+    : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+
+  const computedSub = selSvcs.reduce((sum, s) => {
+    if (s.catId === '3') {
+      return sum + s.price + adBudgetFee
+    }
+    return sum + s.price
+  }, 0)
+
+  const subtotal = computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
   const discAmt  = Math.round(subtotal * form.discountPct / 100)
   const afterDisc = subtotal - discAmt
   const gstAmt   = Math.round(afterDisc * form.gstPct / 100)
@@ -405,7 +523,12 @@ export default function QuotationsPage() {
       paymentTermsOneTime: q.paymentTermsOneTime || companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery',
       paymentTermsMonthly: q.paymentTermsMonthly || companyDocs?.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle',
       extraTerms: q.extraTerms || companyDocs?.extraTerms || '',
-      customTerms: getQuotationTerms(q, companyDocs)
+      customTerms: getQuotationTerms(q, companyDocs),
+      adBudget: q.adBudget || 0,
+      adBudgetPct: q.adBudgetPct || 15,
+      adBudgetFixed: q.adBudgetFixed || 0,
+      adBudgetOverride: q.adBudgetOverride || false,
+      adBudgetBillThrough: q.adBudgetBillThrough || false,
     })
   }
 
@@ -415,11 +538,78 @@ export default function QuotationsPage() {
 
   async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
-    const sub   = svcs.reduce((a, s) => a + s.price, 0)
+    
+    // Calculate dynamic price for Paid Advertising services (catId === '3')
+    const adBudgetFee = data.adBudgetOverride 
+      ? (data.adBudgetFixed || 0) 
+      : Math.round((data.adBudget || 0) * ((data.adBudgetPct || 15) / 100))
+
+    const computedSub = svcs.reduce((sum, s) => {
+      if (s.catId === '3') {
+        return sum + s.price + adBudgetFee
+      }
+      return sum + s.price
+    }, 0)
+
+    const sub = computedSub + (data.adBudgetBillThrough ? (data.adBudget || 0) : 0)
     const dAmt  = Math.round(sub * disc / 100)
     const aft   = sub - dAmt
     const gAmt  = Math.round(aft * gst / 100)
     const tot   = aft + gAmt
+
+    // Map items, splitting Paid Advertising into Setup Cost and Monthly Service Fee
+    const pdfItems: any[] = []
+    svcs.forEach(s => {
+      if (s.catId === '3') {
+        // 1. One-time Setup Cost
+        pdfItems.push({
+          serviceName: `${s.name} - Setup Cost`,
+          finalPrice: s.price,
+          price: s.price,
+          quantity: 1,
+          category: s.category,
+          timeline: s.timeline,
+          pricing_model: 'fixed',
+          deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+        })
+        // 2. Monthly Service Fee
+        pdfItems.push({
+          serviceName: `${s.name} - Monthly Service Fee`,
+          finalPrice: adBudgetFee,
+          price: adBudgetFee,
+          quantity: 1,
+          category: s.category,
+          timeline: s.timeline,
+          pricing_model: 'monthly',
+          deliverables: s.deliverables
+        })
+      } else {
+        pdfItems.push({
+          serviceName: s.name,
+          finalPrice: s.price,
+          price: s.price,
+          quantity: 1,
+          category: s.category,
+          timeline: s.timeline,
+          pricing_model: s.model,
+          deliverables: s.deliverables
+        })
+      }
+    })
+
+    // If ad budget is billed through Netgain, append it as a line item
+    if (data.adBudgetBillThrough && data.adBudget && data.adBudget > 0) {
+      pdfItems.push({
+        serviceName: "Ad Budget (Paid Ads Spend)",
+        finalPrice: data.adBudget,
+        price: data.adBudget,
+        quantity: 1,
+        category: "Ad Spend",
+        timeline: "Monthly",
+        pricing_model: "monthly",
+        deliverables: ["Advertising spend budget on Google/Meta networks"]
+      })
+    }
 
     const payload = {
       docType: 'Quotation',
@@ -428,13 +618,18 @@ export default function QuotationsPage() {
       companyName: data.client,
       clientInfo: { business: data.businessType, industry: data.industry, mobile: data.phone, gst: data.gst },
       content: buildContentBody(data, svcs),
-      items: svcs.map(s => ({ serviceName: s.name, finalPrice: s.price, price: s.price, quantity: 1, category: s.category, timeline: s.timeline, pricing_model: s.model, deliverables: s.deliverables })),
+      items: pdfItems,
       subtotal: sub,
       discountTotal: dAmt,
       grandTotal: tot,
       fullProjectTotal: tot,
       fullSubtotal: sub,
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
+      adBudget: data.adBudget,
+      adBudgetPct: data.adBudgetPct,
+      adBudgetFixed: data.adBudgetFixed,
+      adBudgetOverride: data.adBudgetOverride,
+      adBudgetBillThrough: data.adBudgetBillThrough,
       docsSettings: {
         gstRate: String(gst),
         quotationValidity: String(data.validityDays !== undefined && data.validityDays !== null ? data.validityDays : (companyDocs?.quotationValidity || '14')),
@@ -494,7 +689,12 @@ export default function QuotationsPage() {
         paymentTermsOneTime: form.paymentTermsOneTime,
         paymentTermsMonthly: form.paymentTermsMonthly,
         extraTerms: form.extraTerms,
-        customTerms: form.customTerms
+        customTerms: form.customTerms,
+        adBudget: form.adBudget,
+        adBudgetPct: form.adBudgetPct,
+        adBudgetFixed: form.adBudgetFixed,
+        adBudgetOverride: form.adBudgetOverride,
+        adBudgetBillThrough: form.adBudgetBillThrough,
       } as any
 
       if (isSupabaseConfigured()) {
@@ -524,7 +724,12 @@ export default function QuotationsPage() {
             payment_terms_one_time: form.paymentTermsOneTime,
             payment_terms_monthly: form.paymentTermsMonthly,
             extra_terms: form.extraTerms,
-            custom_terms: form.customTerms
+            custom_terms: form.customTerms,
+            ad_budget: form.adBudget,
+            ad_budget_pct: form.adBudgetPct,
+            ad_budget_fixed: form.adBudgetFixed,
+            ad_budget_override: form.adBudgetOverride,
+            ad_budget_bill_through: form.adBudgetBillThrough,
           }])
           if (error) {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
@@ -576,7 +781,12 @@ export default function QuotationsPage() {
       paymentTermsOneTime: form.paymentTermsOneTime,
       paymentTermsMonthly: form.paymentTermsMonthly,
       extraTerms: form.extraTerms,
-      customTerms: form.customTerms
+      customTerms: form.customTerms,
+      adBudget: form.adBudget,
+      adBudgetPct: form.adBudgetPct,
+      adBudgetFixed: form.adBudgetFixed,
+      adBudgetOverride: form.adBudgetOverride,
+      adBudgetBillThrough: form.adBudgetBillThrough,
     } as any
 
     if (isSupabaseConfigured()) {
@@ -601,7 +811,12 @@ export default function QuotationsPage() {
           payment_terms_one_time: form.paymentTermsOneTime,
           payment_terms_monthly: form.paymentTermsMonthly,
           extra_terms: form.extraTerms,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          ad_budget: form.adBudget,
+          ad_budget_pct: form.adBudgetPct,
+          ad_budget_fixed: form.adBudgetFixed,
+          ad_budget_override: form.adBudgetOverride,
+          ad_budget_bill_through: form.adBudgetBillThrough,
         }).eq('id', editQuote.id)
         if (error) {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })
@@ -872,11 +1087,77 @@ export default function QuotationsPage() {
               
               // Generate matching PDF payload on the fly
               const svcs = servicesData.filter(s => quoteObj.serviceIds.includes(s.id))
-              const sub = svcs.reduce((a, s) => a + s.price, 0)
+              
+              // Calculate dynamic price for Paid Advertising services (catId === '3')
+              const adBudgetFee = quoteObj.adBudgetOverride 
+                ? (quoteObj.adBudgetFixed || 0) 
+                : Math.round((quoteObj.adBudget || 0) * ((quoteObj.adBudgetPct || 15) / 100))
+
+              const computedSub = svcs.reduce((sum, s) => {
+                if (s.catId === '3') {
+                  return sum + s.price + adBudgetFee
+                }
+                return sum + s.price
+              }, 0)
+
+              const sub = computedSub + (quoteObj.adBudgetBillThrough ? (quoteObj.adBudget || 0) : 0)
               const dAmt = Math.round(sub * quoteObj.discountPct / 100)
               const aft = sub - dAmt
               const gAmt = Math.round(aft * quoteObj.gstPct / 100)
               const tot = aft + gAmt
+
+              const pdfItems: any[] = []
+              svcs.forEach(s => {
+                if (s.catId === '3') {
+                  // 1. One-time Setup Cost
+                  pdfItems.push({
+                    serviceName: `${s.name} - Setup Cost`,
+                    finalPrice: s.price,
+                    price: s.price,
+                    quantity: 1,
+                    category: s.category,
+                    timeline: s.timeline,
+                    pricing_model: 'fixed',
+                    deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+                  })
+                  // 2. Monthly Service Fee
+                  pdfItems.push({
+                    serviceName: `${s.name} - Monthly Service Fee`,
+                    finalPrice: adBudgetFee,
+                    price: adBudgetFee,
+                    quantity: 1,
+                    category: s.category,
+                    timeline: s.timeline,
+                    pricing_model: 'monthly',
+                    deliverables: s.deliverables
+                  })
+                } else {
+                  pdfItems.push({
+                    serviceName: s.name,
+                    finalPrice: s.price,
+                    price: s.price,
+                    quantity: 1,
+                    category: s.category,
+                    timeline: s.timeline,
+                    pricing_model: s.model,
+                    deliverables: s.deliverables
+                  })
+                }
+              })
+
+              // If ad budget is billed through Netgain, append it as a line item
+              if (quoteObj.adBudgetBillThrough && quoteObj.adBudget && quoteObj.adBudget > 0) {
+                pdfItems.push({
+                  serviceName: "Ad Budget (Paid Ads Spend)",
+                  finalPrice: quoteObj.adBudget,
+                  price: quoteObj.adBudget,
+                  quantity: 1,
+                  category: "Ad Spend",
+                  timeline: "Monthly",
+                  pricing_model: "monthly",
+                  deliverables: ["Advertising spend budget on Google/Meta networks"]
+                })
+              }
 
               pdfPayload = {
                 docType: 'Quotation',
@@ -885,13 +1166,18 @@ export default function QuotationsPage() {
                 companyName: quoteObj.client,
                 clientInfo: { business: quoteObj.businessType, industry: quoteObj.industry, mobile: quoteObj.phone, gst: quoteObj.gst },
                 content: buildContentBody(quoteObj, svcs),
-                items: svcs.map(s => ({ serviceName: s.name, finalPrice: s.price, price: s.price, quantity: 1, category: s.category, timeline: s.timeline, pricing_model: s.model, deliverables: s.deliverables })),
+                items: pdfItems,
                 subtotal: sub,
                 discountTotal: dAmt,
                 grandTotal: tot,
                 fullProjectTotal: tot,
                 fullSubtotal: sub,
                 paymentScheduleObj: quoteObj.paymentScheduleId ? paymentSchedules.find(p => p.id === quoteObj.paymentScheduleId) : null,
+                adBudget: quoteObj.adBudget,
+                adBudgetPct: quoteObj.adBudgetPct,
+                adBudgetFixed: quoteObj.adBudgetFixed,
+                adBudgetOverride: quoteObj.adBudgetOverride,
+                adBudgetBillThrough: quoteObj.adBudgetBillThrough,
                 docsSettings: {
                   gstRate: String(quoteObj.gstPct),
                   quotationValidity: String(quoteObj.validityDays !== undefined && quoteObj.validityDays !== null ? quoteObj.validityDays : (companyDocs?.quotationValidity || '14')),

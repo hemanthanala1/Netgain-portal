@@ -130,6 +130,11 @@ export interface PdfPayload {
   }
   items?: PdfItem[]
   subtotal?: number
+  adBudget?: number
+  adBudgetPct?: number
+  adBudgetFixed?: number
+  adBudgetOverride?: boolean
+  adBudgetBillThrough?: boolean
   discountTotal?: number
   grandTotal?: number
   fullProjectTotal?: number
@@ -336,6 +341,27 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
               </View>
             ))}
           </>
+        )}
+
+        {/* ── Ad Budget Details ── */}
+        {data.adBudget && data.adBudget > 0 && (
+          <View style={{ marginBottom: 12 }} wrap={false}>
+            <Text style={s.h2}>ADVERTISING BUDGET DETAILS</Text>
+            <View style={s.card}>
+              <View style={s.cardHeaderRow}>
+                <Text style={s.svcName}>Google / Meta Ads Campaign Budget</Text>
+                <Text style={s.svcPrice}>{INR(data.adBudget)} / month</Text>
+              </View>
+              <Text style={s.svcMeta}>
+                Billing Mode: {data.adBudgetBillThrough ? 'Billed via Netgain (included in Invoice Total)' : 'Paid directly to platforms by Client'}
+              </Text>
+              {!data.adBudgetBillThrough && (
+                <Text style={{ fontFamily: 'Helvetica', fontSize: 7.5, color: C.slate, marginTop: 4 }}>
+                  * Note: This ad budget is managed by Netgain but paid directly to Google/Meta by the client. It is not included in the payment totals below.
+                </Text>
+              )}
+            </View>
+          </View>
         )}
 
         {/* ── Rich Content Body ── */}
