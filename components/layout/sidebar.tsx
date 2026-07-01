@@ -111,7 +111,9 @@ export function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
             )}
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                const isActive = item.href === '/ai-hub'
+                  ? pathname === '/ai-hub'
+                  : pathname === item.href || pathname.startsWith(item.href + '/')
                 return (
                   <Link key={item.href} href={item.href} title={collapsed && !onMobileClose ? item.label : undefined} onClick={onMobileClose}>
                     <div
