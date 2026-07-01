@@ -9,257 +9,187 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Plus, FileCode2, Download, Cpu, Layers, Database, Code, Edit, Trash2, History, Loader2 } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PromptViewer } from '@/components/ui/prompt-viewer'
+import { ApprovalBadge } from '@/components/ui/approval-badge'
+import { WorkflowSteps } from '@/components/ui/workflow-steps'
+import { FileUpload } from '@/components/ui/file-upload'
+import { VersionTimeline } from '@/components/ui/version-timeline'
+import {
+  Plus, FileCode2, Download, Cpu, Layers, Database, Code, Edit, Trash2,
+  History, Loader2, Search, Sparkles, ExternalLink, Eye, FileText, Shield,
+  Smartphone, Globe, Key, CreditCard, Bell, Brain, Lock, Gauge
+} from 'lucide-react'
 import { formatDate, generateDocId } from '@/lib/utils'
+import { generateBlueprintPrompt, WORKFLOW_STEPS } from '@/lib/ai-utils'
+import type { BlueprintForm } from '@/lib/ai-types'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
-
-
 type PRD = {
-  id: string; docId: string; title: string; client: string; stack: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]
+  id: string; docId: string; title: string; client: string; stack: string; status: string; created: string;
+  history: { date: string; action: string; canDownload?: boolean }[];
+  prompt?: string; approvalStatus?: string; blueprintDetails?: BlueprintForm
 }
 
-const mockPRDs: PRD[] = []
-
-export default function PRDPage() {
+export default function BlueprintEnginePage() {
   const [prds, setPrds] = useState<PRD[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [historyDoc, setHistoryDoc] = useState<PRD | null>(null)
+  const [detailPrd, setDetailPrd] = useState<PRD | null>(null)
+  const [generatedPrompt, setGeneratedPrompt] = useState('')
+  const [activeTab, setActiveTab] = useState('overview')
+  const [currentStep, setCurrentStep] = useState(0)
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
-  const [downloadingId, setDownloadingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', client: '', productType: 'Web App', techStack: '', objectives: '', userPersonas: '', coreFeatures: '', database: '', apiEndpoints: '', uiFramework: '', timeline: '3 months', targetUsers: '' })
+
+  const emptyForm: BlueprintForm = {
+    productName: '', projectType: 'Web App', targetUsers: '', objectives: '', features: '',
+    modules: '', userRoles: '', platform: 'Web', timeline: '', budget: '', integrations: '',
+    authentication: '', payments: '', notifications: '', aiFeatures: '', security: '',
+    performance: '', techStack: '', database: '', apis: ''
+  }
+  const [form, setForm] = useState<BlueprintForm>(emptyForm)
 
   useEffect(() => {
     const cached = getCachedData<PRD[]>('prds')
-    if (cached) {
-      setPrds(cached)
-      setLoading(false)
-    }
-
-    async function loadPRDs() {
+    if (cached) { setPrds(cached); setLoading(false) }
+    async function load() {
       if (!cached) setLoading(true)
       if (isSupabaseConfigured()) {
         try {
           const { data, error } = await supabase.from('prds').select('*').order('created_at', { ascending: false })
-          if (error) {
-            toast({ title: 'Error loading PRDs', description: error.message, variant: 'destructive' })
-          } else if (data) {
-            const mapped = data.map((p: any) => ({
-              id: p.id,
-              docId: p.doc_id,
-              title: p.title,
-              client: p.client,
-              stack: p.stack || '',
-              status: p.status || 'draft',
-              created: p.created,
-              history: Array.isArray(p.history) ? p.history : []
-            }))
-            setPrds(mapped)
-            setCachedData('prds', mapped)
+          if (!error && data) {
+            const mapped = data.map((p: any) => {
+              let extra: any = {}
+              try { if (p.stack && p.stack.startsWith('{')) extra = JSON.parse(p.stack) } catch {}
+              return {
+                id: p.id, docId: p.doc_id, title: p.title, client: p.client,
+                stack: extra.techStack || p.stack || '', status: p.status || 'draft', created: p.created,
+                history: Array.isArray(p.history) ? p.history : [],
+                prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft',
+                blueprintDetails: extra.blueprintDetails || undefined
+              }
+            })
+            setPrds(mapped); setCachedData('prds', mapped)
           }
-        } catch (err: any) {
-          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        }
-      } else {
-        setPrds(mockPRDs)
-        setCachedData('prds', mockPRDs)
+        } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
       setLoading(false)
     }
-    loadPRDs()
+    load()
   }, [])
 
+  const filtered = prds.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
 
-  const buildPrdContent = (f: typeof form) => {
-    return `# Product Requirements Document (PRD)\n\n## Executive Summary\n**Product:** ${f.title}\n**Client:** ${f.client}\n**Type:** ${f.productType}\n**Tech Stack:** ${f.techStack}\n**Timeline:** ${f.timeline}\n\n## Problem Statement\n${f.objectives}\n\n## Target Users\n${f.targetUsers}\n\n## User Personas\n${f.userPersonas}\n\n## Core Features\n${f.coreFeatures}\n\n## Database Design\n${f.database || 'To be defined in technical specification phase.'}\n\n## API Endpoints\n${f.apiEndpoints || 'RESTful API architecture. Detailed endpoint mapping in technical spec.'}\n\n## UI Architecture\n**Framework:** ${f.uiFramework || f.techStack.split('+')[0] || 'To be determined'}\n\nKey screens: Dashboard, Login/Auth, Main CRUD views, Settings, Reports\n\n## Development Roadmap\n### Phase 1 — Foundation (Weeks 1-4)\n- Project setup and architecture\n- Auth system\n- Core database schema\n- Base UI components\n\n### Phase 2 — Core Features (Weeks 5-10)\n- Main feature modules\n- API integration\n- User flows\n\n### Phase 3 — Polish & Deploy (Weeks 11-12)\n- QA & testing\n- Performance optimization\n- Production deployment\n- Documentation\n\n## Success Metrics\n- Load time < 2 seconds\n- 99.9% uptime\n- Core user flows ≤ 3 clicks\n- User satisfaction score ≥ 4.5/5`
+  const handleGeneratePrompt = () => {
+    const prompt = generateBlueprintPrompt(form)
+    setGeneratedPrompt(prompt)
+    setCurrentStep(2)
+    toast({ title: 'Prompt Generated!' })
   }
 
-  const handleGenerate = async () => {
-    if (!form.title) return
+  const handleCreate = async () => {
+    if (!form.productName) return
     setGenerating(true)
     try {
-      const docId = generateDocId('NG-PRD')
+      const docId = generateDocId('NG-DBE')
       const targetId = String(Date.now())
       const targetCreated = new Date().toISOString().slice(0, 10)
-      const targetHistory = [{date: targetCreated, action: 'PRD Generated', canDownload: true}]
+      const targetHistory = [{ date: targetCreated, action: 'Blueprint created', canDownload: true }]
+      const prompt = generatedPrompt || generateBlueprintPrompt(form)
 
-      const content = buildPrdContent(form)
-
-      const payload = { docType: 'PRD', clientName: form.client, projectTitle: form.title, content, items: [], subtotal: 0, discountTotal: 0, grandTotal: 0 }
-      const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) throw new Error('PDF failed')
-      const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PRD_${form.title.replace(/\s+/g, '_')}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      const extraJson = JSON.stringify({ techStack: form.techStack, prompt, approvalStatus: 'draft', blueprintDetails: form })
 
       if (isSupabaseConfigured()) {
         const { error } = await supabase.from('prds').insert([{
-          id: targetId,
-          doc_id: docId,
-          title: form.title,
-          client: form.client,
-          stack: form.techStack,
-          status: 'draft',
-          created: targetCreated,
-          history: targetHistory
+          id: targetId, doc_id: docId, title: form.productName, client: form.targetUsers || 'Internal',
+          stack: extraJson, status: 'draft', created: targetCreated, history: targetHistory
         }])
-        if (error) {
-          toast({ title: 'Error saving PRD to database', description: error.message, variant: 'destructive' })
-          setGenerating(false)
-          return
-        }
+        if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return }
       }
 
-      const updatedList = [{ id: targetId, docId, title: form.title, client: form.client, stack: form.techStack, status: 'draft', created: targetCreated, history: targetHistory }, ...prds]
-      setPrds(updatedList)
-      setCachedData('prds', updatedList)
-      invalidateCache('dashboard')
-      setShowCreate(false); toast({ title: 'PRD Generated!', description: `${docId} created and downloaded.` })
+      const newPrd: PRD = { id: targetId, docId, title: form.productName, client: form.targetUsers || 'Internal', stack: form.techStack, status: 'draft', created: targetCreated, history: targetHistory, prompt, approvalStatus: 'draft', blueprintDetails: form }
+      const updatedList = [newPrd, ...prds]
+      setPrds(updatedList); setCachedData('prds', updatedList); invalidateCache('dashboard')
+      setShowCreate(false); setGeneratedPrompt(''); setForm(emptyForm); setCurrentStep(0)
+      toast({ title: 'Blueprint Created!', description: `${docId} saved.` })
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
 
-
   const handleDelete = async () => {
     if (!deleteId) return
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('prds').delete().eq('id', deleteId)
-        if (error) {
-          toast({ title: 'Error deleting PRD', description: error.message, variant: 'destructive' })
-          return
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        return
-      }
-    }
+    if (isSupabaseConfigured()) { await supabase.from('prds').delete().eq('id', deleteId) }
     const updatedList = prds.filter(p => p.id !== deleteId)
-    setPrds(updatedList)
-    setCachedData('prds', updatedList)
-    invalidateCache('dashboard')
-    setDeleteId(null)
-    toast({ title: 'PRD Deleted' })
+    setPrds(updatedList); setCachedData('prds', updatedList); invalidateCache('dashboard')
+    setDeleteId(null); toast({ title: 'Blueprint Deleted' })
   }
 
-
-  const handleEditSubmit = async () => {
-    if (!editId) return
-    const targetPrd = prds.find(p => p.id === editId)
-    if (!targetPrd) return
-
-    const newHistory = [...targetPrd.history, {date: new Date().toISOString().slice(0, 10), action: 'PRD Updated', canDownload: true}]
-    const updated = { ...targetPrd, title: form.title, client: form.client, stack: form.techStack, history: newHistory }
-
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('prds').update({
-          title: form.title,
-          client: form.client,
-          stack: form.techStack,
-          history: newHistory
-        }).eq('id', editId)
-
-        if (error) {
-          toast({ title: 'Error saving PRD edit', description: error.message, variant: 'destructive' })
-          return
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-        return
-      }
-    }
-
-    const updatedList = prds.map(p => p.id === editId ? updated : p)
-    setPrds(updatedList)
-    setCachedData('prds', updatedList)
-    invalidateCache('dashboard')
-    setEditId(null)
-    toast({ title: 'PRD Updated' })
+  const openDetail = (p: PRD) => {
+    setDetailPrd(p)
+    if (p.blueprintDetails) setForm(p.blueprintDetails)
+    setGeneratedPrompt(p.prompt || '')
+    setActiveTab('overview')
   }
 
-
-  const handleDownload = async (p: PRD) => {
-    setDownloadingId(p.id)
-    try {
-      const formForPrd = {
-        title: p.title,
-        client: p.client,
-        productType: 'Web App',
-        techStack: p.stack,
-        timeline: '3 months',
-        objectives: 'As defined in original document generation objectives.',
-        targetUsers: 'Primary target audience.',
-        userPersonas: 'Core personas.',
-        coreFeatures: 'Standard product modules and capabilities.',
-        database: '',
-        apiEndpoints: '',
-        uiFramework: ''
-      }
-      const content = buildPrdContent(formForPrd)
-      const payload = { docType: 'PRD', clientName: p.client, projectTitle: p.title, content, items: [], subtotal: 0, discountTotal: 0, grandTotal: 0 }
-      const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) throw new Error('PDF failed')
-      const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PRD_${p.title.replace(/\s+/g, '_')}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a)
-
-      const newHistory = [...p.history, {date: new Date().toISOString().slice(0, 10), action: 'PRD Downloaded', canDownload: true}]
-      if (isSupabaseConfigured()) {
-        const { error } = await supabase.from('prds').update({ history: newHistory }).eq('id', p.id)
-        if (error) {
-          toast({ title: 'Error updating PRD history', description: error.message, variant: 'destructive' })
-        }
-      }
-      const updatedList = prds.map(doc => doc.id === p.id ? { ...doc, history: newHistory } : doc)
-      setPrds(updatedList)
-      setCachedData('prds', updatedList)
-      toast({ title: 'Download Started', description: `Downloading ${p.docId}.pdf` })
-
-    } catch (e: any) {
-      toast({ title: 'Download failed', description: e.message, variant: 'destructive' })
-    } finally {
-      setDownloadingId(null)
-    }
-  }
+  const featureIcons = [
+    { icon: Layers, label: 'Architecture', desc: 'System design & component structure' },
+    { icon: Database, label: 'Database', desc: 'Schema, relationships & data models' },
+    { icon: Code, label: 'APIs & Logic', desc: 'Endpoints, business logic & integrations' },
+  ]
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">PRD Engine</h1><p className="text-muted-foreground text-sm mt-0.5">Generate structured Product Requirements Documents for development projects.</p></div>
-        <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New PRD</Button>
+        <div>
+          <div className="flex items-center gap-2">
+            <FileCode2 className="h-5 w-5 text-violet-400" />
+            <h1 className="text-2xl font-bold tracking-tight">Development Blueprint Engine</h1>
+          </div>
+          <p className="text-muted-foreground text-sm mt-0.5">Generate comprehensive Product Requirement Documents with AI-powered prompts</p>
+        </div>
+        <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto">
+          <Plus className="h-4 w-4" />New Blueprint
+        </Button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
-        {[{ icon: Layers, label: 'Executive Summary', desc: 'Product overview, goals & objectives' }, { icon: Database, label: 'DB Design & APIs', desc: 'Schema, endpoints, architecture' }, { icon: Code, label: 'UI Architecture', desc: 'Component map & user flows' }].map(f => (
-          <Card key={f.label}><CardContent className="p-4 flex items-start gap-3"><div className="rounded-lg bg-gold/10 p-2"><f.icon className="h-5 w-5 text-gold" /></div><div><p className="text-sm font-semibold">{f.label}</p><p className="text-xs text-muted-foreground mt-0.5">{f.desc}</p></div></CardContent></Card>
+
+      {/* Feature Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {featureIcons.map(f => (
+          <Card key={f.label} className="ai-card ai-card-glow"><CardContent className="p-4 flex items-start gap-3"><div className="rounded-lg bg-violet-500/10 p-2"><f.icon className="h-5 w-5 text-violet-400" /></div><div><p className="text-sm font-semibold">{f.label}</p><p className="text-xs text-muted-foreground mt-0.5">{f.desc}</p></div></CardContent></Card>
         ))}
       </div>
+
+      {/* Search */}
+      <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search blueprints..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+
+      {/* PRD Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {prds.map(p => (
-          <Card key={p.id} className="hover:shadow-md hover:border-gold/20 transition-all">
+        {filtered.map(p => (
+          <Card key={p.id} className="ai-card ai-card-glow cursor-pointer" onClick={() => openDetail(p)}>
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1"><FileCode2 className="h-4 w-4 text-gold" /><span className="font-mono text-xs text-gold/70">{p.docId}</span></div>
+                  <div className="flex items-center gap-2 mb-1"><FileCode2 className="h-4 w-4 text-violet-400" /><span className="font-mono text-xs text-violet-400/70">{p.docId}</span></div>
                   <h3 className="font-semibold text-sm">{p.title}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">{p.client}</p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Code className="h-3 w-3" />{p.stack}</span>
+                    {p.stack && <span className="flex items-center gap-1"><Code className="h-3 w-3" />{p.stack}</span>}
                     <span>{formatDate(p.created)}</span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 items-end">
-                  <Badge variant={p.status === 'final' ? 'success' : 'outline'}>{p.status}</Badge>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDownload(p)} title="Download"><Download className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setHistoryDoc(p)} title="History"><History className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm({...form, title: p.title, client: p.client, techStack: p.stack}); setEditId(p.id) }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <ApprovalBadge status={p.approvalStatus || 'draft'} />
+                  <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (p.blueprintDetails) setForm(p.blueprintDetails); else setForm({...emptyForm, productName: p.title, techStack: p.stack}); setEditId(p.id) }}><Edit className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               </div>
@@ -267,111 +197,169 @@ export default function PRDPage() {
           </Card>
         ))}
       </div>
+
+      {/* CREATE DIALOG */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Generate New PRD</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <ClientAutocomplete
-                placeholder="Company name"
-                value={form.client}
-                onChange={v => setForm({ ...form, client: v })}
-                onSelect={client => setForm({
-                  ...form,
-                  client: client.business || client.name,
-                  techStack: client.type ? `${client.type} Tech Stack` : form.techStack
-                })}
-              />
-            </div>
-            <div className="space-y-1"><Label>Product Type</Label><Select value={form.productType} onValueChange={v => setForm({...form, productType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase + Stripe" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Objectives & Problem Statement</Label><Textarea className="h-20 resize-none" placeholder="What problem does this product solve? What are the goals?" value={form.objectives} onChange={e => setForm({...form, objectives: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Target Users / Personas</Label><Textarea className="h-16 resize-none" placeholder="Who will use this product? Describe primary user types." value={form.userPersonas} onChange={e => setForm({...form, userPersonas: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Core Features (one per line)</Label><Textarea className="h-20 resize-none" placeholder="User authentication&#10;Dashboard with analytics&#10;Invoice generation&#10;Client management" value={form.coreFeatures} onChange={e => setForm({...form, coreFeatures: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Key Database Tables (optional)</Label><Textarea className="h-16 resize-none" placeholder="users, clients, projects, invoices, services..." value={form.database} onChange={e => setForm({...form, database: e.target.value})} /></div>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button><Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? 'Generating PRD...' : 'Generate PRD PDF'}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>Edit PRD Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <ClientAutocomplete
-                placeholder="Company name"
-                value={form.client}
-                onChange={v => setForm({ ...form, client: v })}
-                onSelect={client => setForm({
-                  ...form,
-                  client: client.business || client.name
-                })}
-              />
-            </div>
-            <div className="space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button><Button variant="gold" onClick={handleEditSubmit}>Save Changes</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader className="border-b border-white/10 pb-3">
-            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
-            <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Development Blueprint</DialogTitle>
+            <div className="mt-3"><WorkflowSteps steps={WORKFLOW_STEPS} currentStep={currentStep} /></div>
           </DialogHeader>
-          <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
-            {historyDoc?.history.slice().reverse().map((h, i) => (
-              <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${(h as any).canDownload ? 'border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group' : 'border-transparent bg-muted/20 cursor-default'}`}
-                onClick={() => { if ((h as any).canDownload && historyDoc) handleDownload(historyDoc) }}
-              >
-                <div className="flex-1 flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">{h.action}</p>
-                    <p className="text-xs text-muted-foreground">{h.date}</p>
-                  </div>
-                </div>
-                {(h as any).canDownload && (
-                  <Button variant="ghost" size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
-                    disabled={downloadingId === historyDoc?.id}
-                    onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
-                    title="Download this version"
-                  >
-                    {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  </Button>
-                )}
+          <Tabs defaultValue="requirements" className="mt-2">
+            <TabsList className="w-full"><TabsTrigger value="requirements" className="flex-1">Requirements</TabsTrigger><TabsTrigger value="technical" className="flex-1">Technical</TabsTrigger><TabsTrigger value="prompt" className="flex-1">AI Prompt</TabsTrigger></TabsList>
+
+            <TabsContent value="requirements" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.productName} onChange={e => setForm({...form, productName: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Project Type</Label><Select value={form.projectType} onValueChange={v => setForm({...form, projectType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard', 'CRM', 'ERP'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Platform</Label><Select value={form.platform} onValueChange={v => setForm({...form, platform: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web', 'iOS', 'Android', 'Cross-Platform', 'Desktop', 'API Only'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Budget (₹)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Target Users</Label><Textarea className="h-16 resize-none" placeholder="Who will use this product?" value={form.targetUsers} onChange={e => setForm({...form, targetUsers: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Objectives & Problem Statement</Label><Textarea className="h-20 resize-none" placeholder="What problem does this solve?" value={form.objectives} onChange={e => setForm({...form, objectives: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Core Features (one per line)</Label><Textarea className="h-20 resize-none" placeholder="User authentication&#10;Dashboard&#10;Reports" value={form.features} onChange={e => setForm({...form, features: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Modules</Label><Textarea className="h-16 resize-none" placeholder="List the main modules..." value={form.modules} onChange={e => setForm({...form, modules: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>User Roles & Permissions</Label><Textarea className="h-16 resize-none" placeholder="Admin, Manager, User..." value={form.userRoles} onChange={e => setForm({...form, userRoles: e.target.value})} /></div>
               </div>
-            ))}
-          </div>
-          <DialogFooter className="border-t border-white/10 pt-3">
-            <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
-            <Button variant="gold" size="sm" onClick={() => historyDoc && handleDownload(historyDoc)} disabled={downloadingId === historyDoc?.id} className="gap-1.5">
-              {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Download Latest
+            </TabsContent>
+
+            <TabsContent value="technical" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Tech Stack</Label><Input placeholder="e.g. Next.js + Supabase + Stripe" value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Database</Label><Input placeholder="PostgreSQL, MongoDB..." value={form.database} onChange={e => setForm({...form, database: e.target.value})} /></div>
+                <div className="space-y-1"><Label>APIs</Label><Input placeholder="REST, GraphQL..." value={form.apis} onChange={e => setForm({...form, apis: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Integrations</Label><Textarea className="h-12 resize-none" placeholder="Payment gateways, email services..." value={form.integrations} onChange={e => setForm({...form, integrations: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Authentication</Label><Input placeholder="OAuth, JWT, Magic Link..." value={form.authentication} onChange={e => setForm({...form, authentication: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Payments</Label><Input placeholder="Stripe, Razorpay..." value={form.payments} onChange={e => setForm({...form, payments: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Notifications</Label><Input placeholder="Email, Push, SMS..." value={form.notifications} onChange={e => setForm({...form, notifications: e.target.value})} /></div>
+                <div className="space-y-1"><Label>AI Features</Label><Input placeholder="Chatbot, Auto-generation..." value={form.aiFeatures} onChange={e => setForm({...form, aiFeatures: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Security Requirements</Label><Input placeholder="2FA, encryption, RBAC..." value={form.security} onChange={e => setForm({...form, security: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Performance Requirements</Label><Input placeholder="Load time, concurrent users..." value={form.performance} onChange={e => setForm({...form, performance: e.target.value})} /></div>
+              </div>
+              <div className="flex items-center gap-3 mt-6 pt-4 border-t border-border">
+                <Button variant="gold" className="gap-1.5" onClick={handleGeneratePrompt} disabled={!form.productName}><Sparkles className="h-4 w-4" />Generate Prompt</Button>
+                <Button variant="outline" size="sm" className="gap-1.5" asChild><a href="/ai-hub/skills" target="_blank"><Download className="h-3.5 w-3.5" />Download PRD.skill</a></Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="prompt" className="mt-4">
+              <PromptViewer prompt={generatedPrompt} title="Development Blueprint Prompt" downloadFilename={`Blueprint_Prompt_${form.productName.replace(/\s+/g, '_')}.txt`} />
+              {generatedPrompt && (
+                <div className="mt-4 flex items-center gap-3">
+                  <Button variant="outline" size="sm" className="gap-1.5" asChild><a href="/ai-hub/skills" target="_blank"><Download className="h-3.5 w-3.5" />Download PRD.skill</a></Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" asChild><a href="https://claude.ai" target="_blank" rel="noopener"><ExternalLink className="h-3.5 w-3.5" />Open Claude</a></Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button variant="gold" onClick={handleCreate} disabled={generating || !form.productName}>
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : 'Save Blueprint'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete PRD?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. This will permanently delete the PRD record.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete PRD</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+      {/* DETAIL DIALOG */}
+      <Dialog open={!!detailPrd} onOpenChange={open => { if (!open) { setDetailPrd(null); setGeneratedPrompt('') } }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileCode2 className="h-5 w-5 text-violet-400" />{detailPrd?.title}</DialogTitle>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="font-mono text-xs text-violet-400/70">{detailPrd?.docId}</span>
+              <ApprovalBadge status={detailPrd?.approvalStatus || 'draft'} />
+            </div>
+          </DialogHeader>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="requirements">Reqs</TabsTrigger>
+              <TabsTrigger value="prompt">Prompt</TabsTrigger>
+              <TabsTrigger value="documents">Docs</TabsTrigger>
+              <TabsTrigger value="approval" className="hidden sm:block">Approval</TabsTrigger>
+              <TabsTrigger value="activity" className="hidden sm:block">Activity</TabsTrigger>
+              <TabsTrigger value="versions" className="hidden sm:block">Versions</TabsTrigger>
+            </TabsList>
+            <TabsContent value="overview" className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Type</p><p className="text-sm font-bold">{detailPrd?.blueprintDetails?.projectType || 'Web App'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Stack</p><p className="text-sm font-bold truncate">{detailPrd?.stack || 'N/A'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Timeline</p><p className="text-sm font-bold">{detailPrd?.blueprintDetails?.timeline || 'N/A'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Platform</p><p className="text-sm font-bold">{detailPrd?.blueprintDetails?.platform || 'Web'}</p></CardContent></Card>
+              </div>
+              <WorkflowSteps steps={WORKFLOW_STEPS} currentStep={detailPrd?.prompt ? 3 : 1} />
+            </TabsContent>
+            <TabsContent value="requirements" className="mt-4">
+              {detailPrd?.blueprintDetails ? (
+                <div className="space-y-3 text-sm">
+                  {Object.entries(detailPrd.blueprintDetails).filter(([, v]) => v).map(([key, value]) => (
+                    <div key={key} className="flex gap-3 py-2 border-b border-border last:border-0">
+                      <span className="text-xs text-muted-foreground w-32 shrink-0 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                      <span className="text-xs whitespace-pre-wrap">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground py-8 text-center">No detailed requirements stored.</p>}
+            </TabsContent>
+            <TabsContent value="prompt" className="mt-4">
+              <PromptViewer prompt={detailPrd?.prompt || generatedPrompt} title="Blueprint Prompt" downloadFilename={`Blueprint_${detailPrd?.title?.replace(/\s+/g, '_')}.txt`} />
+              {!detailPrd?.prompt && !generatedPrompt && detailPrd?.blueprintDetails && (
+                <Button variant="gold" className="gap-1.5 mt-4" onClick={() => { const prompt = generateBlueprintPrompt(detailPrd.blueprintDetails!); setGeneratedPrompt(prompt) }}>
+                  <Sparkles className="h-4 w-4" />Generate Prompt from Requirements
+                </Button>
+              )}
+            </TabsContent>
+            <TabsContent value="documents" className="mt-4">
+              <div className="text-center py-8">
+                <FileText className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">Upload generated PRD documents</p>
+                <FileUpload accept=".pdf,.doc,.docx" label="Upload Generated PRD" description="Upload the PRD PDF generated by Claude" onFilesSelected={files => { if (files.length > 0) toast({ title: 'Document Uploaded', description: `${files[0].name} attached.` }) }} />
+              </div>
+            </TabsContent>
+            <TabsContent value="approval" className="mt-4">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border">
+                <div><p className="text-sm font-semibold">Approval Status</p><p className="text-xs text-muted-foreground mt-0.5">Current review status</p></div>
+                <ApprovalBadge status={detailPrd?.approvalStatus || 'draft'} size="md" />
+              </div>
+            </TabsContent>
+            <TabsContent value="activity" className="mt-4">
+              <VersionTimeline versions={(detailPrd?.history || []).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: h.canDownload }))} />
+            </TabsContent>
+            <TabsContent value="versions" className="mt-4">
+              <VersionTimeline versions={(detailPrd?.history || []).filter(h => h.canDownload).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: true, canRestore: true }))} />
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editId} onOpenChange={open => !open && setEditId(null)}>
+        <DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Edit Blueprint</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input value={form.productName} onChange={e => setForm({...form, productName: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Tech Stack</Label><Input value={form.techStack} onChange={e => setForm({...form, techStack: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Timeline</Label><Input value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button><Button variant="gold" onClick={async () => {
+            if (!editId) return
+            const target = prds.find(p => p.id === editId)
+            if (!target) return
+            const newHistory = [...target.history, { date: new Date().toISOString().slice(0, 10), action: 'Blueprint Updated', canDownload: true }]
+            const updated = { ...target, title: form.productName, stack: form.techStack, history: newHistory, blueprintDetails: form }
+            if (isSupabaseConfigured()) {
+              const extraJson = JSON.stringify({ techStack: form.techStack, prompt: target.prompt, approvalStatus: target.approvalStatus, blueprintDetails: form })
+              await supabase.from('prds').update({ title: form.productName, stack: extraJson, history: newHistory }).eq('id', editId)
+            }
+            const updatedList = prds.map(p => p.id === editId ? updated : p)
+            setPrds(updatedList); setCachedData('prds', updatedList); invalidateCache('dashboard')
+            setEditId(null); toast({ title: 'Blueprint Updated' })
+          }}>Save Changes</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Blueprint?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   )

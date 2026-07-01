@@ -8,7 +8,8 @@ import { useUser } from '@/components/user-provider'
 import {
   LayoutDashboard, Users, Briefcase, FileText, Receipt, ClipboardList, HandshakeIcon,
   FolderOpen, Cpu, TrendingUp, MessageSquare, UserCog, Settings, ChevronLeft,
-  ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar
+  ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar,
+  Sparkles, BookOpen, Brain
 } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -33,11 +34,21 @@ const navItems = [
     ],
   },
   {
+    label: 'AI Hub',
+    items: [
+      { href: '/ai-hub', icon: Zap, label: 'AI Hub Dashboard' },
+      { href: '/ai-hub/skills', icon: Sparkles, label: 'Skills Library' },
+      { href: '/ai-hub/prompts', icon: BookOpen, label: 'Prompt Library' },
+      { href: '/ai-hub/knowledge', icon: FolderOpen, label: 'Knowledge Base' },
+      { href: '/ai-hub/providers', icon: Cpu, label: 'AI Providers' },
+    ],
+  },
+  {
     label: 'Intelligence',
     items: [
-      { href: '/projects', icon: Zap, label: 'Projects' },
-      { href: '/prd', icon: FileCode2, label: 'PRD Engine' },
-      { href: '/marketing', icon: BarChart3, label: 'Marketing Reports' },
+      { href: '/projects', icon: TrendingUp, label: 'Campaign Strategy' },
+      { href: '/prd', icon: FileCode2, label: 'Dev Blueprint' },
+      { href: '/marketing', icon: Brain, label: 'Marketing Intelligence' },
     ],
   },
   {

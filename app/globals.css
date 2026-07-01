@@ -110,4 +110,41 @@
   .status-badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
+  .ai-card {
+    @apply relative overflow-hidden rounded-xl border bg-card transition-all duration-300;
+  }
+  .ai-card:hover {
+    @apply shadow-lg border-gold/20;
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.05);
+  }
+  .ai-card-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .coming-soon-overlay {
+    @apply absolute inset-0 z-10 flex items-center justify-center rounded-xl;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    background: hsla(var(--card), 0.6);
+  }
+  .pulse-dot {
+    @apply relative;
+  }
+  .pulse-dot::after {
+    content: '';
+    @apply absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-gold;
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+  .prompt-container {
+    @apply relative rounded-xl border border-border bg-muted/10 overflow-hidden;
+    background-image: linear-gradient(135deg, transparent 0%, hsla(var(--muted), 0.05) 100%);
+  }
 }
