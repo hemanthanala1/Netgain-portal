@@ -34,6 +34,14 @@ const navItems = [
     ],
   },
   {
+    label: 'Operations',
+    items: [
+      { href: '/finance', icon: DollarSign, label: 'Finance' },
+      { href: '/meetings', icon: Calendar, label: 'Meetings' },
+      { href: '/communications', icon: MessageSquare, label: 'Communications' },
+    ],
+  },
+  {
     label: 'AI Hub',
     items: [
       { href: '/ai-hub', icon: Zap, label: 'AI Hub Dashboard' },
@@ -52,11 +60,8 @@ const navItems = [
     ],
   },
   {
-    label: 'Operations',
+    label: 'Management',
     items: [
-      { href: '/finance', icon: DollarSign, label: 'Finance' },
-      { href: '/meetings', icon: Calendar, label: 'Meetings' },
-      { href: '/communications', icon: MessageSquare, label: 'Communications' },
       { href: '/team', icon: UserCog, label: 'Team' },
       { href: '/settings', icon: Settings, label: 'Settings' },
     ],
