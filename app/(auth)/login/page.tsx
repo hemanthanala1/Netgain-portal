@@ -81,7 +81,22 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email address</Label>
-                <Input id="email" type="email" placeholder="you@netgain.studio" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="you@netgain.studio" 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  autoComplete="email" 
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (!password) {
+                        e.preventDefault()
+                        document.getElementById('password')?.focus()
+                      }
+                    }
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center"><Label htmlFor="password">Password</Label><button type="button" className="text-xs text-gold hover:underline">Forgot password?</button></div>
