@@ -16,6 +16,7 @@ import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
@@ -566,6 +567,19 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Search & Add Service to Scope</Label>
+                  <ServiceAutocomplete
+                    placeholder="Search for a service to add to scope..."
+                    onSelect={(svc) => {
+                      setForm(prev => ({
+                        ...prev,
+                        services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
+                      }))
+                      toast({ title: `${svc.name} added to scope` })
+                    }}
+                  />
+                </div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>
@@ -621,6 +635,19 @@ export default function AgreementsPage() {
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Search & Add Service to Scope</Label>
+                  <ServiceAutocomplete
+                    placeholder="Search for a service to add to scope..."
+                    onSelect={(svc) => {
+                      setForm(prev => ({
+                        ...prev,
+                        services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
+                      }))
+                      toast({ title: `${svc.name} added to scope` })
+                    }}
+                  />
+                </div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
               </div>
             </div>

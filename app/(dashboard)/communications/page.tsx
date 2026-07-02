@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,19 +9,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, MessageSquare, Mail, Phone, Send, Clock, User, Search, History, Edit, Trash2 } from 'lucide-react'
-import { formatDateTime, getInitials } from '@/lib/utils'
+import { Plus, MessageSquare, Mail, Phone, Send, Clock, User, Search, History, Edit, Trash2, Loader2 } from 'lucide-react'
+import { formatDateTime, getInitials, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { useRef } from 'react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { useCRMClients } from '@/hooks/use-crm-clients'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 
 const commHistory = [
-  { id: 'c1', client: 'FashionHub India', channel: 'email', subject: 'Invoice #INV-0891 Payment Reminder', preview: 'Dear Priya, This is a friendly reminder...', sentAt: '2024-06-04T10:30:00', sentBy: 'Devon S.' },
-  { id: 'c2', client: 'Urban Edge Co.', channel: 'whatsapp', subject: 'Quotation Follow-up', preview: 'Hi Aaron! Just checking in on the quotation...', sentAt: '2024-06-03T14:15:00', sentBy: 'Anjali R.' },
-  { id: 'c3', client: 'TechCore Solutions', channel: 'email', subject: 'Project Update — Week 8', preview: 'Hi Ramesh, Here is your weekly project update...', sentAt: '2024-06-02T09:00:00', sentBy: 'Devon S.' },
+  { id: 'c1', client: 'FashionHub India', channel: 'email', subject: 'Invoice #INV-0891 Payment Reminder', preview: 'Dear Priya, This is a friendly reminder...', sentAt: '2024-06-04T10:30:00', sentBy: 'Devon S.', status: 'sent' },
+  { id: 'c2', client: 'Urban Edge Co.', channel: 'whatsapp', subject: 'Quotation Follow-up', preview: 'Hi Aaron! Just checking in on the quotation...', sentAt: '2024-06-03T14:15:00', sentBy: 'Anjali R.', status: 'sent' },
+  { id: 'c3', client: 'TechCore Solutions', channel: 'email', subject: 'Project Update — Week 8', preview: 'Hi Ramesh, Here is your weekly project update...', sentAt: '2024-06-02T09:00:00', sentBy: 'Devon S.', status: 'sent' },
 ]
 
 const initialTemplates = [
@@ -42,7 +42,81 @@ export default function CommunicationsPage() {
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [search, setSearch] = useState('')
   const { toast } = useToast()
-  const [form, setForm] = useState({ client: '', channel: 'email', template: '', subject: '', body: '', attachments: [] as File[] })
+  const [form, setForm] = useState({ client: '', recipient: '', channel: 'email', template: '', subject: '', body: '', attachments: [] as File[] })
+  
+  const [logs, setLogs] = useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    async function fetchLogs() {
+      setLoadingLogs(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase
+            .from('communication_logs')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(100)
+          
+          if (data) {
+            const mapped = data.map((log: any) => {
+              const clientInfo = crmClients.find(c => c.email === log.recipient || c.phone === log.recipient)
+              return {
+                id: log.id,
+                client: clientInfo ? (clientInfo.business || clientInfo.name) : log.recipient,
+                channel: log.channel,
+                subject: log.subject || '',
+                preview: log.message,
+                sentAt: log.timestamp,
+                sentBy: log.provider || 'System',
+                status: log.status
+              }
+            })
+            setLogs(mapped)
+          }
+        } catch (err) {
+          console.error(err)
+        }
+      } else {
+        setLogs(commHistory)
+      }
+      setLoadingLogs(false)
+    }
+    fetchLogs()
+
+    let channel: any = null
+    if (isSupabaseConfigured()) {
+      channel = supabase
+        .channel('comm_logs_realtime_page')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'communication_logs' },
+          (payload: any) => {
+            const newRecord = payload.new
+            if (newRecord) {
+              const clientInfo = crmClients.find(c => c.email === newRecord.recipient || c.phone === newRecord.recipient)
+              const mapped = {
+                id: newRecord.id,
+                client: clientInfo ? (clientInfo.business || clientInfo.name) : newRecord.recipient,
+                channel: newRecord.channel,
+                subject: newRecord.subject || '',
+                preview: newRecord.message,
+                sentAt: newRecord.timestamp,
+                sentBy: newRecord.provider || 'System',
+                status: newRecord.status
+              }
+              setLogs(prev => [mapped, ...prev])
+            }
+          }
+        )
+        .subscribe()
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [crmClients])
   
   function blankTemplate() {
     return { name: '', channel: 'email', subject: '', body: '', attachments: [] as File[] }
@@ -53,11 +127,61 @@ export default function CommunicationsPage() {
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleSend = () => {
-    if (!form.client || !form.body) { toast({ title: 'Fill required fields', variant: 'destructive' }); return }
-    toast({ title: 'Message Queued', description: `${form.channel.toUpperCase()} to ${form.client} is ready to send when connected.` })
-    setShowCompose(false)
-    setForm({ client: '', channel: 'email', template: '', subject: '', body: '', attachments: [] })
+  const handleSend = async () => {
+    if (!form.client || !form.recipient || !form.body) { 
+      toast({ title: 'Fill required fields', variant: 'destructive' })
+      return 
+    }
+    
+    setSending(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const res = await fetch('/api/meetings/send', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          channel: form.channel,
+          recipient: form.recipient,
+          message: form.body,
+          subject: form.channel === 'email' ? form.subject || 'Message from Netgain' : undefined
+        })
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send message')
+      }
+
+      toast({ 
+        title: 'Message Sent Successfully', 
+        description: `${form.channel.toUpperCase()} sent to ${form.recipient}` 
+      })
+      
+      setShowCompose(false)
+      setForm({ client: '', recipient: '', channel: 'email', template: '', subject: '', body: '', attachments: [] })
+    } catch (err: any) {
+      console.error(err)
+      toast({ 
+        title: 'Send Failed', 
+        description: err.message || 'There was an error sending the message.', 
+        variant: 'destructive' 
+      })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleChannelChange = (newChannel: string) => {
+    const clientInfo = crmClients.find(c => c.name === form.client || c.business === form.client)
+    const newRecipient = newChannel === 'email' ? clientInfo?.email : clientInfo?.phone
+    setForm(f => ({ ...f, channel: newChannel, recipient: newRecipient || '' }))
   }
 
   const handleTemplateSelect = (templateId: string) => {
@@ -79,7 +203,7 @@ export default function CommunicationsPage() {
         body = replacer(body)
         subject = replacer(subject)
       }
-      setForm({ ...form, template: templateId, subject, body, attachments: (t as any).attachments || [] })
+      setForm(f => ({ ...f, template: templateId, subject, body, attachments: (t as any).attachments || [] }))
     }
   }
 
@@ -125,8 +249,17 @@ export default function CommunicationsPage() {
 
         <TabsContent value="history" className="space-y-4">
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search communications..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <div className="space-y-3">
-            {commHistory.filter(c => c.client.toLowerCase().includes(search.toLowerCase())).map(c => {
+            {loadingLogs ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-gold" />
+                <p>Loading communication history...</p>
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p>No communications history found</p>
+              </div>
+            ) : logs.filter(c => c.client.toLowerCase().includes(search.toLowerCase()) || c.preview.toLowerCase().includes(search.toLowerCase()) || (c.subject && c.subject.toLowerCase().includes(search.toLowerCase()))).map(c => {
               const Icon = channelIcon[c.channel] || MessageSquare
               const colors = channelColor[c.channel] || ''
               return (
@@ -144,6 +277,12 @@ export default function CommunicationsPage() {
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant={c.channel === 'email' ? 'info' : c.channel === 'whatsapp' ? 'success' : 'secondary'} className="text-[10px]">{c.channel}</Badge>
                           <span className="text-xs text-muted-foreground">by {c.sentBy}</span>
+                          <span className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded font-medium capitalize",
+                            c.status === 'failed' ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          )}>
+                            {c.status || 'sent'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -151,7 +290,6 @@ export default function CommunicationsPage() {
                 </Card>
               )
             })}
-          </div>
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4">
@@ -170,7 +308,12 @@ export default function CommunicationsPage() {
                         {t.subject && <p className="text-xs text-muted-foreground mt-2 truncate">{t.subject}</p>}
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.body.slice(0, 80)}...</p>
                         <div className="flex items-center gap-2 mt-3">
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setForm({ ...form, template: t.id, subject: t.subject, body: t.body, channel: t.channel, attachments: (t as any).attachments || [] }); setShowCompose(true) }}>Use Template</Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+                            const clientInfo = crmClients.find(c => c.name === form.client || c.business === form.client)
+                            const defaultRecipient = t.channel === 'email' ? clientInfo?.email : clientInfo?.phone
+                            setForm(f => ({ ...f, template: t.id, subject: t.subject, body: t.body, channel: t.channel, recipient: defaultRecipient || '', attachments: (t as any).attachments || [] }));
+                            setShowCompose(true)
+                          }}>Use Template</Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setTemplateForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] }); setEditTemplateId(t.id); setShowCreateTemplate(true) }}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
@@ -202,6 +345,7 @@ export default function CommunicationsPage() {
                   onSelect={client => {
                     const clientName = client.name
                     const businessName = client.business || client.name
+                    const defaultRecipient = form.channel === 'email' ? client.email || '' : client.phone || ''
                     
                     let updatedBody = form.body
                     let updatedSubject = form.subject
@@ -223,13 +367,32 @@ export default function CommunicationsPage() {
                     setForm(f => ({
                       ...f,
                       client: businessName,
+                      recipient: defaultRecipient,
                       body: updatedBody,
                       subject: updatedSubject
                     }))
                   }}
                 />
               </div>
-              <div className="space-y-1"><Label>Channel</Label><Select value={form.channel} onValueChange={v => setForm({...form, channel: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="email">Email</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="sms">SMS</SelectItem></SelectContent></Select></div>
+              <div className="space-y-1">
+                <Label>Channel</Label>
+                <Select value={form.channel} onValueChange={handleChannelChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="sms">SMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Recipient *</Label>
+              <Input 
+                placeholder={form.channel === 'email' ? 'email@example.com' : '+91 99999 99999'} 
+                value={form.recipient} 
+                onChange={e => setForm({...form, recipient: e.target.value})} 
+              />
             </div>
             <div className="space-y-1"><Label>Template (optional)</Label><Select value={form.template} onValueChange={handleTemplateSelect}><SelectTrigger><SelectValue placeholder="Choose a template..." /></SelectTrigger><SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
             {form.channel === 'email' && <div className="space-y-1"><Label>Subject</Label><Input placeholder="Email subject..." value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} /></div>}
@@ -241,7 +404,19 @@ export default function CommunicationsPage() {
             </div>
             <p className="text-xs text-muted-foreground">⚡ Live sending will be activated when SMTP / WhatsApp API is configured in Settings.</p>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setShowCompose(false)}>Cancel</Button><Button variant="gold" onClick={handleSend} className="gap-1.5"><Send className="h-3.5 w-3.5" />Queue Message</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompose(false)} disabled={sending}>Cancel</Button>
+            <Button variant="gold" onClick={handleSend} disabled={sending} className="gap-1.5">
+              {sending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Sending...</>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  {form.channel === 'email' ? 'Send Email' : form.channel === 'whatsapp' ? 'Send WhatsApp' : 'Send SMS'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

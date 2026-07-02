@@ -124,6 +124,7 @@ export default function InvoicesPage() {
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+  const [serviceSearch, setServiceSearch] = useState('')
 
   const [form, setForm] = useState(() => blankForm())
 
@@ -804,7 +805,7 @@ export default function InvoicesPage() {
         </div>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blankForm(companyDocs)) }}>
+      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); setServiceSearch(''); if (!v) setForm(blankForm(companyDocs)) }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Invoice</DialogTitle></DialogHeader>
           <div className="space-y-6 py-2">
@@ -846,8 +847,17 @@ export default function InvoicesPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
-              <div className="space-y-2">
-                {servicesData.map(svc => {
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 h-9"
+                  placeholder="Search services..."
+                  value={serviceSearch}
+                  onChange={e => setServiceSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {servicesData.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
                   const sel = form.selectedIds.includes(svc.id)
                   let priceVal = svc.price
                   let isCalculated = false
@@ -1073,7 +1083,7 @@ export default function InvoicesPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editInvoice} onOpenChange={v => { if (!v) { setEditInvoice(null); setForm(blankForm(companyDocs)) } }}>
+      <Dialog open={!!editInvoice} onOpenChange={v => { setServiceSearch(''); if (!v) { setEditInvoice(null); setForm(blankForm(companyDocs)) } }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Invoice — {editInvoice?.docId}</DialogTitle></DialogHeader>
           <div className="space-y-6 py-2">
@@ -1115,8 +1125,17 @@ export default function InvoicesPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
-              <div className="space-y-2">
-                {servicesData.map(svc => {
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 h-9"
+                  placeholder="Search services..."
+                  value={serviceSearch}
+                  onChange={e => setServiceSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {servicesData.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
                   const sel = form.selectedIds.includes(svc.id)
                   let priceVal = svc.price
                   let isCalculated = false

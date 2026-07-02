@@ -50,6 +50,10 @@ export default function CampaignStrategyPage() {
   const [generatedPrompt, setGeneratedPrompt] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [currentStep, setCurrentStep] = useState(0)
+  const [newVersion, setNewVersion] = useState('')
+  const [categories, setCategories] = useState<string[]>(['Digital Marketing', 'E-Commerce', 'SaaS', 'Real Estate', 'Healthcare', 'Education', 'F&B', 'Fashion', 'Technology', 'Professional Services', 'Other'])
+  const [showManageCategories, setShowManageCategories] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
@@ -78,12 +82,57 @@ export default function CampaignStrategyPage() {
             })
             setProjects(mapped); setCachedData('projects', mapped)
           }
+
+          // Fetch custom campaign categories
+          const { data: settings } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (settings?.docs?.campaignCategories) {
+            setCategories(settings.docs.campaignCategories)
+          }
         } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
       setLoading(false)
     }
     loadProjects()
   }, [])
+
+  const saveCategories = async (updatedCats: string[]) => {
+    setCategories(updatedCats)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, campaignCategories: updatedCats }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { campaignCategories: updatedCats } }])
+        }
+      } catch (err) {
+        console.error('Failed to save categories to db:', err)
+      }
+    }
+  }
+
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) return
+    if (categories.includes(newCategoryName.trim())) {
+      toast({ title: 'Category already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...categories, newCategoryName.trim()]
+    saveCategories(updated)
+    setNewCategoryName('')
+    toast({ title: 'Category Added' })
+  }
+
+  const handleDeleteCategory = (catToDelete: string) => {
+    if (catToDelete === 'Other') {
+      toast({ title: 'Cannot delete "Other" category', variant: 'destructive' })
+      return
+    }
+    const updated = categories.filter(c => c !== catToDelete)
+    saveCategories(updated)
+    toast({ title: 'Category Deleted' })
+  }
 
   const filtered = projects.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
 
@@ -159,9 +208,14 @@ export default function CampaignStrategyPage() {
           </div>
           <p className="text-muted-foreground text-sm mt-0.5">Create complete marketing strategies with AI-powered prompt generation</p>
         </div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto">
-          <Plus className="h-4 w-4" />New Strategy
-        </Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5 flex-1 sm:flex-initial">
+            Manage Categories
+          </Button>
+          <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 flex-1 sm:flex-initial">
+            <Plus className="h-4 w-4" />New Strategy
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -229,7 +283,7 @@ export default function CampaignStrategyPage() {
             <TabsContent value="details" className="mt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input placeholder="e.g. FashionHub India" value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
-                <div className="space-y-1"><Label>Business Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Digital Marketing', 'E-Commerce', 'SaaS', 'Real Estate', 'Healthcare', 'Education', 'F&B', 'Fashion', 'Technology', 'Professional Services', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Business Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 ..." value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
                 <div className="space-y-1"><Label>Email</Label><Input placeholder="contact@business.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
@@ -396,7 +450,7 @@ export default function CampaignStrategyPage() {
           <DialogHeader><DialogTitle>Edit Strategy Details</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Digital Marketing', 'E-Commerce', 'SaaS', 'Real Estate', 'Healthcare', 'Education', 'F&B', 'Fashion', 'Technology', 'Professional Services', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1"><Label>Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Monthly Budget (₹)</Label><Input type="number" value={form.monthlyBudget} onChange={e => setForm({...form, monthlyBudget: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
             <div className="space-y-1"><Label>Website</Label><Input value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
@@ -425,6 +479,48 @@ export default function CampaignStrategyPage() {
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Strategy?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+      {/* Manage Categories Dialog */}
+      <Dialog open={showManageCategories} onOpenChange={setShowManageCategories}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Business Categories</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Category Name"
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddCategory}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[300px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Categories</p>
+              {categories.map(cat => (
+                <div key={cat} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm">{cat}</span>
+                  {cat !== 'Other' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-400"
+                      onClick={() => handleDeleteCategory(cat)}
+                      title="Delete Category"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageCategories(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

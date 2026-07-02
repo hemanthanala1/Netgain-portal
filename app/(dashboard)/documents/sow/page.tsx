@@ -16,6 +16,7 @@ import { ShareDialog } from '@/components/ui/share-dialog'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
@@ -554,6 +555,23 @@ export default function SOWPage() {
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Scope Details</p>
               <div className="space-y-3">
                 <div className="space-y-1"><Label>Objectives</Label><Textarea className="h-16 resize-none" placeholder="What will be achieved? What problems are solved?" value={form.objectives} onChange={e => setForm({ ...form, objectives: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Search & Add Service Deliverables</Label>
+                  <ServiceAutocomplete
+                    placeholder="Search for a service to append..."
+                    onSelect={(svc) => {
+                      const bulletPoints = svc.deliverables && Array.isArray(svc.deliverables)
+                        ? svc.deliverables.map((d: string) => `- ${d}`).join('\n')
+                        : ''
+                      const entry = `**${svc.name}**\n${bulletPoints}`
+                      setForm(prev => ({
+                        ...prev,
+                        deliverables: prev.deliverables ? `${prev.deliverables}\n\n${entry}` : entry
+                      }))
+                      toast({ title: `${svc.name} deliverables added` })
+                    }}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Deliverables (one per line)</Label><Textarea className="h-24 resize-none" placeholder="Fully functional Shopify store&#10;Mobile responsive design&#10;Payment gateway integration&#10;Admin dashboard&#10;Training session" value={form.deliverables} onChange={e => setForm({ ...form, deliverables: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Milestones (one per line)</Label><Textarea className="h-20 resize-none" placeholder="Discovery & Kickoff (Week 1)&#10;Design Mockups (Week 2-3)&#10;Development (Week 4-7)&#10;Testing & Launch (Week 8)" value={form.milestones} onChange={e => setForm({ ...form, milestones: e.target.value })} /></div>
               </div>

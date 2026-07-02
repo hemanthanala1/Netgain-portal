@@ -124,82 +124,94 @@ interface FormBodyProps {
   paymentSchedules: any[]
 }
 
-const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc, paymentSchedules }: FormBodyProps) => (
-  <div className="space-y-6 py-2">
-    <div>
-      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Project Details</p>
-      <Input placeholder="Project / Quotation Title (e.g. Digital Growth Package Q3 2024)" value={form.projectTitle} onChange={e => setForm({ ...form, projectTitle: e.target.value })} />
-    </div>
-    <div>
-      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label>Company Name *</Label>
-          <ClientAutocomplete
-            placeholder="e.g. Urban Edge Co."
-            value={form.client}
-            onChange={v => setForm({ ...form, client: v })}
-            onSelect={client => setForm({
-              ...form,
-              client: client.business || client.name,
-              contact: client.name,
-              email: client.email || '',
-              phone: client.phone || '',
-              businessType: client.type || form.businessType,
-              industry: client.type || form.industry,
-              gst: client.gst || form.gst
-            })}
+const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc, paymentSchedules }: FormBodyProps) => {
+  const [serviceSearch, setServiceSearch] = useState('')
+
+  return (
+    <div className="space-y-6 py-2">
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Project Details</p>
+        <Input placeholder="Project / Quotation Title (e.g. Digital Growth Package Q3 2024)" value={form.projectTitle} onChange={e => setForm({ ...form, projectTitle: e.target.value })} />
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Company Name *</Label>
+            <ClientAutocomplete
+              placeholder="e.g. Urban Edge Co."
+              value={form.client}
+              onChange={v => setForm({ ...form, client: v })}
+              onSelect={client => setForm({
+                ...form,
+                client: client.business || client.name,
+                contact: client.name,
+                email: client.email || '',
+                phone: client.phone || '',
+                businessType: client.type || form.businessType,
+                industry: client.type || form.industry,
+                gst: client.gst || form.gst
+              })}
+            />
+          </div>
+          <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+          <div className="space-y-1"><Label>Business Type</Label>
+            <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Retail / Offline','Service Business','Healthcare','Education','Real Estate','Manufacturing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1"><Label>Industry</Label><Input placeholder="e.g. Fashion, Tech, Food" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} /></div>
+          <div className="col-span-1 sm:col-span-2 space-y-1"><Label>GST Number (optional)</Label><Input placeholder="29AABCN1234D1Z1" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Select Services ({selSvcs.length} selected)</p>
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9 h-9"
+            placeholder="Search services..."
+            value={serviceSearch}
+            onChange={e => setServiceSearch(e.target.value)}
           />
         </div>
-        <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
-        <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-        <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-        <div className="space-y-1"><Label>Business Type</Label>
-          <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Retail / Offline','Service Business','Healthcare','Education','Real Estate','Manufacturing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1"><Label>Industry</Label><Input placeholder="e.g. Fashion, Tech, Food" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} /></div>
-        <div className="col-span-1 sm:col-span-2 space-y-1"><Label>GST Number (optional)</Label><Input placeholder="29AABCN1234D1Z1" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-      </div>
-    </div>
-    <div>
-      <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Select Services ({selSvcs.length} selected)</p>
-      <div className="space-y-2">
-        {allSvcs.map(svc => {
-          const sel = form.selectedIds.includes(svc.id)
-          let priceVal = svc.price
-          let isCalculated = false
-          if (svc.catId === '3') {
-            priceVal = form.adBudgetOverride 
-              ? (form.adBudgetFixed || 0) 
-              : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
-            isCalculated = true
-          }
-          const priceStr = isCalculated 
-            ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
-            : (svc.priceMin && svc.priceMax
-                ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                : formatCurrency(svc.price))
-          return (
-            <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-              <div className="flex items-center gap-3">
-                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                  {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+          {allSvcs.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
+            const sel = form.selectedIds.includes(svc.id)
+            let priceVal = svc.price
+            let isCalculated = false
+            if (svc.catId === '3') {
+              priceVal = form.adBudgetOverride 
+                ? (form.adBudgetFixed || 0) 
+                : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+              isCalculated = true
+            }
+            const priceStr = isCalculated 
+              ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
+              : (svc.priceMin && svc.priceMax
+                  ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
+                  : formatCurrency(svc.price))
+            return (
+              <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
+                    {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
+                  </div>
+                  <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
                 </div>
-                <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
-              </div>
-              <div className="text-right shrink-0 ml-4">
-                <span className="text-sm font-bold text-gold">{priceStr}</span>
-                {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
-                {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
-              </div>
-            </button>
-          )
-        })}
+                <div className="text-right shrink-0 ml-4">
+                  <span className="text-sm font-bold text-gold">{priceStr}</span>
+                  {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
+                  {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
-    </div>
 
     {selSvcs.some(s => s.catId === '3') && (
       <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
@@ -327,13 +339,13 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         onChange={e => setForm({ ...form, customTerms: e.target.value })}
       />
     </div>
-
     <div className="space-y-1">
       <Label>Additional Notes</Label>
       <Textarea className="resize-none h-16" placeholder="Special terms, conditions, custom requirements..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
     </div>
   </div>
-)
+  )
+}
 
 export default function QuotationsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])

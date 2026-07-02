@@ -47,6 +47,12 @@ export default function BlueprintEnginePage() {
   const [currentStep, setCurrentStep] = useState(0)
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
+  const [projectTypes, setProjectTypes] = useState<string[]>(['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard', 'CRM', 'ERP'])
+  const [platforms, setPlatforms] = useState<string[]>(['Web', 'iOS', 'Android', 'Cross-Platform', 'Desktop', 'API Only'])
+  const [showManageTypes, setShowManageTypes] = useState(false)
+  const [showManagePlatforms, setShowManagePlatforms] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const [newPlatformName, setNewPlatformName] = useState('')
 
   const emptyForm: BlueprintForm = {
     productName: '', projectType: 'Web App', targetUsers: '', objectives: '', features: '',
@@ -78,12 +84,99 @@ export default function BlueprintEnginePage() {
             })
             setPrds(mapped); setCachedData('prds', mapped)
           }
+
+          // Fetch custom project types and platforms
+          const { data: settings } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (settings?.docs?.prdProjectTypes) {
+            setProjectTypes(settings.docs.prdProjectTypes)
+          }
+          if (settings?.docs?.prdPlatforms) {
+            setPlatforms(settings.docs.prdPlatforms)
+          }
         } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
       setLoading(false)
     }
     load()
   }, [])
+
+  const saveProjectTypes = async (updatedTypes: string[]) => {
+    setProjectTypes(updatedTypes)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, prdProjectTypes: updatedTypes }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { prdProjectTypes: updatedTypes } }])
+        }
+      } catch (err) {
+        console.error('Failed to save project types to db:', err)
+      }
+    }
+  }
+
+  const handleAddProjectType = () => {
+    if (!newTypeName.trim()) return
+    if (projectTypes.includes(newTypeName.trim())) {
+      toast({ title: 'Project type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...projectTypes, newTypeName.trim()]
+    saveProjectTypes(updated)
+    setNewTypeName('')
+    toast({ title: 'Project Type Added' })
+  }
+
+  const handleDeleteProjectType = (typeToDelete: string) => {
+    if (typeToDelete === 'Web App') {
+      toast({ title: 'Cannot delete default "Web App" type', variant: 'destructive' })
+      return
+    }
+    const updated = projectTypes.filter(t => t !== typeToDelete)
+    saveProjectTypes(updated)
+    toast({ title: 'Project Type Deleted' })
+  }
+
+  const savePlatforms = async (updatedPlatforms: string[]) => {
+    setPlatforms(updatedPlatforms)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, prdPlatforms: updatedPlatforms }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { prdPlatforms: updatedPlatforms } }])
+        }
+      } catch (err) {
+        console.error('Failed to save platforms to db:', err)
+      }
+    }
+  }
+
+  const handleAddPlatform = () => {
+    if (!newPlatformName.trim()) return
+    if (platforms.includes(newPlatformName.trim())) {
+      toast({ title: 'Platform already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...platforms, newPlatformName.trim()]
+    savePlatforms(updated)
+    setNewPlatformName('')
+    toast({ title: 'Platform Added' })
+  }
+
+  const handleDeletePlatform = (platformToDelete: string) => {
+    if (platformToDelete === 'Web') {
+      toast({ title: 'Cannot delete default "Web" platform', variant: 'destructive' })
+      return
+    }
+    const updated = platforms.filter(p => p !== platformToDelete)
+    savePlatforms(updated)
+    toast({ title: 'Platform Deleted' })
+  }
 
   const filtered = prds.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
 
@@ -154,9 +247,17 @@ export default function BlueprintEnginePage() {
           </div>
           <p className="text-muted-foreground text-sm mt-0.5">Generate comprehensive Product Requirement Documents with AI-powered prompts</p>
         </div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto">
-          <Plus className="h-4 w-4" />New Blueprint
-        </Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 flex-1 sm:flex-initial">
+            Manage Project Types
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowManagePlatforms(true)} className="gap-1.5 flex-1 sm:flex-initial">
+            Manage Platforms
+          </Button>
+          <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 flex-1 sm:flex-initial">
+            <Plus className="h-4 w-4" />New Blueprint
+          </Button>
+        </div>
       </div>
 
       {/* Feature Cards */}
@@ -211,8 +312,8 @@ export default function BlueprintEnginePage() {
             <TabsContent value="requirements" className="mt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Product Name *</Label><Input placeholder="e.g. TechCore SaaS Dashboard 2.0" value={form.productName} onChange={e => setForm({...form, productName: e.target.value})} /></div>
-                <div className="space-y-1"><Label>Project Type</Label><Select value={form.projectType} onValueChange={v => setForm({...form, projectType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web App', 'Mobile App', 'SaaS Platform', 'API Service', 'E-Commerce', 'Dashboard', 'CRM', 'ERP'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1"><Label>Platform</Label><Select value={form.platform} onValueChange={v => setForm({...form, platform: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Web', 'iOS', 'Android', 'Cross-Platform', 'Desktop', 'API Only'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Project Type</Label><Select value={form.projectType} onValueChange={v => setForm({...form, projectType: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{projectTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Platform</Label><Select value={form.platform} onValueChange={v => setForm({...form, platform: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{platforms.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
                 <div className="space-y-1"><Label>Budget (₹)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Target Users</Label><Textarea className="h-16 resize-none" placeholder="Who will use this product?" value={form.targetUsers} onChange={e => setForm({...form, targetUsers: e.target.value})} /></div>
@@ -361,6 +462,91 @@ export default function BlueprintEnginePage() {
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Blueprint?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+      {/* Manage Project Types Dialog */}
+      <Dialog open={showManageTypes} onOpenChange={setShowManageTypes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Project Types</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Project Type"
+                value={newTypeName}
+                onChange={e => setNewTypeName(e.target.value)}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddProjectType}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[250px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Types</p>
+              {projectTypes.map(type => (
+                <div key={type} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm">{type}</span>
+                  {type !== 'Web App' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-400"
+                      onClick={() => handleDeleteProjectType(type)}
+                      title="Delete Project Type"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageTypes(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Platforms Dialog */}
+      <Dialog open={showManagePlatforms} onOpenChange={setShowManagePlatforms}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Platforms</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Platform"
+                value={newPlatformName}
+                onChange={e => setNewPlatformName(e.target.value)}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddPlatform}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[250px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Platforms</p>
+              {platforms.map(platform => (
+                <div key={platform} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm">{platform}</span>
+                  {platform !== 'Web' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-400"
+                      onClick={() => handleDeletePlatform(platform)}
+                      title="Delete Platform"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManagePlatforms(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

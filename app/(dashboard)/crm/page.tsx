@@ -45,13 +45,17 @@ export default function CRMPage() {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const { toast } = useToast()
 
+  const [industryTypes, setIndustryTypes] = useState<string[]>(['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'])
+  const [showManageIndustries, setShowManageIndustries] = useState(false)
+  const [newIndustryInput, setNewIndustryInput] = useState('')
+
   const [newClient, setNewClient] = useState({
     name: '', business: '', type: 'E-Commerce', email: '', phone: '',
     status: 'new', gst: '', address: '', website: '', city: ''
   })
 
   useEffect(() => {
-    const cached = getCachedData<any[]>('crm_clients')
+    const cached = getCachedData<any[]>( 'crm_clients')
     if (cached) {
       setClients(cached)
       setLoading(false)
@@ -83,6 +87,12 @@ export default function CRMPage() {
             setClients(mapped)
             setCachedData('crm_clients', mapped)
           }
+
+          // Fetch Custom Industry Types
+          const { data: cData } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (cData && cData.docs && cData.docs.industryTypes && Array.isArray(cData.docs.industryTypes)) {
+            setIndustryTypes(cData.docs.industryTypes)
+          }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
@@ -94,6 +104,49 @@ export default function CRMPage() {
     }
     fetchClients()
   }, [])
+
+  const handleAddIndustry = async () => {
+    if (!newIndustryInput.trim()) return
+    const cleanedInput = newIndustryInput.trim()
+    if (industryTypes.includes(cleanedInput)) {
+      toast({ title: 'Industry type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...industryTypes, cleanedInput]
+    setIndustryTypes(updated)
+    setNewIndustryInput('')
+    
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...(exist.docs || {}), industryTypes: updated }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    toast({ title: 'Industry type added' })
+  }
+
+  const handleDeleteIndustry = async (typeToDelete: string) => {
+    const updated = industryTypes.filter(t => t !== typeToDelete)
+    setIndustryTypes(updated)
+    
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...(exist.docs || {}), industryTypes: updated }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    toast({ title: 'Industry type removed' })
+  }
 
 
   const filtered = clients.filter(c => {
@@ -243,9 +296,14 @@ export default function CRMPage() {
           <h1 className="text-2xl font-bold tracking-tight">Client Relationship Manager</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Manage leads, clients, and relationship pipeline.</p>
         </div>
-        <Button variant="gold" size="sm" onClick={() => setShowAdd(true)} className="gap-1.5 self-start sm:self-auto">
-          <Plus className="h-4 w-4" /> Add Client
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button variant="outline" size="sm" onClick={() => setShowManageIndustries(true)} className="gap-1.5">
+            Manage Industry Types
+          </Button>
+          <Button variant="gold" size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" /> Add Client
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -364,10 +422,18 @@ export default function CRMPage() {
             <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} /></div>
             <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} /></div>
             <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} /></div>
-            <div className="space-y-1"><Label>Industry Type</Label>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label>Industry Type</Label>
+                <button type="button" onClick={() => setShowManageIndustries(true)} className="text-[10px] text-gold hover:underline">
+                  + Add/Manage
+                </button>
+              </div>
               <Select value={newClient.type} onValueChange={v => setNewClient({ ...newClient, type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {industryTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
@@ -408,10 +474,18 @@ export default function CRMPage() {
               <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
               <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={editClient.phone} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} /></div>
               <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={editClient.city} onChange={e => setEditClient({ ...editClient, city: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Industry Type</Label>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label>Industry Type</Label>
+                  <button type="button" onClick={() => setShowManageIndustries(true)} className="text-[10px] text-gold hover:underline">
+                    + Add/Manage
+                  </button>
+                </div>
                 <Select value={editClient.type} onValueChange={v => setEditClient({ ...editClient, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {industryTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -455,6 +529,52 @@ export default function CRMPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Manage Industry Types Dialog */}
+      <Dialog open={showManageIndustries} onOpenChange={setShowManageIndustries}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Industry Types</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New industry type (e.g. Fintech)..."
+                value={newIndustryInput}
+                onChange={e => setNewIndustryInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddIndustry()
+                  }
+                }}
+              />
+              <Button variant="gold" onClick={handleAddIndustry}>
+                Add
+              </Button>
+            </div>
+            
+            <div className="border rounded-lg p-1 max-h-[250px] overflow-y-auto divide-y divide-border">
+              {industryTypes.map(t => (
+                <div key={t} className="flex items-center justify-between p-2 text-sm">
+                  <span>{t}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-muted-foreground hover:text-red-400"
+                    onClick={() => handleDeleteIndustry(t)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="gold" className="w-full" onClick={() => setShowManageIndustries(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

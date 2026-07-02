@@ -31,6 +31,9 @@ export default function PromptLibraryPage() {
   const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [categories, setCategories] = useState<string[]>(['Marketing', 'PRD', 'SEO', 'Proposal', 'Sales', 'Website Audit', 'AI Automation', 'Custom'])
+  const [showManageCategories, setShowManageCategories] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
   const { toast } = useToast()
   const { user } = useUser()
   const isFounder = user?.role === 'Founder' || user?.role === 'Admin'
@@ -47,12 +50,57 @@ export default function PromptLibraryPage() {
         try {
           const { data, error } = await supabase.from('ai_prompts').select('*').eq('status', 'active').order('created_at', { ascending: false })
           if (!error && data) { setPrompts(data as Prompt[]); setCachedData('ai_prompts', data) }
+
+          // Fetch custom categories
+          const { data: settings } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (settings?.docs?.promptCategories) {
+            setCategories(settings.docs.promptCategories)
+          }
         } catch { /* tables may not exist */ }
       }
       setLoading(false)
     }
     load()
   }, [])
+
+  const saveCategories = async (updatedCats: string[]) => {
+    setCategories(updatedCats)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, promptCategories: updatedCats }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { promptCategories: updatedCats } }])
+        }
+      } catch (err) {
+        console.error('Failed to save categories to db:', err)
+      }
+    }
+  }
+
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) return
+    if (categories.includes(newCategoryName.trim())) {
+      toast({ title: 'Category already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...categories, newCategoryName.trim()]
+    saveCategories(updated)
+    setNewCategoryName('')
+    toast({ title: 'Category Added' })
+  }
+
+  const handleDeleteCategory = (catToDelete: string) => {
+    if (catToDelete === 'Custom') {
+      toast({ title: 'Cannot delete "Custom" category', variant: 'destructive' })
+      return
+    }
+    const updated = categories.filter(c => c !== catToDelete)
+    saveCategories(updated)
+    toast({ title: 'Category Deleted' })
+  }
 
   const filtered = prompts.filter(p => {
     const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.description?.toLowerCase().includes(search.toLowerCase())
@@ -130,9 +178,14 @@ export default function PromptLibraryPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Reusable AI prompts across all categories</p>
         </div>
         {isFounder && (
-          <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto">
-            <Plus className="h-4 w-4" />Create Prompt
-          </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5 flex-1 sm:flex-initial">
+              Manage Categories
+            </Button>
+            <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 flex-1 sm:flex-initial">
+              <Plus className="h-4 w-4" />Create Prompt
+            </Button>
+          </div>
         )}
       </div>
 
@@ -141,7 +194,7 @@ export default function PromptLibraryPage() {
         <button onClick={() => setCategoryFilter('all')} className={`text-xs px-3 py-1.5 rounded-full border transition-all ${categoryFilter === 'all' ? 'bg-gold/10 text-gold border-gold/30' : 'border-border text-muted-foreground hover:border-gold/20'}`}>
           All ({prompts.length})
         </button>
-        {PROMPT_CATEGORIES.map(cat => {
+        {categories.map(cat => {
           const count = prompts.filter(p => p.category === cat).length
           return (
             <button key={cat} onClick={() => setCategoryFilter(cat)} className={`text-xs px-3 py-1.5 rounded-full border transition-all ${categoryFilter === cat ? 'bg-gold/10 text-gold border-gold/30' : 'border-border text-muted-foreground hover:border-gold/20'}`}>
@@ -237,7 +290,7 @@ export default function PromptLibraryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Prompt Title *</Label><Input placeholder="e.g. Marketing Strategy Generator" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Description</Label><Input placeholder="Brief description of what this prompt does" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PROMPT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Tags (comma separated)</Label><Input placeholder="marketing, strategy, seo" value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} /></div>
             </div>
             <div className="space-y-1">
@@ -257,7 +310,7 @@ export default function PromptLibraryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Prompt Title *</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Description</Label><Input value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PROMPT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Tags</Label><Input value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} /></div>
             </div>
             <div className="space-y-1">
@@ -301,6 +354,48 @@ export default function PromptLibraryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Manage Categories Dialog */}
+      <Dialog open={showManageCategories} onOpenChange={setShowManageCategories}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Prompt Categories</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Category Name"
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddCategory}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[300px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Categories</p>
+              {categories.map(cat => (
+                <div key={cat} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm">{cat}</span>
+                  {cat !== 'Custom' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-400"
+                      onClick={() => handleDeleteCategory(cat)}
+                      title="Delete Category"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageCategories(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

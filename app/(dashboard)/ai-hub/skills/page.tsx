@@ -33,7 +33,12 @@ export default function SkillsLibraryPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [historySkill, setHistorySkill] = useState<Skill | null>(null)
   const [versions, setVersions] = useState<SkillVersion[]>([])
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+  const [newVersion, setNewVersion] = useState('')
+  const [editReleaseNotes, setEditReleaseNotes] = useState('')
+  const [categories, setCategories] = useState<string[]>(['Marketing', 'PRD', 'SEO', 'Proposal', 'Sales', 'Website Audit', 'AI Automation', 'Custom'])
+  const [showManageCategories, setShowManageCategories] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
   const { toast } = useToast()
   const { user } = useUser()
   const isFounder = user?.role === 'Founder' || user?.role === 'Admin'
@@ -56,6 +61,12 @@ export default function SkillsLibraryPage() {
             setSkills(data as Skill[])
             setCachedData('ai_skills', data)
           }
+
+          // Fetch custom categories
+          const { data: settings } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          if (settings?.docs?.skillCategories) {
+            setCategories(settings.docs.skillCategories)
+          }
         } catch { /* tables may not exist */ }
       }
       setLoading(false)
@@ -63,54 +74,183 @@ export default function SkillsLibraryPage() {
     load()
   }, [])
 
+  const saveCategories = async (updatedCats: string[]) => {
+    setCategories(updatedCats)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, skillCategories: updatedCats }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { skillCategories: updatedCats } }])
+        }
+      } catch (err) {
+        console.error('Failed to save categories to db:', err)
+      }
+    }
+  }
+
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) return
+    if (categories.includes(newCategoryName.trim())) {
+      toast({ title: 'Category already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...categories, newCategoryName.trim()]
+    saveCategories(updated)
+    setNewCategoryName('')
+    toast({ title: 'Category Added' })
+  }
+
+  const handleDeleteCategory = (catToDelete: string) => {
+    if (catToDelete === 'Custom') {
+      toast({ title: 'Cannot delete "Custom" category', variant: 'destructive' })
+      return
+    }
+    const updated = categories.filter(c => c !== catToDelete)
+    saveCategories(updated)
+    toast({ title: 'Category Deleted' })
+  }
+
   const filtered = skills.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.description?.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = categoryFilter === 'all' || s.category === categoryFilter
     return matchesSearch && matchesCategory
   })
 
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const getNextVersion = (current: string) => {
+    if (!current) return '1.1.0'
+    const parts = current.split('.')
+    if (parts.length === 3) {
+      const major = parseInt(parts[0], 10)
+      const minor = parseInt(parts[1], 10)
+      const patch = parseInt(parts[2], 10)
+      if (!isNaN(minor)) {
+        return `${major}.${minor + 1}.0`
+      }
+    }
+    return current + '.1'
+  }
+
   const handleCreate = async () => {
-    if (!form.name) return
-    const id = `skill-${Date.now()}`
-    const newSkill: Skill = {
-      id,
-      name: form.name,
-      description: form.description,
-      category: form.category as any,
-      current_version: '1.0.0',
-      compatible_ai: form.compatible_ai,
-      compatible_version: form.compatible_version,
-      file_name: uploadedFile?.name || '',
-      file_size: uploadedFile?.size || 0,
-      file_url: '',
-      downloads: 0,
-      status: 'active',
-      created_by: user?.name || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    if (!form.name && uploadedFiles.length === 0) {
+      toast({ title: 'Skill Name or file is required', variant: 'destructive' })
+      return
     }
 
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('ai_skills').insert([newSkill])
-        if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return }
-        // Also create initial version
-        await supabase.from('ai_skill_versions').insert([{
-          id: `sv-${Date.now()}`, skill_id: id, version: '1.0.0',
-          release_notes: form.release_notes || 'Initial release',
-          file_name: uploadedFile?.name || '', file_size: uploadedFile?.size || 0,
-          status: 'active', created_by: user?.name || ''
-        }])
-      } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }); return }
-    }
+    setLoading(true)
+    try {
+      const newSkills: Skill[] = []
+      
+      if (uploadedFiles.length === 0) {
+        const id = `skill-${Date.now()}`
+        const newSkill: Skill = {
+          id,
+          name: form.name,
+          description: form.description,
+          category: form.category as any,
+          current_version: '1.0.0',
+          compatible_ai: form.compatible_ai,
+          compatible_version: form.compatible_version,
+          file_name: '',
+          file_size: 0,
+          file_url: '',
+          downloads: 0,
+          status: 'active',
+          created_by: user?.name || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
 
-    const updated = [newSkill, ...skills]
-    setSkills(updated)
-    setCachedData('ai_skills', updated)
-    setShowCreate(false)
-    setUploadedFile(null)
-    setForm({ name: '', description: '', category: 'Custom', compatible_ai: 'Claude', compatible_version: 'Claude 3.5+', release_notes: '' })
-    toast({ title: 'Skill Published!', description: `${form.name} v1.0.0 is now available.` })
+        if (isSupabaseConfigured()) {
+          const { error } = await supabase.from('ai_skills').insert([newSkill])
+          if (error) throw error
+          
+          await supabase.from('ai_skill_versions').insert([{
+            id: `sv-${Date.now()}`,
+            skill_id: id,
+            version: '1.0.0',
+            release_notes: form.release_notes || 'Initial release',
+            file_name: '',
+            file_size: 0,
+            file_url: '',
+            status: 'active',
+            created_by: user?.name || ''
+          }])
+        }
+        newSkills.push(newSkill)
+      } else {
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const file = uploadedFiles[i]
+          const id = `skill-${Date.now()}-${i}`
+          
+          let fileUrl = ''
+          try {
+            fileUrl = await readFileAsDataURL(file)
+          } catch (err) {
+            console.error('Failed to read file', err)
+          }
+
+          const newSkill: Skill = {
+            id,
+            name: uploadedFiles.length === 1 ? form.name || file.name.replace(/\.skill$/, '') : `${form.name || 'Skill'} - ${file.name.replace(/\.skill$/, '')}`,
+            description: form.description,
+            category: form.category as any,
+            current_version: '1.0.0',
+            compatible_ai: form.compatible_ai,
+            compatible_version: form.compatible_version,
+            file_name: file.name,
+            file_size: file.size,
+            file_url: fileUrl,
+            downloads: 0,
+            status: 'active',
+            created_by: user?.name || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+
+          if (isSupabaseConfigured()) {
+            const { error } = await supabase.from('ai_skills').insert([newSkill])
+            if (error) throw error
+            
+            await supabase.from('ai_skill_versions').insert([{
+              id: `sv-${Date.now()}-${i}`,
+              skill_id: id,
+              version: '1.0.0',
+              release_notes: form.release_notes || 'Initial release',
+              file_name: file.name,
+              file_size: file.size,
+              file_url: fileUrl,
+              status: 'active',
+              created_by: user?.name || ''
+            }])
+          }
+          newSkills.push(newSkill)
+        }
+      }
+
+      const updated = [...newSkills, ...skills]
+      setSkills(updated)
+      setCachedData('ai_skills', updated)
+      setShowCreate(false)
+      setUploadedFiles([])
+      setForm({ name: '', description: '', category: 'Custom', compatible_ai: 'Claude', compatible_version: 'Claude 3.5+', release_notes: '' })
+      toast({ title: `${newSkills.length} skill(s) published successfully!` })
+    } catch (err: any) {
+      toast({ title: 'Publish Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -125,16 +265,36 @@ export default function SkillsLibraryPage() {
     toast({ title: 'Skill Deleted' })
   }
 
-  const handleDownload = (skill: Skill) => {
+  const handleDownload = async (skill: Skill) => {
+    const nextDownloads = (skill.downloads || 0) + 1
     // Increment download count
-    const updated = skills.map(s => s.id === skill.id ? { ...s, downloads: s.downloads + 1 } : s)
+    const updated = skills.map(s => s.id === skill.id ? { ...s, downloads: nextDownloads } : s)
     setSkills(updated)
     setCachedData('ai_skills', updated)
     if (isSupabaseConfigured()) {
-      supabase.from('ai_skills').update({ downloads: skill.downloads + 1 }).eq('id', skill.id)
+      try {
+        await supabase.from('ai_skills').update({ downloads: nextDownloads }).eq('id', skill.id)
+      } catch (err) {
+        console.error('Failed to update downloads count:', err)
+      }
     }
-    // In a real scenario, this would download the actual .skill file from storage
-    toast({ title: 'Download Started', description: `Downloading ${skill.file_name || skill.name + '.skill'}` })
+    
+    // Trigger real download in browser
+    if (skill.file_url) {
+      const link = document.createElement('a')
+      link.href = skill.file_url
+      link.download = skill.file_name || `${skill.name}.skill`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      toast({ title: 'Download Started', description: `Downloading ${skill.file_name || skill.name + '.skill'}` })
+    } else {
+      toast({ 
+        title: 'Download Failed', 
+        description: 'No file associated with this skill.', 
+        variant: 'destructive' 
+      })
+    }
   }
 
   const loadVersions = async (skill: Skill) => {
@@ -167,9 +327,14 @@ export default function SkillsLibraryPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Official Claude Skills for AI-powered document generation</p>
         </div>
         {isFounder && (
-          <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 w-full sm:w-auto">
-            <Plus className="h-4 w-4" />Upload Skill
-          </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5 flex-1 sm:flex-initial">
+              Manage Categories
+            </Button>
+            <Button variant="gold" size="sm" onClick={() => setShowCreate(true)} className="gap-1.5 flex-1 sm:flex-initial">
+              <Plus className="h-4 w-4" />Upload Skill
+            </Button>
+          </div>
         )}
       </div>
 
@@ -186,7 +351,7 @@ export default function SkillsLibraryPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {SKILL_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+            {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -256,7 +421,20 @@ export default function SkillsLibraryPage() {
                   </Button>
                   {isFounder && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => { setForm({ name: skill.name, description: skill.description, category: skill.category, compatible_ai: skill.compatible_ai, compatible_version: skill.compatible_version, release_notes: '' }); setEditSkill(skill) }} title="Edit">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => { 
+                        setForm({ 
+                          name: skill.name, 
+                          description: skill.description || '', 
+                          category: skill.category, 
+                          compatible_ai: skill.compatible_ai || '', 
+                          compatible_version: skill.compatible_version || '', 
+                          release_notes: '' 
+                        }); 
+                        setUploadedFiles([]);
+                        setNewVersion(getNextVersion(skill.current_version));
+                        setEditReleaseNotes('');
+                        setEditSkill(skill); 
+                      }} title="Edit">
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteId(skill.id)} title="Delete">
@@ -279,50 +457,162 @@ export default function SkillsLibraryPage() {
             <div className="space-y-1"><Label>Skill Name *</Label><Input placeholder="e.g. Marketing Strategy Generator" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" placeholder="What does this skill do?" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SKILL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Compatible AI</Label><Input value={form.compatible_ai} onChange={e => setForm({...form, compatible_ai: e.target.value})} /></div>
             </div>
             <div className="space-y-1"><Label>Compatible Version</Label><Input value={form.compatible_version} onChange={e => setForm({...form, compatible_version: e.target.value})} /></div>
             <div className="space-y-1"><Label>Release Notes</Label><Textarea className="h-16 resize-none" placeholder="What's included in this version..." value={form.release_notes} onChange={e => setForm({...form, release_notes: e.target.value})} /></div>
             <FileUpload
               accept=".skill"
-              label="Upload .skill File"
-              description="Drag & drop your Claude Skill file here"
-              onFilesSelected={files => setUploadedFile(files[0] || null)}
+              label="Upload .skill File(s)"
+              description="Drag & drop your Claude Skill file(s) here"
+              multiple={true}
+              onFilesSelected={files => setUploadedFiles(files)}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button variant="gold" onClick={handleCreate} disabled={!form.name}>Publish Skill</Button>
+            <Button variant="gold" onClick={handleCreate} disabled={!form.name && uploadedFiles.length === 0}>Publish Skill</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editSkill} onOpenChange={open => !open && setEditSkill(null)}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>Edit Skill</DialogTitle></DialogHeader>
+      <Dialog open={!!editSkill} onOpenChange={open => { if(!open) { setEditSkill(null); setUploadedFiles([]); } }}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Skill Details</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Skill Name *</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SKILL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Compatible AI</Label><Input value={form.compatible_ai} onChange={e => setForm({...form, compatible_ai: e.target.value})} /></div>
             </div>
+            <div className="space-y-1"><Label>Compatible Version</Label><Input value={form.compatible_version} onChange={e => setForm({...form, compatible_version: e.target.value})} /></div>
+            
+            <div className="border-t border-border pt-3 mt-3">
+              <p className="text-xs font-semibold text-gold mb-2 uppercase tracking-wide">Skill Document File</p>
+              {editSkill?.file_name ? (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Current document: <span className="font-medium text-foreground">{editSkill.file_name}</span> ({formatFileSize(editSkill.file_size)})
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mb-3">No document attached.</p>
+              )}
+              
+              <FileUpload
+                accept=".skill"
+                label="Upload Newer Version Document (.skill)"
+                description="Optional - drag & drop a newer file to update the skill document"
+                onFilesSelected={files => {
+                  setUploadedFiles(files)
+                  if (files[0] && editSkill) {
+                    setNewVersion(getNextVersion(editSkill.current_version))
+                  }
+                }}
+              />
+            </div>
+
+            {uploadedFiles.length > 0 && (
+              <div className="border-t border-border pt-3 space-y-3">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wide">New Version Details</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label>New Version *</Label>
+                    <Input value={newVersion} onChange={e => setNewVersion(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Release Notes</Label>
+                    <Input placeholder="e.g. Added custom tools" value={editReleaseNotes} onChange={e => setEditReleaseNotes(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditSkill(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditSkill(null); setUploadedFiles([]); }}>Cancel</Button>
             <Button variant="gold" onClick={async () => {
               if (!editSkill) return
-              const updated: Skill = { ...editSkill, name: form.name, description: form.description, category: form.category as any, compatible_ai: form.compatible_ai, compatible_version: form.compatible_version, updated_at: new Date().toISOString() }
-              if (isSupabaseConfigured()) {
-                await supabase.from('ai_skills').update({ name: form.name, description: form.description, category: form.category, compatible_ai: form.compatible_ai, compatible_version: form.compatible_version, updated_at: new Date().toISOString() }).eq('id', editSkill.id)
+              
+              let fileUrl = editSkill.file_url
+              let fileName = editSkill.file_name
+              let fileSize = editSkill.file_size
+              let currentVersion = editSkill.current_version
+              const isNewFile = uploadedFiles.length > 0
+
+              if (isNewFile) {
+                try {
+                  fileUrl = await readFileAsDataURL(uploadedFiles[0])
+                  fileName = uploadedFiles[0].name
+                  fileSize = uploadedFiles[0].size
+                  currentVersion = newVersion || getNextVersion(editSkill.current_version)
+                } catch (err) {
+                  console.error('Failed to read file', err)
+                }
               }
+
+              const updated: Skill = { 
+                ...editSkill, 
+                name: form.name, 
+                description: form.description, 
+                category: form.category as any, 
+                compatible_ai: form.compatible_ai, 
+                compatible_version: form.compatible_version,
+                current_version: currentVersion,
+                file_name: fileName,
+                file_size: fileSize,
+                file_url: fileUrl,
+                updated_at: new Date().toISOString() 
+              }
+
+              if (isSupabaseConfigured()) {
+                try {
+                  const { error } = await supabase.from('ai_skills').update({ 
+                    name: form.name, 
+                    description: form.description, 
+                    category: form.category, 
+                    compatible_ai: form.compatible_ai, 
+                    compatible_version: form.compatible_version, 
+                    current_version: currentVersion,
+                    file_name: fileName,
+                    file_size: fileSize,
+                    file_url: fileUrl,
+                    updated_at: new Date().toISOString() 
+                  }).eq('id', editSkill.id)
+
+                  if (error) {
+                    toast({ title: 'Error updating skill', description: error.message, variant: 'destructive' })
+                    return
+                  }
+
+                  if (isNewFile) {
+                    // Create new version in version history
+                    await supabase.from('ai_skill_versions').insert([{
+                      id: `sv-${Date.now()}`,
+                      skill_id: editSkill.id,
+                      version: currentVersion,
+                      release_notes: editReleaseNotes || 'Updated version',
+                      file_name: fileName,
+                      file_size: fileSize,
+                      file_url: fileUrl,
+                      status: 'active',
+                      created_by: user?.name || ''
+                    }])
+                  }
+                } catch (e: any) {
+                  toast({ title: 'Database Error', description: e.message, variant: 'destructive' })
+                  return
+                }
+              }
+
               const updatedList = skills.map(s => s.id === editSkill.id ? updated : s)
               setSkills(updatedList)
               setCachedData('ai_skills', updatedList)
               setEditSkill(null)
-              toast({ title: 'Skill Updated' })
+              setUploadedFiles([])
+              setNewVersion('')
+              setEditReleaseNotes('')
+              toast({ title: 'Skill Updated successfully' })
             }}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
@@ -337,8 +627,25 @@ export default function SkillsLibraryPage() {
           </DialogHeader>
           <div className="py-4 max-h-[50vh] overflow-y-auto">
             <VersionTimeline
-              versions={versions.map(v => ({ version: v.version, date: v.created_at, action: v.release_notes || 'Version released', by: v.created_by, canDownload: true }))}
-              onDownload={() => historySkill && handleDownload(historySkill)}
+              versions={versions.map(v => ({ 
+                version: v.version, 
+                date: v.created_at, 
+                action: v.release_notes || 'Version released', 
+                by: v.created_by, 
+                canDownload: true,
+                meta: v
+              }))}
+              onDownload={(v: any) => {
+                const versionMeta = v.meta
+                if (versionMeta) {
+                  handleDownload({
+                    name: historySkill?.name || 'Skill',
+                    file_name: versionMeta.file_name,
+                    file_url: versionMeta.file_url,
+                    downloads: historySkill?.downloads || 0
+                  } as any)
+                }
+              }}
             />
             {versions.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">No version history available</p>
@@ -360,6 +667,48 @@ export default function SkillsLibraryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Manage Categories Dialog */}
+      <Dialog open={showManageCategories} onOpenChange={setShowManageCategories}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Skill Categories</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Category Name"
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddCategory}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[300px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Categories</p>
+              {categories.map(cat => (
+                <div key={cat} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm">{cat}</span>
+                  {cat !== 'Custom' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-400"
+                      onClick={() => handleDeleteCategory(cat)}
+                      title="Delete Category"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageCategories(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

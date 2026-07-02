@@ -39,6 +39,9 @@ export function FileUpload({
     const updated = multiple ? [...files, ...validFiles] : validFiles.slice(0, 1)
     setFiles(updated)
     onFilesSelected(updated)
+    if (inputRef.current) {
+      inputRef.current.value = ''
+    }
   }, [files, multiple, maxSizeMB, onFilesSelected])
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
