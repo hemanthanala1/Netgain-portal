@@ -16,13 +16,15 @@ import { FileUpload } from '@/components/ui/file-upload'
 import { VersionTimeline } from '@/components/ui/version-timeline'
 import {
   Plus, BarChart3, TrendingUp, Download, Edit, Trash2, Loader2,
-  Search, Sparkles, ExternalLink, Eye, FileText, Upload, Brain
+  Search, Sparkles, ExternalLink, Eye, FileText, Upload, Brain, Globe
 } from 'lucide-react'
 import { formatDate, generateDocId } from '@/lib/utils'
 import { generateMarketingReportPrompt, WORKFLOW_STEPS } from '@/lib/ai-utils'
 import type { MarketingIntelligenceForm } from '@/lib/ai-types'
 import { useToast } from '@/hooks/use-toast'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
@@ -31,9 +33,22 @@ type MarketingReport = {
   id: string; docId: string; client: string; period: string; channels: string[]; status: string; created: string;
   history: { date: string; action: string; canDownload?: boolean }[];
   prompt?: string; approvalStatus?: string; reportDetails?: Partial<MarketingIntelligenceForm>
+  published?: boolean
+  published_by?: string
+  published_at?: string
+  viewed_at?: string
+  downloaded_at?: string
+  signed_at?: string
+  published_version?: number
+  visibility_status?: string
+  ip_address?: string;
+  browser?: string;
+  device?: string;
+  client_id?: string;
 }
 
 export default function MarketingIntelligencePage() {
+  const { user } = useUser()
   const [reports, setReports] = useState<MarketingReport[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -47,6 +62,7 @@ export default function MarketingIntelligencePage() {
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [uploadedDataFiles, setUploadedDataFiles] = useState<File[]>([])
+  const [publishDoc, setPublishDoc] = useState<MarketingReport | null>(null)
 
   const emptyForm: MarketingIntelligenceForm = {
     client: '', period: '', channels: [], uploadedFiles: [],
@@ -74,7 +90,19 @@ export default function MarketingIntelligencePage() {
                 channels: Array.isArray(extra.channels) ? extra.channels : [], status: r.status || 'draft',
                 created: r.created, history: Array.isArray(r.history) ? r.history : [],
                 prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft',
-                reportDetails: extra.reportDetails || undefined
+                reportDetails: extra.reportDetails || undefined,
+                published: r.published || false,
+                published_by: r.published_by || '',
+                published_at: r.published_at || '',
+                viewed_at: r.viewed_at || '',
+                downloaded_at: r.downloaded_at || '',
+                signed_at: r.signed_at || '',
+                published_version: r.published_version || 1,
+                visibility_status: r.visibility_status || 'visible',
+                ip_address: r.ip_address || '',
+                browser: r.browser || '',
+                device: r.device || '',
+                client_id: r.client_id || '',
               }
             })
             setReports(mapped); setCachedData('marketing_reports', mapped)
@@ -135,6 +163,87 @@ export default function MarketingIntelligencePage() {
     setDeleteId(null); toast({ title: 'Report Deleted' })
   }
 
+  async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
+    if (!publishDoc) return
+    const id = publishDoc.id
+    
+    if (user?.role === 'Employee') {
+      throw new Error("Permission Denied: Employees cannot publish documents. Please request publication from a Founder or Admin.")
+    }
+
+    let updates: any = {}
+    let logMessage = ''
+    const nextVer = (publishDoc.published_version || 1) + 1
+
+    if (action === 'publish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published',
+        published_version: 1
+      }
+      logMessage = 'Document published to Client Portal'
+    } else if (action === 'unpublish') {
+      updates = {
+        published: false,
+        published_by: null,
+        published_at: null,
+        status: 'draft'
+      }
+      logMessage = 'Document unpublished from Client Portal'
+    } else if (action === 'hide') {
+      updates = {
+        visibility_status: 'hidden'
+      }
+      logMessage = 'Document hidden from Client Portal'
+    } else if (action === 'show') {
+      updates = {
+        visibility_status: 'visible'
+      }
+      logMessage = 'Document made visible in Client Portal'
+    } else if (action === 'republish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        published_version: nextVer,
+        status: 'published'
+      }
+      logMessage = `Document republished (Version ${nextVer})`
+    } else if (action === 'replace') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published'
+      }
+      logMessage = 'Document replaced with updated version'
+    }
+
+    const updatedHistory = [
+      ...(publishDoc.history || []),
+      { date: new Date().toISOString().split('T')[0], action: logMessage }
+    ]
+    updates.history = updatedHistory
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('marketing_reports')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    }
+
+    const updatedList = reports.map(r => r.id === id ? { ...r, ...updates } : r)
+    setReports(updatedList)
+    setCachedData('marketing_reports', updatedList)
+    invalidateCache('dashboard')
+  }
+
   const openDetail = (r: MarketingReport) => {
     setDetailReport(r)
     if (r.reportDetails) setForm(r.reportDetails as MarketingIntelligenceForm)
@@ -183,6 +292,18 @@ export default function MarketingIntelligencePage() {
               <div className="flex items-start justify-between">
                 <div>
                   <span className="font-mono text-xs text-cyan-400/70">{r.docId}</span>
+                  {r.published ? (
+                    <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                      <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${r.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={r.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                        <Globe className="h-2.5 w-2.5" />
+                        {r.visibility_status === 'hidden' ? 'Hidden' : `V${r.published_version || 1}`}
+                      </span>
+                      {r.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(r.viewed_at)}`}>Viewed</span>}
+                      {r.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(r.downloaded_at)}`}>DL</span>}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                  )}
                   <h3 className="font-semibold text-sm mt-1">{r.client}</h3>
                   <p className="text-xs text-muted-foreground">Period: {r.period}</p>
                   <div className="flex gap-1 mt-2 flex-wrap">
@@ -193,6 +314,9 @@ export default function MarketingIntelligencePage() {
                   <ApprovalBadge status={r.approvalStatus || 'draft'} />
                   <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(r)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className={`h-7 w-7 ${r.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(r)}>
+                      <Globe className="h-3.5 w-3.5" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (r.reportDetails) setForm(r.reportDetails as MarketingIntelligenceForm); else setForm({...emptyForm, client: r.client, period: r.period, channels: r.channels}); setEditId(r.id) }}><Edit className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
@@ -376,6 +500,17 @@ export default function MarketingIntelligencePage() {
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Report?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+
+      <PublishDialog
+        open={!!publishDoc}
+        onOpenChange={(open) => !open && setPublishDoc(null)}
+        docTitle={publishDoc?.client ? `Marketing Report — ${publishDoc?.client}` : publishDoc?.docId || ''}
+        docId={publishDoc?.docId || ''}
+        isPublished={!!publishDoc?.published}
+        visibilityStatus={publishDoc?.visibility_status || 'visible'}
+        currentVersion={publishDoc?.published_version || 1}
+        onAction={handlePublishAction}
+      />
     </div>
   )
 }

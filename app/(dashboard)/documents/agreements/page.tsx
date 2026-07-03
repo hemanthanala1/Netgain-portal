@@ -9,28 +9,40 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History } from 'lucide-react'
+import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
-
-
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
-const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
+const STATUS_OPTS = ['draft', 'sent', 'signed', 'completed', 'expired']
 
 type Agreement = {
   id: string; docId: string; client: string; contact: string; phone: string; email: string
   type: string; value: number; duration: string; services: string
-  ip: string; cancellation: string; jurisdiction: string
+  ip: string; cancellation: string; jurisdiction: string;
   status: string; created: string
   history: { date: string; action: string; canDownload?: boolean }[]
   customTerms?: string;
+  published?: boolean
+  published_by?: string
+  published_at?: string
+  viewed_at?: string
+  downloaded_at?: string
+  signed_at?: string
+  published_version?: number
+  visibility_status?: string
+  ip_address?: string;
+  browser?: string;
+  device?: string;
+  client_id?: string;
 }
 
 const INITIAL: Agreement[] = []
@@ -63,6 +75,7 @@ function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 
 }
 
 export default function AgreementsPage() {
+  const { user } = useUser()
   const [agreements, setAgreements] = useState<Agreement[]>([])
   const [sourceDocs, setSourceDocs] = useState<any[]>([])
   const [servicesMap, setServicesMap] = useState<Record<string, any>>({})
@@ -76,6 +89,7 @@ export default function AgreementsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Agreement | null>(null)
+  const [publishDoc, setPublishDoc] = useState<Agreement | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
@@ -182,9 +196,21 @@ export default function AgreementsPage() {
               cancellation: a.cancellation || '',
               jurisdiction: a.jurisdiction || '',
               status: a.status || 'draft',
-              created: a.created,
               history: Array.isArray(a.history) ? a.history : [],
               customTerms: a.custom_terms || '',
+              created: a.created || a.created_at || '',
+              published: a.published || false,
+              published_by: a.published_by || '',
+              published_at: a.published_at || '',
+              viewed_at: a.viewed_at || '',
+              downloaded_at: a.downloaded_at || '',
+              signed_at: a.signed_at || '',
+              published_version: a.published_version || 1,
+              visibility_status: a.visibility_status || 'visible',
+              ip_address: a.ip_address || '',
+              browser: a.browser || '',
+              device: a.device || '',
+              client_id: a.client_id || '',
             }))
             setAgreements(mappedAgreements)
           }
@@ -452,7 +478,88 @@ export default function AgreementsPage() {
 
     const updatedList = agreements.map(a => a.id === id ? { ...a, status, history: targetHistory } : a)
     setAgreements(updatedList)
-    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap })
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
+    invalidateCache('dashboard')
+  }
+
+  async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
+    if (!publishDoc) return
+    const id = publishDoc.id
+    
+    if (user?.role === 'Employee') {
+      throw new Error("Permission Denied: Employees cannot publish documents. Please request publication from a Founder or Admin.")
+    }
+
+    let updates: any = {}
+    let logMessage = ''
+    const nextVer = (publishDoc.published_version || 1) + 1
+
+    if (action === 'publish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published',
+        published_version: 1
+      }
+      logMessage = 'Document published to Client Portal'
+    } else if (action === 'unpublish') {
+      updates = {
+        published: false,
+        published_by: null,
+        published_at: null,
+        status: 'signed'
+      }
+      logMessage = 'Document unpublished from Client Portal'
+    } else if (action === 'hide') {
+      updates = {
+        visibility_status: 'hidden'
+      }
+      logMessage = 'Document hidden from Client Portal'
+    } else if (action === 'show') {
+      updates = {
+        visibility_status: 'visible'
+      }
+      logMessage = 'Document made visible in Client Portal'
+    } else if (action === 'republish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        published_version: nextVer,
+        status: 'published'
+      }
+      logMessage = `Document republished (Version ${nextVer})`
+    } else if (action === 'replace') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published'
+      }
+      logMessage = 'Document replaced with updated version'
+    }
+
+    const updatedHistory = [
+      ...(publishDoc.history || []),
+      { date: new Date().toISOString().split('T')[0], action: logMessage }
+    ]
+    updates.history = updatedHistory
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('agreements')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    }
+
+    const updatedList = agreements.map(a => a.id === id ? { ...a, ...updates } : a)
+    setAgreements(updatedList)
+    setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
     invalidateCache('dashboard')
   }
 
@@ -481,7 +588,22 @@ export default function AgreementsPage() {
               {agreements.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><HandshakeIcon className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No agreements yet</p></td></tr>}
               {agreements.filter(a => a.client.toLowerCase().includes(search.toLowerCase())).map(a => (
                 <tr key={a.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4 font-mono text-xs text-gold">{a.docId}</td>
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-xs text-gold">{a.docId}</span>
+                    {a.published ? (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${a.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={a.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                          <Globe className="h-2.5 w-2.5" />
+                          {a.visibility_status === 'hidden' ? 'Hidden' : `V${a.published_version || 1}`}
+                        </span>
+                        {a.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(a.viewed_at)}`}>Viewed</span>}
+                        {a.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(a.downloaded_at)}`}>DL</span>}
+                        {a.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(a.signed_at)}`}>Signed</span>}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                    )}
+                  </td>
                   <td className="py-3 px-4"><p className="font-medium">{a.client}</p><p className="text-xs text-muted-foreground">{a.contact}</p></td>
                   <td className="py-3 px-4 text-xs text-muted-foreground">{a.type}</td>
                   <td className="py-3 px-4 font-semibold text-gold">{a.value > 0 ? formatCurrency(a.value) : '—'}</td>
@@ -500,6 +622,9 @@ export default function AgreementsPage() {
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs) }}>
                         <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
+                        <Globe className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}>
                         <Send className="h-3.5 w-3.5" />
@@ -797,6 +922,17 @@ export default function AgreementsPage() {
 
           updateStatus(shareDoc.id, 'sent')
         }}
+      />
+
+      <PublishDialog
+        open={!!publishDoc}
+        onOpenChange={(open) => !open && setPublishDoc(null)}
+        docTitle={publishDoc?.type || publishDoc?.docId || ''}
+        docId={publishDoc?.docId || ''}
+        isPublished={!!publishDoc?.published}
+        visibilityStatus={publishDoc?.visibility_status || 'visible'}
+        currentVersion={publishDoc?.published_version || 1}
+        onAction={handlePublishAction}
       />
     </div>
   )

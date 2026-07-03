@@ -8,23 +8,42 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Download, Pencil, Trash2, Loader2, Send, History } from 'lucide-react'
+import { Search, Plus, Download, Pencil, Trash2, Loader2, Send, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId, getDocStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
-
-
-type SOW = { id: string; docId: string; client: string; contact: string; phone: string; email: string; project: string; value: number; timeline: string; objectives: string; deliverables: string; milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string; status: string; created: string; history: { date: string; action: string; canDownload?: boolean }[]; customTerms?: string }
+type SOW = { 
+  id: string; docId: string; client: string; contact: string; phone: string; email: string
+  project: string; value: number; timeline: string; objectives: string; deliverables: string
+  milestones: string; payment: string; exclusions: string; revisions: string; jurisdiction: string
+  status: string; created: string
+  history: { date: string; action: string; canDownload?: boolean }[]
+  customTerms?: string
+  published?: boolean
+  published_by?: string
+  published_at?: string
+  viewed_at?: string
+  downloaded_at?: string
+  signed_at?: string
+  published_version?: number
+  visibility_status?: string
+  ip_address?: string;
+  browser?: string;
+  device?: string;
+  client_id?: string;
+}
 
 const mockSOWs: SOW[] = []
-const STATUS_OPTS = ['draft', 'sent', 'signed', 'expired']
+const STATUS_OPTS = ['draft', 'sent', 'signed', 'completed', 'expired']
 
 function compileDefaultSowTerms(companyDocs?: any) {
   const paymentTermsOneTime = companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
@@ -50,6 +69,7 @@ function getSowTerms(sow: SOW | any, companyDocs?: any) {
 }
 
 export default function SOWPage() {
+  const { user } = useUser()
   const [sows, setSows] = useState<SOW[]>([])
   const [sourceDocs, setSourceDocs] = useState<any[]>([])
   const [servicesMap, setServicesMap] = useState<Record<string, any>>({})
@@ -63,6 +83,7 @@ export default function SOWPage() {
   const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<SOW | null>(null)
+  const [publishDoc, setPublishDoc] = useState<SOW | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
 
   const [form, setForm] = useState({
@@ -195,7 +216,19 @@ export default function SOWPage() {
               status: s.status || 'draft',
               created: s.created,
               history: Array.isArray(s.history) ? s.history : [],
-              customTerms: s.custom_terms || ''
+              customTerms: s.custom_terms || '',
+              published: s.published || false,
+              published_by: s.published_by || '',
+              published_at: s.published_at || '',
+              viewed_at: s.viewed_at || '',
+              downloaded_at: s.downloaded_at || '',
+              signed_at: s.signed_at || '',
+              published_version: s.published_version || 1,
+              visibility_status: s.visibility_status || 'visible',
+              ip_address: s.ip_address || '',
+              browser: s.browser || '',
+              device: s.device || '',
+              client_id: s.client_id || '',
             }))
             setSows(mappedSows)
           }
@@ -332,9 +365,106 @@ export default function SOWPage() {
     if (!targetSow) return
     const newHistory = [...targetSow.history, { date: new Date().toISOString().split('T')[0], action: `Status changed to ${status}` }]
     
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('sows')
+          .update({ status, history: newHistory })
+          .eq('id', id)
+        if (error) {
+          toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        return
+      }
+    }
+
     const updatedList = sows.map(s => s.id === id ? { ...s, status, history: newHistory } : s)
     setSows(updatedList)
-    setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap })
+    setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
+    invalidateCache('dashboard')
+  }
+
+  async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
+    if (!publishDoc) return
+    const id = publishDoc.id
+    
+    if (user?.role === 'Employee') {
+      throw new Error("Permission Denied: Employees cannot publish documents. Please request publication from a Founder or Admin.")
+    }
+
+    let updates: any = {}
+    let logMessage = ''
+    const nextVer = (publishDoc.published_version || 1) + 1
+
+    if (action === 'publish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published',
+        published_version: 1
+      }
+      logMessage = 'Document published to Client Portal'
+    } else if (action === 'unpublish') {
+      updates = {
+        published: false,
+        published_by: null,
+        published_at: null,
+        status: 'signed'
+      }
+      logMessage = 'Document unpublished from Client Portal'
+    } else if (action === 'hide') {
+      updates = {
+        visibility_status: 'hidden'
+      }
+      logMessage = 'Document hidden from Client Portal'
+    } else if (action === 'show') {
+      updates = {
+        visibility_status: 'visible'
+      }
+      logMessage = 'Document made visible in Client Portal'
+    } else if (action === 'republish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        published_version: nextVer,
+        status: 'published'
+      }
+      logMessage = `Document republished (Version ${nextVer})`
+    } else if (action === 'replace') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published'
+      }
+      logMessage = 'Document replaced with updated version'
+    }
+
+    const updatedHistory = [
+      ...(publishDoc.history || []),
+      { date: new Date().toISOString().split('T')[0], action: logMessage }
+    ]
+    updates.history = updatedHistory
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('sows')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    }
+
+    const updatedList = sows.map(s => s.id === id ? { ...s, ...updates } : s)
+    setSows(updatedList)
+    setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
     invalidateCache('dashboard')
   }
 
@@ -467,7 +597,22 @@ export default function SOWPage() {
             <thead><tr className="border-b border-border">{['Doc ID', 'Client', 'Project', 'Value', 'Status', 'Created', 'Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody>{sows.filter(s => s.client.toLowerCase().includes(search.toLowerCase())).map(s => (
               <tr key={s.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                <td className="py-3 px-4 font-mono text-xs text-gold">{s.docId}</td>
+                <td className="py-3 px-4">
+                  <span className="font-mono text-xs text-gold">{s.docId}</span>
+                  {s.published ? (
+                    <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                      <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${s.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={s.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                        <Globe className="h-2.5 w-2.5" />
+                        {s.visibility_status === 'hidden' ? 'Hidden' : `V${s.published_version || 1}`}
+                      </span>
+                      {s.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(s.viewed_at)}`}>Viewed</span>}
+                      {s.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(s.downloaded_at)}`}>DL</span>}
+                      {s.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(s.signed_at)}`}>Signed</span>}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                  )}
+                </td>
                 <td className="py-3 px-4"><p className="font-medium">{s.client}</p><p className="text-xs text-muted-foreground">{s.contact}</p></td>
                 <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate">{s.project}</td>
                 <td className="py-3 px-4 font-semibold text-gold">{s.value > 0 ? formatCurrency(s.value) : '—'}</td>
@@ -486,6 +631,9 @@ export default function SOWPage() {
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }}>
                       <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className={`h-7 w-7 ${s.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(s)}>
+                      <Globe className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })}>
                       <Send className="h-3.5 w-3.5" />
@@ -719,6 +867,17 @@ export default function SOWPage() {
 
           updateStatus(shareDoc.id, 'sent')
         }}
+      />
+
+      <PublishDialog
+        open={!!publishDoc}
+        onOpenChange={(open) => !open && setPublishDoc(null)}
+        docTitle={publishDoc?.project || publishDoc?.docId || ''}
+        docId={publishDoc?.docId || ''}
+        isPublished={!!publishDoc?.published}
+        visibilityStatus={publishDoc?.visibility_status || 'visible'}
+        currentVersion={publishDoc?.published_version || 1}
+        onAction={handlePublishAction}
       />
     </div>
   )

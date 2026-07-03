@@ -12,10 +12,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
@@ -23,8 +25,15 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
 
-const STATUS_OPTS = ['draft', 'sent', 'approved', 'rejected']
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', approved: 'Approved', rejected: 'Rejected' }
+const STATUS_OPTS = ['draft', 'sent', 'approved', 'rejected', 'completed', 'signed']
+const STATUS_LABELS: Record<string, string> = { 
+  draft: 'Draft', 
+  sent: 'Sent', 
+  approved: 'Approved', 
+  rejected: 'Rejected', 
+  completed: 'Completed',
+  signed: 'Signed'
+}
 
 type Quote = {
   id: string; docId: string; client: string; contact: string; email: string; phone: string
@@ -43,6 +52,18 @@ type Quote = {
   adBudgetFixed?: number;
   adBudgetOverride?: boolean;
   adBudgetBillThrough?: boolean;
+  published?: boolean;
+  published_by?: string;
+  published_at?: string;
+  viewed_at?: string;
+  downloaded_at?: string;
+  signed_at?: string;
+  published_version?: number;
+  visibility_status?: string;
+  ip_address?: string;
+  browser?: string;
+  device?: string;
+  client_id?: string;
 }
 
 const INITIAL: Quote[] = []
@@ -348,6 +369,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
 }
 
 export default function QuotationsPage() {
+  const { user } = useUser()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
   const [paymentSchedules, setPaymentSchedules] = useState<any[]>([])
@@ -362,6 +384,7 @@ export default function QuotationsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Quote | null>(null)
+  const [publishDoc, setPublishDoc] = useState<Quote | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
 
   const [form, setForm] = useState(() => blankForm())
@@ -454,6 +477,18 @@ export default function QuotationsPage() {
               adBudgetFixed: q.ad_budget_fixed ? Number(q.ad_budget_fixed) : 0,
               adBudgetOverride: q.ad_budget_override || false,
               adBudgetBillThrough: q.ad_budget_bill_through || false,
+              published: q.published || false,
+              published_by: q.published_by || '',
+              published_at: q.published_at || '',
+              viewed_at: q.viewed_at || '',
+              downloaded_at: q.downloaded_at || '',
+              signed_at: q.signed_at || '',
+              published_version: q.published_version || 1,
+              visibility_status: q.visibility_status || 'visible',
+              ip_address: q.ip_address || '',
+              browser: q.browser || '',
+              device: q.device || '',
+              client_id: q.client_id || '',
             }))
             setQuotes(mappedQuotes)
           }
@@ -903,6 +938,87 @@ export default function QuotationsPage() {
     invalidateCache('dashboard')
   }
 
+  async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
+    if (!publishDoc) return
+    const id = publishDoc.id
+    
+    if (user?.role === 'Employee') {
+      throw new Error("Permission Denied: Employees cannot publish documents. Please request publication from a Founder or Admin.")
+    }
+
+    let updates: any = {}
+    let logMessage = ''
+    const nextVer = (publishDoc.published_version || 1) + 1
+
+    if (action === 'publish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published',
+        published_version: 1
+      }
+      logMessage = 'Document published to Client Portal'
+    } else if (action === 'unpublish') {
+      updates = {
+        published: false,
+        published_by: null,
+        published_at: null,
+        status: 'approved'
+      }
+      logMessage = 'Document unpublished from Client Portal'
+    } else if (action === 'hide') {
+      updates = {
+        visibility_status: 'hidden'
+      }
+      logMessage = 'Document hidden from Client Portal'
+    } else if (action === 'show') {
+      updates = {
+        visibility_status: 'visible'
+      }
+      logMessage = 'Document made visible in Client Portal'
+    } else if (action === 'republish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        published_version: nextVer,
+        status: 'published'
+      }
+      logMessage = `Document republished (Version ${nextVer})`
+    } else if (action === 'replace') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published'
+      }
+      logMessage = 'Document replaced with updated version'
+    }
+
+    const updatedHistory = [
+      ...(publishDoc.history || []),
+      { date: new Date().toISOString().split('T')[0], action: logMessage }
+    ]
+    updates.history = updatedHistory
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('quotations')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    }
+
+    const updatedQuotes = quotes.map(q => q.id === id ? { ...q, ...updates } : q)
+    setQuotes(updatedQuotes)
+    setCachedData('quotations', { quotes: updatedQuotes, servicesData, paymentSchedules, companyDocs })
+    invalidateCache('dashboard')
+  }
+
 
   return (
     <div className="space-y-6">
@@ -941,7 +1057,22 @@ export default function QuotationsPage() {
               )}
               {filtered.map(q => (
                 <tr key={q.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4"><span className="font-mono text-xs text-gold">{q.docId}</span></td>
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-xs text-gold">{q.docId}</span>
+                    {q.published ? (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${q.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={q.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                          <Globe className="h-2.5 w-2.5" />
+                          {q.visibility_status === 'hidden' ? 'Hidden' : `V${q.published_version || 1}`}
+                        </span>
+                        {q.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(q.viewed_at)}`}>Viewed</span>}
+                        {q.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(q.downloaded_at)}`}>DL</span>}
+                        {q.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(q.signed_at)}`}>Signed</span>}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                    )}
+                  </td>
                   <td className="py-3 px-4"><p className="font-medium">{q.client}</p><p className="text-xs text-muted-foreground">{q.contact}</p></td>
                   <td className="py-3 px-4">
                     <div className="flex gap-1 flex-wrap max-w-[220px]">
@@ -973,6 +1104,9 @@ export default function QuotationsPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit"
                         onClick={() => openEdit(q)}>
                         <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${q.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(q)}>
+                        <Globe className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: q.id, title: `${q.docId} - ${q.client}` })}>
                         <Send className="h-3.5 w-3.5" />
@@ -1228,6 +1362,17 @@ export default function QuotationsPage() {
 
           updateStatus(shareDoc.id, 'sent')
         }}
+      />
+
+      <PublishDialog
+        open={!!publishDoc}
+        onOpenChange={(open) => !open && setPublishDoc(null)}
+        docTitle={publishDoc?.projectTitle || publishDoc?.docId || ''}
+        docId={publishDoc?.docId || ''}
+        isPublished={!!publishDoc?.published}
+        visibilityStatus={publishDoc?.visibility_status || 'visible'}
+        currentVersion={publishDoc?.published_version || 1}
+        onAction={handlePublishAction}
       />
     </div>
   )

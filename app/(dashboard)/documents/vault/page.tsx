@@ -1,14 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, Download, Archive, Copy, FolderOpen, FileText, Receipt, ClipboardList, HandshakeIcon, FolderKanban, ArchiveRestore, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { buildPdfPayload } from '@/lib/pdf-payload-builder'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { useUser } from '@/components/user-provider'
+import { motion, AnimatePresence } from 'framer-motion'
+import { CheckCircle2, Clock, AlertTriangle, ShieldCheck, User, Building2, Globe, Send, X, CopyCheck, RefreshCw, Layers } from 'lucide-react'
 
 interface VaultDoc {
   id: string
@@ -141,6 +146,208 @@ export default function VaultPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const { toast } = useToast()
 
+  // Custom approvals/e-sign state
+  const { user } = useUser()
+  const isFounder = user?.role === 'Founder' || user?.role === 'Admin'
+
+  const [selectedDoc, setSelectedDoc] = useState<VaultDoc | null>(null)
+  const [showDetails, setShowDetails] = useState(false)
+  const [timeline, setTimeline] = useState<any[]>([])
+  const [versions, setVersions] = useState<any[]>([])
+  const [signatureInfo, setSignatureInfo] = useState<any>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  // Version Comparison states
+  const [showCompare, setShowCompare] = useState(false)
+  const [compVer1, setCompVer1] = useState('')
+  const [compVer2, setCompVer2] = useState('')
+  const [comparisonResult, setComparisonResult] = useState<any[] | null>(null)
+
+  // Revision notes state
+  const [showRevisionModal, setShowRevisionModal] = useState(false)
+  const [revisionNotes, setRevisionNotes] = useState('')
+
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  const fetchDocDetails = async (doc: VaultDoc) => {
+    if (!isSupabaseConfigured()) return
+    try {
+      // 1. Fetch Timeline
+      const tlRes = await fetch('/api/document-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_timeline', id: doc.id, type: doc.type })
+      })
+      const tlData = await tlRes.json()
+      if (tlData.success) {
+        setTimeline(tlData.timeline)
+      }
+
+      // 2. Fetch Versions
+      const verRes = await fetch('/api/document-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_versions', id: doc.id, type: doc.type })
+      })
+      const verData = await verRes.json()
+      if (verData.success) {
+        setVersions(verData.versions)
+      }
+
+      // 3. Fetch Signature
+      const { data: sigData } = await supabase
+        .from('document_signatures')
+        .select('*')
+        .eq('document_type', doc.type)
+        .eq('document_id', doc.id)
+        .maybeSingle()
+      setSignatureInfo(sigData)
+    } catch (e: any) {
+      console.error('Failed to load doc details:', e)
+    }
+  }
+
+  const handleOpenDetails = (doc: VaultDoc) => {
+    setSelectedDoc(doc)
+    setShowDetails(true)
+    fetchDocDetails(doc)
+  }
+
+  const handleDocAction = async (action: string, notesText?: string) => {
+    if (!selectedDoc || !isSupabaseConfigured()) return
+    setActionLoading(true)
+    try {
+      const body: any = {
+        action,
+        id: selectedDoc.id,
+        type: selectedDoc.type,
+        approver: user?.name || user?.email || 'Founder'
+      }
+      if (notesText) body.notes = notesText
+
+      const res = await fetch('/api/document-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Action failed')
+      }
+
+      toast({ title: 'Success', description: `Action ${action} completed successfully.` })
+      
+      // Refresh list
+      fetchDocuments()
+      
+      // Update local state
+      let nextStatus = selectedDoc.status
+      if (action === 'request_approval') nextStatus = 'Internal Review'
+      if (action === 'approve') nextStatus = 'Approved'
+      if (action === 'reject' || action === 'request_revision') nextStatus = 'Needs Revision'
+      if (action === 'send_for_signature') nextStatus = 'Sent to Client'
+      if (action === 'cancel_signing') nextStatus = 'Approved'
+      if (action === 'create_version') nextStatus = 'Draft'
+      
+      const updatedDoc = { ...selectedDoc, status: nextStatus }
+      setSelectedDoc(updatedDoc)
+      fetchDocDetails(updatedDoc)
+    } catch (e: any) {
+      toast({ title: 'Action Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCompareVersions = () => {
+    if (!compVer1 || !compVer2 || versions.length === 0) return
+    const v1Data = versions.find(v => String(v.version) === compVer1)?.document_data
+    const v2Data = versions.find(v => String(v.version) === compVer2)?.document_data
+    if (!v1Data || !v2Data) return
+
+    const keys = [
+      { label: 'Client / Business', key: 'client' },
+      { label: 'Contact Attention', key: 'contact' },
+      { label: 'Mobile Phone', key: 'phone' },
+      { label: 'Project Title', key: 'project_title' },
+      { label: 'Project Name', key: 'project' },
+      { label: 'Contract Value / Fee', key: 'value' },
+      { label: 'Quotation Amount', key: 'amount' },
+      { label: 'Project Timeline', key: 'timeline' },
+      { label: 'Document Status', key: 'status' },
+      { label: 'Legal Jurisdiction', key: 'jurisdiction' },
+      { label: 'Scope of Services', key: 'services' },
+      { label: 'Key Deliverables', key: 'deliverables' },
+      { label: 'Project Milestones', key: 'milestones' }
+    ]
+
+    const comparison = keys.map(item => {
+      const val1 = v1Data[item.key] !== undefined ? String(v1Data[item.key]) : '—'
+      const val2 = v2Data[item.key] !== undefined ? String(v2Data[item.key]) : '—'
+      const changed = val1.trim() !== val2.trim()
+      return { label: item.label, val1, val2, changed }
+    }).filter(item => item.val1 !== '—' || item.val2 !== '—')
+
+    setComparisonResult(comparison)
+    setShowCompare(true)
+  }
+
+  const handleRestoreVersion = async (targetVer: number) => {
+    if (!selectedDoc || !isSupabaseConfigured()) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/document-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'restore_version',
+          id: selectedDoc.id,
+          type: selectedDoc.type,
+          targetVersion: targetVer,
+          approver: user?.name || user?.email || 'Founder'
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Restore failed')
+      }
+
+      toast({ title: 'Version Restored', description: `Successfully restored back to Version ${targetVer}` })
+      fetchDocuments()
+      setShowDetails(false)
+      setSelectedDoc(null)
+    } catch (e: any) {
+      toast({ title: 'Restore Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const copySigningLink = async () => {
+    if (!selectedDoc || !isSupabaseConfigured()) return
+    try {
+      const { data: tokenData } = await supabase
+        .from('document_tokens')
+        .select('token')
+        .eq('document_type', selectedDoc.type)
+        .eq('document_id', selectedDoc.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (tokenData) {
+        const link = `${window.location.origin}/sign/${tokenData.token}`
+        await navigator.clipboard.writeText(link)
+        setCopiedLink(true)
+        setTimeout(() => setCopiedLink(false), 2000)
+        toast({ title: 'Signing Link Copied', description: 'Secure client URL copied to clipboard.' })
+      } else {
+        toast({ title: 'No Link Found', description: 'Click "Send for Signature" to generate a secure signing link first.', variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Copy Failed', description: e.message, variant: 'destructive' })
+    }
+  }
+
   const getTableNameForDocType = (type: string) => {
     switch (type) {
       case 'Quotation': return 'quotations'
@@ -245,6 +452,14 @@ export default function VaultPage() {
       const mapped = mapRecord(table, newRecord)
       if (mapped) {
         setDocs(prev => prev.map(d => d.id === mapped.id && d.type === mapped.type ? mapped : d))
+        // If the updated document is currently selected in the details panel, update it in realtime
+        setSelectedDoc(curr => {
+          if (curr && curr.id === mapped.id && curr.type === mapped.type) {
+            fetchDocDetails(mapped)
+            return mapped
+          }
+          return curr
+        })
       }
     } else if (eventType === 'DELETE') {
       setDocs(prev => prev.filter(d => !(d.id === oldRecord.id && getTableNameForDocType(d.type) === table)))
@@ -803,7 +1018,7 @@ export default function VaultPage() {
               const Icon = typeIcon[doc.type] || FileText
               const colors = typeColors[doc.type] || 'text-muted-foreground bg-muted'
               return (
-                <Card key={doc.id} className="group hover:shadow-md hover:border-gold/20 transition-all">
+                <Card key={doc.id} onClick={() => handleOpenDetails(doc)} className="group hover:shadow-md hover:border-gold/20 transition-all cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       <div className={`rounded-lg p-2 shrink-0 ${colors}`}><Icon className="h-5 w-5" /></div>
@@ -834,7 +1049,7 @@ export default function VaultPage() {
                         variant="outline" 
                         size="sm" 
                         className="h-7 text-xs gap-1 flex-1" 
-                        onClick={() => handleDownload(doc)}
+                        onClick={(e) => { e.stopPropagation(); handleDownload(doc); }}
                         disabled={downloadingId === doc.id}
                       >
                         {downloadingId === doc.id ? (
@@ -848,7 +1063,7 @@ export default function VaultPage() {
                         variant="outline" 
                         size="icon" 
                         className="h-7 w-7" 
-                        onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
@@ -856,7 +1071,7 @@ export default function VaultPage() {
                         variant="outline" 
                         size="icon" 
                         className="h-7 w-7" 
-                        onClick={() => doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc)} 
+                        onClick={(e) => { e.stopPropagation(); doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc); }} 
                         title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}
                       >
                         {doc.status === 'archived' ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
@@ -869,12 +1084,414 @@ export default function VaultPage() {
           </div>
 
           {filtered.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No documents found</p>
+            <div className="text-center py-16 border border-dashed border-[#1E3A2F]/60 rounded-xl bg-[#12241D]/10">
+              <FolderOpen className="h-10 w-10 mx-auto text-slate-600 mb-2" />
+              <p className="text-sm font-semibold text-slate-400">No documents found</p>
+              <p className="text-xs text-slate-500 mt-1">Refine your search parameters or check back later.</p>
             </div>
           )}
         </>
+      )}
+
+      {/* Sliding Details Drawer */}
+      <AnimatePresence>
+        {selectedDoc && showDetails && (
+          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex justify-end">
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.25 }}
+              className="w-full max-w-xl bg-[#07110E] border-l border-[#1E3A2F] h-full flex flex-col justify-between shadow-2xl overflow-y-auto text-slate-100 z-50"
+            >
+              {/* Drawer Header */}
+              <div className="border-b border-[#1E3A2F] p-5 flex justify-between items-center bg-[#0A1612]">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/20 text-[#D4AF37]">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-sm tracking-wide leading-tight truncate max-w-[280px]">
+                      {selectedDoc.title}
+                    </h2>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{selectedDoc.docId}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] border-[#D4AF37]/30 text-[#D4AF37] capitalize">
+                    {selectedDoc.status}
+                  </Badge>
+                  <Button variant="outline" size="icon" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowDetails(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                {/* 1. Document Lifecycle Progress Tracker */}
+                <div className="space-y-3">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">Workflow Status</h3>
+                  <div className="grid grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-slate-500">
+                    {[
+                      { l: 'Draft', active: ['draft', 'internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Reviewed', active: ['internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Approved', active: ['approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Sent', active: ['sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Signed', active: ['signed', 'completed'].includes(selectedDoc.status.toLowerCase()) }
+                    ].map((step, idx) => (
+                      <div key={idx} className="space-y-1.5">
+                        <div className={`h-1.5 rounded-full transition-all duration-300 ${step.active ? 'gold-gradient' : 'bg-slate-800'}`} />
+                        <p className={step.active ? 'text-[#D4AF37] font-semibold' : ''}>{step.l}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Operations / Workflow Actions */}
+                <div className="bg-[#12241D]/30 border border-[#1E3A2F]/60 rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Approvals & Operations</h3>
+                    <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
+                      Role: {user?.role || 'Guest'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {/* Employee: Send for Approval */}
+                    {selectedDoc.status.toLowerCase() === 'draft' && (
+                      <Button
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={() => handleDocAction('request_approval')}
+                        className="h-8 text-xs font-bold gold-gradient text-black flex-1"
+                      >
+                        {actionLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
+                        Send for Approval
+                      </Button>
+                    )}
+
+                    {/* Founder/Admin: Approve / Reject / Request Revision */}
+                    {selectedDoc.status.toLowerCase() === 'internal review' && (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={actionLoading || !isFounder}
+                          onClick={() => handleDocAction('approve')}
+                          className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex-1 border-none"
+                        >
+                          {actionLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={actionLoading || !isFounder}
+                          onClick={() => { setShowRevisionModal(true); setRevisionNotes(''); }}
+                          className="h-8 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white flex-1 border-none"
+                        >
+                          Revision Needed
+                        </Button>
+                      </>
+                    )}
+
+                    {/* Send for Signature */}
+                    {selectedDoc.status.toLowerCase() === 'approved' && (
+                      <Button
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={() => handleDocAction('send_for_signature')}
+                        className="h-8 text-xs font-bold gold-gradient text-black flex-1"
+                      >
+                        {actionLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
+                        Send for Signature
+                      </Button>
+                    )}
+
+                    {/* Resend / Cancel Signing */}
+                    {['sent to client', 'viewed'].includes(selectedDoc.status.toLowerCase()) && (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={actionLoading}
+                          onClick={copySigningLink}
+                          className="h-8 text-xs font-bold border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10 flex-1 bg-transparent"
+                        >
+                          {copiedLink ? <CopyCheck className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                          {copiedLink ? 'Copied' : 'Copy Signing Link'}
+                        </Button>
+                        {isFounder && (
+                          <Button
+                            size="sm"
+                            disabled={actionLoading}
+                            onClick={() => handleDocAction('cancel_signing')}
+                            className="h-8 text-xs font-bold bg-red-600 hover:bg-red-700 text-white flex-1 border-none"
+                          >
+                            Cancel Signing
+                          </Button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Needs Revision: New Version creation */}
+                    {selectedDoc.status.toLowerCase() === 'needs revision' && (
+                      <Button
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={() => handleDocAction('create_version')}
+                        className="h-8 text-xs font-bold gold-gradient text-black flex-1"
+                      >
+                        {actionLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Layers className="h-3 w-3 mr-1" />}
+                        Create Version {selectedDoc.raw?.version ? selectedDoc.raw.version + 1 : 2}
+                      </Button>
+                    )}
+
+                    {/* Completed / Locked State */}
+                    {['signed', 'completed'].includes(selectedDoc.status.toLowerCase()) && (
+                      <div className="w-full text-center py-2 px-3 bg-emerald-950/20 border border-emerald-500/10 rounded-lg text-emerald-400 text-xs font-medium flex items-center justify-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4" /> This document is complete and locked.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Secure E-Signature Certificate (if signed) */}
+                {signatureInfo && (
+                  <div className="bg-[#12241D]/30 border border-[#1E3A2F]/60 rounded-xl p-4 space-y-3 font-sans">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
+                      <ShieldCheck className="h-4 w-4 text-[#D4AF37]" /> Signature Audit Certificate
+                    </h3>
+                    <div className="border-t border-[#1E3A2F]/60 pt-2 space-y-2 text-xs text-slate-300 font-mono">
+                      <div className="flex justify-between"><span className="text-slate-500">Signee Name</span><span>{signatureInfo.client_name}</span></div>
+                      {signatureInfo.company && <div className="flex justify-between"><span className="text-slate-500">Company</span><span>{signatureInfo.company}</span></div>}
+                      <div className="flex justify-between"><span className="text-slate-500">Email</span><span>{signatureInfo.email}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Signature Type</span><span className="capitalize">{signatureInfo.signature_type}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Date/Time</span><span>{new Date(signatureInfo.created_at).toLocaleString('en-IN')}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Browser / OS</span><span className="truncate max-w-[200px]">{signatureInfo.browser} on {signatureInfo.operating_system}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Client IP Address</span><span>{signatureInfo.ip_address}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Doc SHA-256 Hash</span><span className="truncate max-w-[160px] text-slate-500 hover:text-white" title={signatureInfo.document_hash}>{signatureInfo.document_hash}</span></div>
+                      <div className="flex justify-between font-bold border-t border-[#1E3A2F]/40 pt-2 text-[#D4AF37]"><span className="text-slate-400">Verification ID</span><span>{signatureInfo.verification_id}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Versions Management Section */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Version History</h3>
+                  {versions.length === 0 ? (
+                    <p className="text-xs text-slate-500 font-sans">No previous versions archived.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <div className="flex gap-2 items-center bg-[#12241D]/20 border border-[#1E3A2F]/60 rounded-xl p-3">
+                        <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">Version A</label>
+                            <select
+                              value={compVer1}
+                              onChange={e => setCompVer1(e.target.value)}
+                              className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded p-1 text-slate-300 outline-none"
+                            >
+                              <option value="">Select version</option>
+                              {versions.map(v => <option key={v.id} value={v.version}>v{v.version}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">Version B</label>
+                            <select
+                              value={compVer2}
+                              onChange={e => setCompVer2(e.target.value)}
+                              className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded p-1 text-slate-300 outline-none"
+                            >
+                              <option value="">Select version</option>
+                              {versions.map(v => <option key={v.id} value={v.version}>v{v.version}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <Button
+                          disabled={!compVer1 || !compVer2}
+                          onClick={handleCompareVersions}
+                          className="h-8 text-[10px] font-bold border-[#1E3A2F] bg-[#12241D] text-slate-300 hover:bg-[#D4AF37]/10"
+                          variant="outline"
+                        >
+                          Compare
+                        </Button>
+                      </div>
+
+                      {versions.map(v => (
+                        <div key={v.id} className="flex justify-between items-center border border-[#1E3A2F]/40 p-3 rounded-lg text-xs bg-black/10">
+                          <div>
+                            <p className="font-bold text-[#D4AF37]">Version {v.version}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              Created by {v.created_by || 'System'} on {new Date(v.created_at).toLocaleDateString('en-IN')}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRestoreVersion(v.version)}
+                              disabled={actionLoading}
+                              className="h-6 text-[9px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                            >
+                              Restore
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                setDownloadingId(`v_${v.id}`)
+                                try {
+                                  // Re-route to standard download with version override details
+                                  toast({ title: 'Download Started', description: `Compiling Version ${v.version}...` })
+                                  const payload = await buildPdfPayload(v.document_type, v.document_data, supabase)
+                                  await generateAndSavePdf(payload, `${v.document_type}_v${v.version}_${v.document_data.client}`)
+                                  toast({ title: '✅ Completed', description: `Version PDF downloaded.` })
+                                } catch (err: any) {
+                                  toast({ title: 'Failed', description: err.message, variant: 'destructive' })
+                                } finally {
+                                  setDownloadingId(null)
+                                }
+                              }}
+                              disabled={downloadingId === `v_${v.id}`}
+                              className="h-6 text-[9px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                            >
+                              {downloadingId === `v_${v.id}` ? '...' : <Download className="h-3 w-3" />}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Document Activity Logs (Timeline) */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Activity History</h3>
+                  {timeline.length === 0 ? (
+                    <p className="text-xs text-slate-500 font-sans">No logs recorded.</p>
+                  ) : (
+                    <div className="relative pl-4 border-l border-[#1E3A2F]/60 space-y-4 text-xs font-sans">
+                      {timeline.map((entry, idx) => {
+                        const dateStr = new Date(entry.created_at).toLocaleString('en-IN', {
+                          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                        })
+                        return (
+                          <div key={entry.id || idx} className="relative space-y-0.5">
+                            {/* Dot overlay */}
+                            <div className="absolute -left-[20px] top-1.5 h-2 w-2 rounded-full bg-[#D4AF37] border-4 border-[#07110E]" />
+                            <div className="flex justify-between font-bold text-slate-300">
+                              <span className="capitalize">{entry.event.replace('_', ' ')}</span>
+                              <span className="text-[10px] text-slate-500 font-normal">{dateStr}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">By {entry.user_name}</p>
+                            {entry.notes && (
+                              <p className="text-[10px] text-slate-500 bg-[#0A1612]/80 p-2 rounded border border-[#1E3A2F]/30 mt-1 font-mono italic">
+                                "{entry.notes}"
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Version Comparison Modal */}
+      {showCompare && comparisonResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <Card className="max-w-2xl w-full border-[#1E3A2F] bg-[#12241D] text-white">
+            <CardHeader className="border-b border-[#1E3A2F] pb-4 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-[#D4AF37]" /> Version Comparison
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-400">
+                  Comparing Version {compVer1} vs. Version {compVer2}
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="icon" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowCompare(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="overflow-x-auto text-xs">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-[#1E3A2F] text-slate-500 text-[10px] uppercase font-bold font-mono">
+                      <th className="py-2">Property</th>
+                      <th className="py-2">v{compVer1}</th>
+                      <th className="py-2">v{compVer2}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparisonResult.map((res, idx) => (
+                      <tr
+                        key={idx}
+                        className={`border-b border-[#1E3A2F]/30 hover:bg-white/5 transition-colors ${res.changed ? 'bg-amber-500/5 text-amber-300' : 'text-slate-400'}`}
+                      >
+                        <td className="py-2.5 font-bold">{res.label}</td>
+                        <td className="py-2.5 font-mono truncate max-w-[200px]" title={res.val1}>{res.val1}</td>
+                        <td className="py-2.5 font-mono truncate max-w-[200px]" title={res.val2}>{res.val2}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Revision Request Dialog Modal */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <Card className="max-w-md w-full border-[#1E3A2F] bg-[#12241D] text-white">
+            <CardHeader className="border-b border-[#1E3A2F] pb-4">
+              <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" /> Request Revision
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-400">
+                Log the revision request and details for the drafting employee.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div>
+                <Label htmlFor="revisionNotes" className="text-xs text-slate-400">Revision Notes</Label>
+                <textarea
+                  id="revisionNotes"
+                  rows={4}
+                  value={revisionNotes}
+                  onChange={e => setRevisionNotes(e.target.value)}
+                  placeholder="Details of corrections, modifications, or budget adjustments required..."
+                  className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-white"
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRevisionModal(false)}
+                  className="h-9 text-xs border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowRevisionModal(false)
+                    handleDocAction('request_revision', revisionNotes)
+                  }}
+                  className="h-9 text-xs bg-amber-600 hover:bg-amber-700 text-white border-none font-bold"
+                >
+                  Submit Notes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )

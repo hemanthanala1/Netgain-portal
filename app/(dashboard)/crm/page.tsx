@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -48,10 +49,12 @@ export default function CRMPage() {
   const [industryTypes, setIndustryTypes] = useState<string[]>(['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'])
   const [showManageIndustries, setShowManageIndustries] = useState(false)
   const [newIndustryInput, setNewIndustryInput] = useState('')
+  const [portalAccounts, setPortalAccounts] = useState<Set<string>>(new Set())
 
   const [newClient, setNewClient] = useState({
     name: '', business: '', type: 'E-Commerce', email: '', phone: '',
-    status: 'new', gst: '', address: '', website: '', city: ''
+    status: 'new', gst: '', address: '', website: '', city: '',
+    createAccount: false, clientPassword: ''
   })
 
   useEffect(() => {
@@ -86,6 +89,12 @@ export default function CRMPage() {
             }))
             setClients(mapped)
             setCachedData('crm_clients', mapped)
+          }
+
+          // Fetch Client Portal Accounts
+          const { data: accounts } = await supabase.from('client_accounts').select('client_id')
+          if (accounts) {
+            setPortalAccounts(new Set(accounts.map((a: any) => a.client_id)))
           }
 
           // Fetch Custom Industry Types
@@ -186,6 +195,24 @@ export default function CRMPage() {
           setSubmitting(false)
           return
         }
+
+        // Add client account if option is checked
+        if (newClient.createAccount) {
+          const accountData = {
+            id,
+            client_id: id,
+            email: newClient.email,
+            password: newClient.clientPassword || 'Welcome123!',
+            status: 'active'
+          }
+          const { error: accError } = await supabase.from('client_accounts').insert([accountData])
+          if (accError) {
+            toast({ title: 'Warning', description: `Client added, but portal account creation failed: ${accError.message}`, variant: 'destructive' })
+          } else {
+            toast({ title: 'Portal Account Created', description: `Account password set to "${accountData.password}"` })
+            setPortalAccounts(prev => new Set([...Array.from(prev), id]))
+          }
+        }
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         setSubmitting(false)
@@ -204,7 +231,7 @@ export default function CRMPage() {
     setCachedData('crm_clients', updatedList)
     invalidateCache('dashboard')
     setShowAdd(false)
-    setNewClient({ name: '', business: '', type: 'E-Commerce', email: '', phone: '', status: 'new', gst: '', address: '', website: '', city: '' })
+    setNewClient({ name: '', business: '', type: 'E-Commerce', email: '', phone: '', status: 'new', gst: '', address: '', website: '', city: '', createAccount: false, clientPassword: '' })
     toast({ title: 'Client Added', description: `${newClient.name} has been added successfully.` })
     setSubmitting(false)
   }
@@ -365,7 +392,14 @@ export default function CRMPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium text-sm">{client.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium text-sm">{client.name}</p>
+                          {portalAccounts.has(client.id) && (
+                            <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 text-[9px] px-1 py-0.25 font-bold font-mono">
+                              Portal Active
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{client.city}</p>
                       </div>
                     </div>
@@ -446,7 +480,35 @@ export default function CRMPage() {
               </Select>
             </div>
             <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={newClient.gst} onChange={e => setNewClient({...newClient, gst: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
+             <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
+            
+            <div className="col-span-1 sm:col-span-2 border-t border-[#1E3A2F]/20 pt-4 mt-2 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="createAccount"
+                  checked={newClient.createAccount}
+                  onCheckedChange={(checked) => setNewClient({ ...newClient, createAccount: !!checked })}
+                />
+                <Label htmlFor="createAccount" className="cursor-pointer text-xs font-bold text-slate-300">
+                  Enable Client Portal Account (Login using email)
+                </Label>
+              </div>
+              
+              {newClient.createAccount && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-400">Portal Password</Label>
+                    <Input
+                      type="password"
+                      placeholder="Welcome123! (or custom)"
+                      value={newClient.clientPassword}
+                      onChange={e => setNewClient({ ...newClient, clientPassword: e.target.value })}
+                    />
+                    <p className="text-[10px] text-slate-500 font-sans">Defaults to "Welcome123!" if blank</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>

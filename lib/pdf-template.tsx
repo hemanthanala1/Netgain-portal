@@ -7,6 +7,16 @@ import {
   Document, Page, Text, View, StyleSheet, Font, Image,
 } from '@react-pdf/renderer'
 
+// Register cursive fonts for client e-signatures
+Font.register({
+  family: 'DancingScript',
+  src: 'https://fonts.gstatic.com/s/dancingscript/v25/GhF3yp15Mr-MC5tA851Es39uSMkP.ttf'
+})
+Font.register({
+  family: 'AlexBrush',
+  src: 'https://fonts.gstatic.com/s/alexbrush/v22/SZcuFz4rVPCQMBpkqFMq_Mf5.ttf'
+})
+
 // ── Colour palette (Urban Edge / Dark Theme) ─────────────────────────────
 const C = {
   bg:        '#0A1612',
@@ -92,6 +102,63 @@ const s = StyleSheet.create({
   spacer4:  { height: 4 },
   spacer8:  { height: 8 },
   spacer14: { height: 14 },
+
+  // E-Signature Block
+  sigContainer: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: C.darkCard,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 4,
+  },
+  sigBlockRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 20,
+    marginTop: 10,
+  },
+  sigColumn: {
+    flex: 1,
+  },
+  sigTitle: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 8,
+    color: C.gold,
+    marginBottom: 4,
+  },
+  sigName: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 11,
+    color: C.white,
+  },
+  sigMeta: {
+    fontFamily: 'Helvetica',
+    fontSize: 7.5,
+    color: C.slate,
+    marginTop: 2,
+  },
+  sigImage: {
+    width: 120,
+    height: 40,
+    objectFit: 'contain',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  sigTextDancing: {
+    fontFamily: 'DancingScript',
+    fontSize: 16,
+    color: C.gold,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  sigTextAlex: {
+    fontFamily: 'AlexBrush',
+    fontSize: 18,
+    color: C.gold,
+    marginTop: 4,
+    marginBottom: 4,
+  },
 })
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -141,6 +208,16 @@ export interface PdfPayload {
   fullSubtotal?: number
   paymentScheduleObj?: { name: string, points: { label: string, pct: number }[] } | null
   content?: string           // Markdown-lite body text
+  signatureDetails?: {
+    clientName: string
+    company?: string
+    signatureType: 'drawn' | 'typed'
+    signatureImage?: string
+    signatureText?: string
+    signatureFont?: string
+    signedAt: string
+    verificationId: string
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -211,13 +288,30 @@ function Footer({ company, tagline, docType, invoiceFooter }: { company: PdfPayl
 }
 
 // ── Render markdown-lite content ──────────────────────────────────────────
-function RenderContent({ text }: { text: string }) {
+function RenderContent({ text, isSigned }: { text: string; isSigned: boolean }) {
   const lines = text.split('\n')
   return (
     <>
       {lines.map((line, i) => {
         const t = line.trim()
         if (!t) return <View key={i} style={s.spacer4} />
+        
+        // Strip manual signature elements on signed copies
+        if (isSigned) {
+          const lower = t.toLowerCase();
+          if (
+            t.includes('____') || 
+            lower.includes('signature:') || 
+            lower.includes('signatures') || 
+            t.includes('__FOUNDER_NAME__') || 
+            t.includes('__COMPANY_NAME__') ||
+            t.includes('Prepared By') ||
+            t.includes('Accepted By')
+          ) {
+            return null
+          }
+        }
+
         if (t.startsWith('## ')) return <Text key={i} style={s.h2}>{t.slice(3)}</Text>
         if (t.startsWith('### ')) return <Text key={i} style={s.h3}>{t.slice(4)}</Text>
         if (t.startsWith('# ')) return <Text key={i} style={{ ...s.h1, fontSize: 14 }}>{t.slice(2)}</Text>
@@ -238,6 +332,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
   const docRef = `NG-${Math.floor(Date.now() / 1000) % 1000000}`
   const co = data.companySettings || {}
   const ci = data.clientInfo || {}
+  const founder = data.founderSettings || {}
   const docs = data.docsSettings || {}
   const items = data.items || []
   const isFinancial = ['Quotation', 'Invoice', 'Agreement', 'SOW'].includes(data.docType)
@@ -368,7 +463,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
         {data.content && data.content.trim() && (
           <>
             <View style={s.spacer8} />
-            <RenderContent text={data.content} />
+            <RenderContent text={data.content} isSigned={!!data.signatureDetails} />
           </>
         )}
 
@@ -536,6 +631,53 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
               ].map((t, i) => (
                 <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
               ))
+            )}
+
+            {/* ── Signature & Audit Block ── */}
+            {data.signatureDetails && (
+              <View style={s.sigContainer} wrap={false}>
+                <Text style={[s.h2, { marginTop: 0 }]}>E-SIGNATURE & AUDIT CERTIFICATE</Text>
+                <View style={s.sep} />
+                <View style={s.sigBlockRow}>
+                  {/* Prepared By */}
+                  <View style={s.sigColumn}>
+                    <Text style={s.sigTitle}>PREPARED BY</Text>
+                    <Text style={s.sigName}>{co.name || 'Netgain Studio'}</Text>
+                    <Text style={s.sigMeta}>{founder.name || 'Hemanth Anala'}</Text>
+                    <Text style={s.sigMeta}>{founder.designation || 'Founder & CEO'}</Text>
+                    <Text style={s.sigMeta}>{co.email || 'mail.netgain@gmail.com'}</Text>
+                    <Text style={[s.sigMeta, { fontFamily: 'Helvetica-Bold', marginTop: 4, color: '#D4AF37' }]}>Digitally Certified</Text>
+                  </View>
+
+                  {/* Accepted By */}
+                  <View style={s.sigColumn}>
+                    <Text style={s.sigTitle}>ACCEPTED & DIGITALLY SIGNED BY</Text>
+                    <Text style={s.sigName}>{data.signatureDetails.clientName}</Text>
+                    {data.signatureDetails.company && (
+                      <Text style={s.sigMeta}>{data.signatureDetails.company}</Text>
+                    )}
+                    
+                    {/* Render Signature Image / Text */}
+                    <View style={{ marginTop: 4, marginBottom: 4 }}>
+                      {data.signatureDetails.signatureType === 'drawn' && data.signatureDetails.signatureImage ? (
+                        <Image src={data.signatureDetails.signatureImage} style={s.sigImage} />
+                      ) : (
+                        <Text style={
+                          data.signatureDetails.signatureFont === 'AlexBrush' ? s.sigTextAlex : s.sigTextDancing
+                        }>
+                          {data.signatureDetails.signatureText || data.signatureDetails.clientName}
+                        </Text>
+                      )}
+                    </View>
+
+                    <Text style={s.sigMeta}>Signed via Netgain Business OS</Text>
+                    <Text style={s.sigMeta}>Date: {data.signatureDetails.signedAt}</Text>
+                    <Text style={[s.sigMeta, { fontFamily: 'Helvetica-Bold', color: '#D4AF37' }]}>
+                      Verification ID: {data.signatureDetails.verificationId}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             )}
           </>
         )}

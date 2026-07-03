@@ -9,19 +9,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Download, Trash2, Pencil, Loader2, Receipt, Send, History } from 'lucide-react'
+import { Search, Plus, Download, Trash2, Pencil, Loader2, Receipt, Send, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
-
-
-const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue']
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue' }
+const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue', 'completed']
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', completed: 'Completed' }
 
 type Invoice = {
   id: string; docId: string; client: string; contact: string; email: string; phone: string
@@ -40,6 +40,18 @@ type Invoice = {
   adBudgetFixed?: number;
   adBudgetOverride?: boolean;
   adBudgetBillThrough?: boolean;
+  published?: boolean
+  published_by?: string
+  published_at?: string
+  viewed_at?: string
+  downloaded_at?: string
+  signed_at?: string
+  published_version?: number
+  visibility_status?: string
+  ip_address?: string;
+  browser?: string;
+  device?: string;
+  client_id?: string;
 }
 
 const INITIAL: Invoice[] = []
@@ -109,6 +121,7 @@ function blankForm(initialDocs?: any) {
 }
 
 export default function InvoicesPage() {
+  const { user } = useUser()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
   const [paymentSchedules, setPaymentSchedules] = useState<any[]>([])
@@ -123,6 +136,7 @@ export default function InvoicesPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
+  const [publishDoc, setPublishDoc] = useState<Invoice | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
   const [serviceSearch, setServiceSearch] = useState('')
 
@@ -216,6 +230,18 @@ export default function InvoicesPage() {
               adBudgetFixed: i.ad_budget_fixed ? Number(i.ad_budget_fixed) : 0,
               adBudgetOverride: i.ad_budget_override || false,
               adBudgetBillThrough: i.ad_budget_bill_through || false,
+              published: i.published || false,
+              published_by: i.published_by || '',
+              published_at: i.published_at || '',
+              viewed_at: i.viewed_at || '',
+              downloaded_at: i.downloaded_at || '',
+              signed_at: i.signed_at || '',
+              published_version: i.published_version || 1,
+              visibility_status: i.visibility_status || 'visible',
+              ip_address: i.ip_address || '',
+              browser: i.browser || '',
+              device: i.device || '',
+              client_id: i.client_id || '',
             }))
             setInvoices(mappedInvoices)
           }
@@ -738,7 +764,88 @@ export default function InvoicesPage() {
 
     const updatedInvoices = invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i)
     setInvoices(updatedInvoices)
-    setCachedData('invoices', { invoices: updatedInvoices, servicesData })
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
+    invalidateCache('dashboard')
+  }
+
+  async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
+    if (!publishDoc) return
+    const id = publishDoc.id
+    
+    if (user?.role === 'Employee') {
+      throw new Error("Permission Denied: Employees cannot publish documents. Please request publication from a Founder or Admin.")
+    }
+
+    let updates: any = {}
+    let logMessage = ''
+    const nextVer = (publishDoc.published_version || 1) + 1
+
+    if (action === 'publish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published',
+        published_version: 1
+      }
+      logMessage = 'Document published to Client Portal'
+    } else if (action === 'unpublish') {
+      updates = {
+        published: false,
+        published_by: null,
+        published_at: null,
+        status: 'sent'
+      }
+      logMessage = 'Document unpublished from Client Portal'
+    } else if (action === 'hide') {
+      updates = {
+        visibility_status: 'hidden'
+      }
+      logMessage = 'Document hidden from Client Portal'
+    } else if (action === 'show') {
+      updates = {
+        visibility_status: 'visible'
+      }
+      logMessage = 'Document made visible in Client Portal'
+    } else if (action === 'republish') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        published_version: nextVer,
+        status: 'published'
+      }
+      logMessage = `Document republished (Version ${nextVer})`
+    } else if (action === 'replace') {
+      updates = {
+        published: true,
+        published_by: user?.email || 'Founder/Admin',
+        published_at: new Date().toISOString(),
+        visibility_status: 'visible',
+        status: 'published'
+      }
+      logMessage = 'Document replaced with updated version'
+    }
+
+    const updatedHistory = [
+      ...(publishDoc.history || []),
+      { date: new Date().toISOString().split('T')[0], action: logMessage }
+    ]
+    updates.history = updatedHistory
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase
+        .from('invoices')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    }
+
+    const updatedInvoices = invoices.map(i => i.id === id ? { ...i, ...updates } : i)
+    setInvoices(updatedInvoices)
+    setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
   }
 
@@ -776,7 +883,21 @@ export default function InvoicesPage() {
               {filtered.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><Receipt className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No invoices found</p></td></tr>}
               {filtered.map(inv => (
                 <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4"><span className="font-mono text-xs text-gold">{inv.docId}</span></td>
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-xs text-gold">{inv.docId}</span>
+                    {inv.published ? (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${inv.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={inv.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                          <Globe className="h-2.5 w-2.5" />
+                          {inv.visibility_status === 'hidden' ? 'Hidden' : `V${inv.published_version || 1}`}
+                        </span>
+                        {inv.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(inv.viewed_at)}`}>Viewed</span>}
+                        {inv.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(inv.downloaded_at)}`}>DL</span>}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                    )}
+                  </td>
                   <td className="py-3 px-4"><p className="font-medium">{inv.client}</p><p className="text-xs text-muted-foreground">{inv.contact}</p></td>
                   <td className="py-3 px-4"><div className="flex gap-1 flex-wrap max-w-[180px]">{servicesData.filter(s => inv.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px]">{s.name.slice(0,18)}</Badge>)}{inv.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{inv.serviceIds.length-2}</Badge>}</div></td>
                   <td className="py-3 px-4 font-semibold text-gold whitespace-nowrap">{formatCurrency(inv.amount)}</td>
@@ -794,6 +915,9 @@ export default function InvoicesPage() {
                         {downloadingId === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => openEdit(inv)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${inv.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(inv)}>
+                        <Globe className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: inv.id, title: `${inv.docId} - ${inv.client}` })}><Send className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(inv.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
@@ -1619,6 +1743,17 @@ export default function InvoicesPage() {
 
           updateStatus(shareDoc.id, 'sent')
         }}
+      />
+
+      <PublishDialog
+        open={!!publishDoc}
+        onOpenChange={(open) => !open && setPublishDoc(null)}
+        docTitle={publishDoc?.docId || ''}
+        docId={publishDoc?.docId || ''}
+        isPublished={!!publishDoc?.published}
+        visibilityStatus={publishDoc?.visibility_status || 'visible'}
+        currentVersion={publishDoc?.published_version || 1}
+        onAction={handlePublishAction}
       />
     </div>
   )

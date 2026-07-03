@@ -60,7 +60,12 @@ export function getDocStatusColor(status: string): string {
     approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
     signed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     expired: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    'internal review': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    published: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    viewed: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    archived: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
   }
   return map[status] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'
 }
