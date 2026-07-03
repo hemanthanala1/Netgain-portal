@@ -22,7 +22,7 @@ import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
-const STATUS_OPTS = ['draft', 'sent', 'signed', 'completed', 'expired']
+const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'needs revision', 'signed', 'completed', 'expired', 'rejected']
 
 type Agreement = {
   id: string; docId: string; client: string; contact: string; phone: string; email: string

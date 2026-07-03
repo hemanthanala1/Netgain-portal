@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
 import { createClient } from '@supabase/supabase-js'
 import { buildPdfPayload } from '@/lib/pdf-payload-builder'
 import { generatePdfBuffer } from '@/lib/pdf-generator-server'

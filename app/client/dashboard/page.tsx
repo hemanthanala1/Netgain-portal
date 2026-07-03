@@ -77,6 +77,7 @@ export default function ClientDashboardPage() {
   const [docs, setDocs] = useState<ClientDoc[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [notifications, setNotifications] = useState<ClientNotification[]>([])
+  const [companySettings, setCompanySettings] = useState<any>(null)
   
   // UI Interaction States
   const [search, setSearch] = useState('')
@@ -113,47 +114,43 @@ export default function ClientDashboardPage() {
   }, [])
 
   // ─── 2. Fetch Client Data ───
-  const fetchClientData = useCallback(async (sess: any, isRefresh = false) => {
-    if (!sess || !isSupabaseConfigured()) {
-      setLoading(false)
-      return
+  // ─── 2. If no session, redirect to login ───
+  useEffect(() => {
+    if (sessionReady && !session) {
+      router.push('/client')
     }
+  }, [session, sessionReady, router])
 
-    if (isRefresh) setRefreshing(true)
-    else setLoading(true)
-
+  // ─── 3. Global document/project fetcher logic ───
+  const fetchClientData = async (isRefresh = false) => {
+    if (!session) return
+    if (!isRefresh) setLoading(true)
     try {
-      const clientEmail = (sess.email || '').toLowerCase().trim()
-      const clientCompany = (sess.company || '').toLowerCase().trim()
-      const clientPhone = (sess.phone || '').trim()
+      const clientEmail = (session.email || '').toLowerCase().trim()
+      const clientCompany = (session.company || '').toLowerCase().trim()
 
-      const matchDoc = (d: any) => {
-        if (!d) return false
-        const docClient = (d.client || '').toLowerCase().trim()
-        const docContact = (d.contact || '').toLowerCase().trim()
-        const docEmail = (d.email || d.client_email || '').toLowerCase().trim()
-        const docPhone = (d.phone || '').trim()
-
-        return (
-          (clientCompany && docClient === clientCompany) ||
-          (sess.name && docClient === (sess.name || '').toLowerCase().trim()) ||
-          (sess.name && docContact === (sess.name || '').toLowerCase().trim()) ||
-          (clientEmail && docEmail === clientEmail) ||
-          (clientPhone && docPhone && docPhone === clientPhone)
-        )
+      const matchDoc = (doc: any) => {
+        const dClient = (doc.client || '').toLowerCase().trim()
+        const dEmail = (doc.email || doc.client_email || '').toLowerCase().trim()
+        return dClient === clientCompany || dClient === (session.name || '').toLowerCase().trim() || dEmail === clientEmail
       }
 
       // Fetch from Supabase tables
-      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes] = await Promise.all([
+      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, compRes] = await Promise.all([
         supabase.from('quotations').select('*'),
         supabase.from('sows').select('*'),
         supabase.from('agreements').select('*'),
         supabase.from('invoices').select('*'),
         supabase.from('marketing_reports').select('*'),
         supabase.from('projects').select('*'),
-        supabase.from('client_notifications').select('*').or(`client_id.eq."${sess.company}",client_id.eq."${sess.email}"`).order('created_at', { ascending: false }),
-        supabase.from('document_tokens').select('*').eq('status', 'active')
+        supabase.from('client_notifications').select('*').or(`client_id.eq."${session.company}",client_id.eq."${session.email}"`).order('created_at', { ascending: false }),
+        supabase.from('document_tokens').select('*').eq('status', 'active'),
+        supabase.from('company_settings').select('*').limit(1).single()
       ])
+      
+      if (compRes.data) {
+        setCompanySettings(compRes.data)
+      }
 
       // Build token lookup map
       const tokenMap = new Map<string, string>()
@@ -163,352 +160,105 @@ export default function ClientDashboardPage() {
         })
       }
 
-      // Map combined docs (Only showing published and non-hidden documents)
       const combined: ClientDoc[] = []
-
       ;(quosRes.data || []).filter(matchDoc).filter(q => q.published && q.visibility_status !== 'hidden').forEach(q => combined.push({
-        id: q.id, docId: q.doc_id, type: 'Quotation',
-        title: q.project_title || 'Service Quotation',
-        amount: Number(q.amount) || 0, status: q.status || 'published',
-        date: q.created || q.created_at?.slice(0, 10),
-        token: tokenMap.get(`Quotation_${q.id}`) || null, raw: q,
-        published_version: q.published_version || 1,
-        published_at: q.published_at || q.created_at,
-        viewed_at: q.viewed_at, downloaded_at: q.downloaded_at, signed_at: q.signed_at,
-        visibility_status: q.visibility_status || 'visible'
+        id: q.id, docId: q.doc_id, type: 'Quotation', title: q.project_title || 'Service Quotation', amount: Number(q.amount) || 0, status: q.status || 'published', date: q.created || q.created_at?.slice(0, 10), token: tokenMap.get(`Quotation_${q.id}`) || null, raw: q, published_version: q.published_version || 1, published_at: q.published_at || q.created_at, viewed_at: q.viewed_at, downloaded_at: q.downloaded_at, signed_at: q.signed_at, visibility_status: q.visibility_status || 'visible'
       }))
-
       ;(sowsRes.data || []).filter(matchDoc).filter(s => s.published && s.visibility_status !== 'hidden').forEach(s => combined.push({
-        id: s.id, docId: s.doc_id, type: 'SOW',
-        title: s.project || 'Scope of Work',
-        amount: Number(s.value) || 0, status: s.status || 'published',
-        date: s.created || s.created_at?.slice(0, 10),
-        token: tokenMap.get(`SOW_${s.id}`) || null, raw: s,
-        published_version: s.published_version || 1,
-        published_at: s.published_at || s.created_at,
-        viewed_at: s.viewed_at, downloaded_at: s.downloaded_at, signed_at: s.signed_at,
-        visibility_status: s.visibility_status || 'visible'
+        id: s.id, docId: s.doc_id, type: 'SOW', title: s.project || 'Scope of Work', amount: Number(s.value) || 0, status: s.status || 'published', date: s.created || s.created_at?.slice(0, 10), token: tokenMap.get(`SOW_${s.id}`) || null, raw: s, published_version: s.published_version || 1, published_at: s.published_at || s.created_at, viewed_at: s.viewed_at, downloaded_at: s.downloaded_at, signed_at: s.signed_at, visibility_status: s.visibility_status || 'visible'
       }))
-
       ;(agrsRes.data || []).filter(matchDoc).filter(a => a.published && a.visibility_status !== 'hidden').forEach(a => combined.push({
-        id: a.id, docId: a.doc_id, type: 'Agreement',
-        title: a.type || 'Service Agreement',
-        amount: Number(a.value) || 0, status: a.status || 'published',
-        date: a.created || a.created_at?.slice(0, 10),
-        token: tokenMap.get(`Agreement_${a.id}`) || null, raw: a,
-        published_version: a.published_version || 1,
-        published_at: a.published_at || a.created_at,
-        viewed_at: a.viewed_at, downloaded_at: a.downloaded_at, signed_at: a.signed_at,
-        visibility_status: a.visibility_status || 'visible'
+        id: a.id, docId: a.doc_id, type: 'Agreement', title: a.type || 'Service Agreement', amount: Number(a.value) || 0, status: a.status || 'published', date: a.created || a.created_at?.slice(0, 10), token: tokenMap.get(`Agreement_${a.id}`) || null, raw: a, published_version: a.published_version || 1, published_at: a.published_at || a.created_at, viewed_at: a.viewed_at, downloaded_at: a.downloaded_at, signed_at: a.signed_at, visibility_status: a.visibility_status || 'visible'
       }))
-
       ;(invsRes.data || []).filter(matchDoc).filter(i => i.published && i.visibility_status !== 'hidden').forEach(i => combined.push({
-        id: i.id, docId: i.doc_id, type: 'Invoice',
-        title: `Tax Invoice — ${i.doc_id}`,
-        amount: Number(i.amount) || 0, status: i.status || 'published',
-        date: i.created || i.created_at?.slice(0, 10),
-        token: tokenMap.get(`Invoice_${i.id}`) || null, raw: i,
-        published_version: i.published_version || 1,
-        published_at: i.published_at || i.created_at,
-        viewed_at: i.viewed_at, downloaded_at: i.downloaded_at, signed_at: i.signed_at,
-        visibility_status: i.visibility_status || 'visible'
+        id: i.id, docId: i.doc_id, type: 'Invoice', title: `Tax Invoice — ${i.doc_id}`, amount: Number(i.amount) || 0, status: i.status || 'published', date: i.created || i.created_at?.slice(0, 10), token: tokenMap.get(`Invoice_${i.id}`) || null, raw: i, published_version: i.published_version || 1, published_at: i.published_at || i.created_at, viewed_at: i.viewed_at, downloaded_at: i.downloaded_at, signed_at: i.signed_at, visibility_status: i.visibility_status || 'visible'
       }))
-
       ;(mrRes.data || []).filter(matchDoc).filter(r => r.published && r.visibility_status !== 'hidden').forEach(r => {
         let titleVal = 'Marketing Performance Report'
-        try {
-          const parsed = JSON.parse(r.title)
-          if (parsed && parsed.period) {
-            titleVal = `Marketing Report — ${parsed.period}`
-          }
-        } catch {}
+        try { const parsed = JSON.parse(r.title); if (parsed && parsed.period) titleVal = `Marketing Report — ${parsed.period}` } catch {}
         combined.push({
-          id: r.id, docId: r.doc_id, type: 'Marketing',
-          title: titleVal,
-          amount: 0, status: r.status || 'published',
-          date: r.created || r.created_at?.slice(0, 10),
-          token: null, raw: r,
-          published_version: r.published_version || 1,
-          published_at: r.published_at || r.created_at,
-          viewed_at: r.viewed_at, downloaded_at: r.downloaded_at, signed_at: r.signed_at,
-          visibility_status: r.visibility_status || 'visible'
+          id: r.id, docId: r.doc_id, type: 'Marketing', title: titleVal, amount: 0, status: r.status || 'published', date: r.created || r.created_at?.slice(0, 10), token: null, raw: r, published_version: r.published_version || 1, published_at: r.published_at || r.created_at, viewed_at: r.viewed_at, downloaded_at: r.downloaded_at, signed_at: r.signed_at, visibility_status: r.visibility_status || 'visible'
         })
       })
 
       setDocs(combined)
 
-      // Map matching projects
       const matchedProjects: Project[] = (projRes.data || []).filter(p => {
         const docClient = (p.client || '').toLowerCase().trim()
-        return docClient === clientCompany || docClient === (sess.name || '').toLowerCase().trim()
+        return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
       }).map((p: any) => ({
-        id: p.id,
-        docId: p.doc_id,
-        title: p.title,
-        client: p.client,
-        stack: p.stack || 'Custom Stack',
-        status: p.status || 'active',
-        created: p.created || p.created_at?.slice(0, 10),
-        history: Array.isArray(p.history) ? p.history : []
+        id: p.id, docId: p.doc_id, title: p.title, client: p.client, stack: p.stack || 'Custom Stack', status: p.status || 'active', created: p.created_at, history: p.history || []
       }))
 
       setProjects(matchedProjects)
-
-      // Map notifications
+      
       if (notifRes.data) {
         setNotifications(notifRes.data)
       }
-
-      if (isRefresh) {
-        toast({ title: 'Portal Updated', description: 'Realtime data loaded successfully.' })
-      }
-    } catch (e: any) {
-      console.error('Portal fetch error:', e)
-      toast({ title: 'Error Loading Portal', description: e.message, variant: 'destructive' })
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
-  }, [toast])
+  }
 
-  // ─── 3. Fetch when session is ready ───
   useEffect(() => {
-    if (sessionReady && session) {
-      fetchClientData(session, false)
-    }
-  }, [sessionReady, session, fetchClientData])
+    if (session) fetchClientData()
+  }, [session])
 
-  // ─── 4. Real-time subscriptions — auto-refresh when docs change ───
-  useEffect(() => {
-    if (!session || !isSupabaseConfigured()) return
-
-    const tables = ['quotations', 'invoices', 'sows', 'agreements', 'marketing_reports', 'projects', 'client_notifications']
-    const channels = tables.map(table =>
-      supabase
-        .channel(`client_portal_${table}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-          fetchClientData(session, false)
-        })
-        .subscribe()
-    )
-
-    return () => {
-      channels.forEach(ch => supabase.removeChannel(ch))
-    }
-  }, [session, fetchClientData])
-
-  // ─── 5. Track Activity (Viewed At, Downloaded At, Signed At, IP Address, Browser, Device) ───
-  const trackActivity = async (doc: ClientDoc, action: 'view' | 'download' | 'sign') => {
+  const trackActivity = async (doc: ClientDoc, action: 'view' | 'download' | 'sign' | 'approve') => {
     let ip = 'Unknown IP'
-    try {
-      const res = await fetch('https://api.ipify.org?format=json')
-      const data = await res.json()
-      ip = data.ip || 'Unknown IP'
-    } catch {}
-
-    const browser = navigator.userAgent
-    const device = window.innerWidth < 768 ? 'Mobile' : 'Desktop'
-
-    const tableMap: Record<string, string> = {
-      Quotation: 'quotations',
-      Invoice: 'invoices',
-      SOW: 'sows',
-      Agreement: 'agreements',
-      Marketing: 'marketing_reports'
-    }
-
+    try { const res = await fetch('https://api.ipify.org?format=json'); const data = await res.json(); ip = data.ip || 'Unknown IP' } catch {}
+    const tableMap: Record<string, string> = { Quotation: 'quotations', Invoice: 'invoices', SOW: 'sows', Agreement: 'agreements', Marketing: 'marketing_reports' }
     const tableName = tableMap[doc.type]
     if (!tableName) return
-
     const nowStr = new Date().toISOString()
-    const updates: any = {
-      ip_address: ip,
-      browser: browser.slice(0, 150),
-      device: device
-    }
-
-    if (action === 'view') {
-      updates.viewed_at = nowStr
-      if (doc.status === 'published') updates.status = 'viewed'
-    } else if (action === 'download') {
-      updates.downloaded_at = nowStr
-    } else if (action === 'sign') {
-      updates.signed_at = nowStr
-      updates.status = 'completed'
-    }
-
-    try {
-      const { error } = await supabase.from(tableName).update(updates).eq('id', doc.id)
-      if (error) throw error
-
-      // Log to document history log
-      const histAction = action === 'view' ? 'Document viewed' : action === 'download' ? 'Document downloaded' : 'Document signed'
-      const updatedHistory = [
-        ...(doc.raw.history || []),
-        { date: new Date().toISOString().split('T')[0], action: `${histAction} by client (${device} · ${ip})` }
-      ]
-      await supabase.from(tableName).update({ history: updatedHistory }).eq('id', doc.id)
-      
-      // Update local state smoothly
-      setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, ...updates } : d))
-    } catch (err) {
-      console.error('Error tracking activity:', err)
-    }
+    const updates: any = { ip_address: ip, browser: navigator.userAgent.slice(0, 150), device: window.innerWidth < 768 ? 'Mobile' : 'Desktop' }
+    if (action === 'view') { updates.viewed_at = nowStr; if (doc.status === 'published') updates.status = 'viewed' }
+    else if (action === 'download') updates.downloaded_at = nowStr
+    else if (action === 'sign') { updates.signed_at = nowStr; updates.status = 'signed' }
+    else if (action === 'approve') { updates.signed_at = nowStr; updates.status = 'approved' }
+    try { await supabase.from(tableName).update(updates).eq('id', doc.id); await fetchClientData(true) } catch (err) { console.error(err) }
   }
 
-  // ─── 6. Document Viewer trigger ───
-  const openDoc = (doc: ClientDoc) => {
-    setSelectedDoc(doc)
-    trackActivity(doc, 'view')
-  }
+  const openDoc = (doc: ClientDoc) => { setSelectedDoc(doc); trackActivity(doc, 'view') }
 
-  const handleDownloadPdf = async (doc: ClientDoc) => {
-    await trackActivity(doc, 'download')
-    toast({ title: 'Downloading PDF', description: `${doc.docId} download started.` })
-    
-    // Trigger download using Next.js token-less or tokenized routes
-    const url = doc.token ? `/api/document-pdf?token=${doc.token}` : `/api/document-pdf?id=${doc.id}&type=${doc.type}`
-    window.open(url, '_blank')
-  }
-
-  // ─── 7. Sign flow submission ───
-  const submitSignature = async () => {
-    if (!signerName.trim() || !signingAgreed || !selectedDoc) {
-      toast({ title: 'Missing requirements', description: 'Please fill name and accept checkbox.', variant: 'destructive' })
-      return
-    }
-    setSubmittingAction(true)
-    try {
-      // 1. If active token exists, hit sign-document API, else update directly
-      if (selectedDoc.token) {
-        const response = await fetch('/api/sign-document', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: selectedDoc.token,
-            fullName: signerName,
-            agreed: true
-          })
-        })
-        if (!response.ok) {
-          const errData = await response.json()
-          throw new Error(errData.error || 'Failed to sign document via E-Sign API')
-        }
-      } else {
-        // Direct DB fallback signing
-        await trackActivity(selectedDoc, 'sign')
-      }
-
-      toast({ title: '✅ Document Signed Successfully!', description: 'Your digital signature is captured and locked.' })
-      setShowSignModal(false)
-      setSelectedDoc(prev => prev ? { ...prev, status: 'completed', signed_at: new Date().toISOString() } : null)
-      setSignerName('')
-      setSigningAgreed(false)
-    } catch (e: any) {
-      toast({ title: 'Signing Failed', description: e.message, variant: 'destructive' })
-    } finally {
-      setSubmittingAction(false)
-    }
-  }
-
-  // ─── 8. Request Changes (Revision) flow ───
-  const submitRevisionRequest = async () => {
-    if (!revisionNotes.trim() || !selectedDoc) return
-    setSubmittingAction(true)
-
-    const tableMap: Record<string, string> = {
-      Quotation: 'quotations',
-      Invoice: 'invoices',
-      SOW: 'sows',
-      Agreement: 'agreements',
-      Marketing: 'marketing_reports'
-    }
-    const tableName = tableMap[selectedDoc.type]
-
-    try {
-      const updatedHistory = [
-        ...(selectedDoc.raw.history || []),
-        { date: new Date().toISOString().split('T')[0], action: `Client requested changes: "${revisionNotes}"` }
-      ]
-
-      const { error } = await supabase.from(tableName).update({
-        status: 'needs revision',
-        history: updatedHistory
-      }).eq('id', selectedDoc.id)
-
-      if (error) throw error
-
-      toast({ title: 'Revision Requested', description: 'Your change request was sent to the Netgain team.' })
-      setShowRevisionModal(false)
-      setRevisionNotes('')
-      setSelectedDoc(prev => prev ? { ...prev, status: 'needs revision' } : null)
-    } catch (e: any) {
-      toast({ title: 'Request Failed', description: e.message, variant: 'destructive' })
-    } finally {
-      setSubmittingAction(false)
-    }
-  }
-
-  // ─── 9. Decline Document flow ───
   const handleDeclineDoc = async () => {
     if (!selectedDoc) return
-    if (!window.confirm("Are you sure you want to decline this document? This will mark it as rejected.")) return
-    
+    if (!window.confirm("Are you sure?")) return
     setSubmittingAction(true)
-    const tableMap: Record<string, string> = {
-      Quotation: 'quotations',
-      Invoice: 'invoices',
-      SOW: 'sows',
-      Agreement: 'agreements',
-      Marketing: 'marketing_reports'
-    }
+    const tableMap: Record<string, string> = { Quotation: 'quotations', Invoice: 'invoices', SOW: 'sows', Agreement: 'agreements', Marketing: 'marketing_reports' }
     const tableName = tableMap[selectedDoc.type]
-
     try {
-      const updatedHistory = [
-        ...(selectedDoc.raw.history || []),
-        { date: new Date().toISOString().split('T')[0], action: 'Client declined document' }
-      ]
-
-      const { error } = await supabase.from(tableName).update({
-        status: 'rejected',
-        history: updatedHistory
-      }).eq('id', selectedDoc.id)
-
+      const { error } = await supabase.from(tableName).update({ status: 'rejected' }).eq('id', selectedDoc.id)
       if (error) throw error
-
-      toast({ title: 'Document Declined', description: 'The document status was set to rejected.' })
+      toast({ title: 'Document Declined' })
       setSelectedDoc(prev => prev ? { ...prev, status: 'rejected' } : null)
     } catch (e: any) {
-      toast({ title: 'Decline Action Failed', description: e.message, variant: 'destructive' })
+      toast({ title: 'Action Failed', description: e.message, variant: 'destructive' })
     } finally {
       setSubmittingAction(false)
     }
   }
 
-  // ─── 10. Send Support Ticket ───
   const handleSendSupport = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!supportSubject.trim() || !supportMessage.trim()) {
-      toast({ title: 'Incomplete request', description: 'Subject and message are required.', variant: 'destructive' })
-      return
-    }
-
+    if (!supportSubject.trim() || !supportMessage.trim()) return
     setSubmittingAction(true)
     try {
-      // Simulate ticket generation and notify the admin
-      await supabase.from('client_notifications').insert({
-        client_id: 'Founder',
-        title: `New Support Ticket from ${session?.company || 'Client'}`,
-        message: `Subject: ${supportSubject}\nMessage: ${supportMessage}\nFrom: ${session?.name} (${session?.email})`,
+      const { error } = await supabase.from('client_notifications').insert({
+        client_id: session?.company || session?.email,
+        title: `Support: ${supportSubject}`,
+        message: supportMessage,
+        type: 'support',
         is_read: false
       })
-
-      toast({ title: 'Support Ticket Raised!', description: 'Our engineering/accounts team will review this shortly.' })
+      if (error) throw error
+      toast({ title: 'Support Ticket Raised', description: 'We will get back to you shortly.' })
       setSupportSubject('')
       setSupportMessage('')
-    } catch (e: any) {
-      toast({ title: 'Ticket failed', description: e.message, variant: 'destructive' })
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
     } finally {
       setSubmittingAction(false)
     }
@@ -520,8 +270,58 @@ export default function ClientDashboardPage() {
     router.push('/client/login')
   }
 
+  const handleDownloadPdf = (doc: ClientDoc) => {
+    const url = doc.token ? `/api/document-pdf?token=${doc.token}&download=1` : `/api/document-pdf?id=${doc.id}&type=${doc.type}&download=1`
+    window.open(url, '_blank')
+    trackActivity(doc, 'download')
+  }
+
+  const handleApproveDoc = () => {
+    if (selectedDoc) {
+      trackActivity(selectedDoc, 'approve')
+      toast({ title: 'Document Approved', description: 'Thank you for your approval.' })
+    }
+  }
+
+  const submitSignature = () => {
+    if (selectedDoc) {
+      trackActivity(selectedDoc, 'sign')
+      setShowSignModal(false)
+      setSignerName('')
+      setSigningAgreed(false)
+      toast({ title: 'Document Signed', description: 'Thank you for signing.' })
+    }
+  }
+
+  const submitRevisionRequest = async () => {
+    if (selectedDoc && revisionNotes.trim()) {
+      setSubmittingAction(true)
+      try {
+        const tableMap: Record<string, string> = { Quotation: 'quotations', Invoice: 'invoices', SOW: 'sows', Agreement: 'agreements', Marketing: 'marketing_reports' }
+        const tableName = tableMap[selectedDoc.type]
+        await supabase.from(tableName).update({ status: 'needs revision' }).eq('id', selectedDoc.id)
+        
+        await supabase.from('client_notifications').insert({
+          client_id: session?.company || session?.email,
+          title: `Revision Requested for ${selectedDoc.title}`,
+          message: revisionNotes,
+          type: 'support',
+          is_read: false
+        })
+        toast({ title: 'Revision Requested', description: 'Your request has been sent to our team.' })
+        setShowRevisionModal(false)
+        setRevisionNotes('')
+      } catch (err: any) {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' })
+      } finally {
+        setSubmittingAction(false)
+        fetchClientData(true)
+      }
+    }
+  }
+
   const handleRefresh = () => {
-    if (session) fetchClientData(session, true)
+    if (session) fetchClientData(true)
   }
 
   // Sidebar link details
@@ -990,15 +790,15 @@ export default function ClientDashboardPage() {
                   <CardContent className="space-y-3 leading-relaxed">
                     <div>
                       <p className="text-slate-400 font-medium">Primary Email</p>
-                      <p className="text-[#D4AF37] font-semibold mt-0.5">support@netgainstudio.com</p>
+                      <p className="text-[#D4AF37] font-semibold mt-0.5">{companySettings?.company?.email || 'support@netgainstudio.com'}</p>
                     </div>
                     <div>
                       <p className="text-slate-400 font-medium">Finance & Invoices</p>
-                      <p className="text-[#D4AF37] font-semibold mt-0.5">accounts@netgainstudio.com</p>
+                      <p className="text-[#D4AF37] font-semibold mt-0.5">{companySettings?.company?.email || 'accounts@netgainstudio.com'}</p>
                     </div>
                     <div>
                       <p className="text-slate-400 font-medium">Head Office Consultation</p>
-                      <p className="text-slate-300 font-semibold mt-0.5">+91 (800) 555-NETGAIN</p>
+                      <p className="text-slate-300 font-semibold mt-0.5">{companySettings?.company?.phone || '+91 (800) 555-NETGAIN'}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -1012,7 +812,7 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6 max-w-3xl">
             <div>
               <h1 className="text-xl font-bold text-white">Company Profile</h1>
-              <p className="text-xs text-slate-400 mt-1">Review your business profiles, GST records, and authorized client contact configurations.</p>
+              <p className="text-xs text-slate-400 mt-1">Review your business profiles, and authorized client contact configurations.</p>
             </div>
 
             <Card className="bg-[#091510] border-[#152e23]/80 text-xs">
@@ -1033,10 +833,6 @@ export default function ClientDashboardPage() {
                 <div>
                   <p className="text-slate-400 font-medium">Authorized Phone</p>
                   <p className="text-white font-bold text-sm mt-0.5">{session?.phone || 'Not Configured'}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 font-medium">Tax Registration GST Number</p>
-                  <p className="text-[#D4AF37] font-semibold mt-0.5">{session?.gst || '36ABCDE1234F1ZR (Default)'}</p>
                 </div>
                 <div>
                   <p className="text-slate-400 font-medium">Authorized Domain / Website</p>
@@ -1075,199 +871,52 @@ export default function ClientDashboardPage() {
               </div>
             </div>
 
-            {/* Document metadata sheet */}
+            {/* Document body preview with iframe */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              
-              {/* Main Document Body (Paper simulation) */}
-              <div className="lg:col-span-3 bg-[#0a1410] border border-[#152e23] rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl relative print:bg-white print:text-black">
-                <div className="absolute top-0 left-0 right-0 h-1.5 gold-gradient rounded-t-2xl" />
-                
-                {/* Simulated Paper Header */}
-                <div className="flex justify-between items-start border-b border-[#152e23]/60 pb-5 text-xs text-slate-400">
-                  <div>
-                    <h3 className="text-gold font-black text-sm tracking-wide">NETGAIN DIGITAL</h3>
-                    <p>Hyderabad, Telangana, India</p>
-                    <p>GST: 36ABCDE1234F1ZR</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-white text-[13px]">{selectedDoc.type.toUpperCase()}</p>
-                    <p className="font-mono mt-0.5">{selectedDoc.docId}</p>
-                    <p className="mt-0.5">Version {selectedDoc.published_version}</p>
-                  </div>
-                </div>
-
-                {/* Simulated Paper Metadata */}
-                <div className="grid grid-cols-2 gap-4 text-xs leading-relaxed">
-                  <div>
-                    <p className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Client Details</p>
-                    <p className="font-bold text-white mt-0.5">{selectedDoc.raw.client || session.company}</p>
-                    <p className="text-slate-300">{selectedDoc.raw.contact || session.name}</p>
-                    <p className="text-slate-400">{selectedDoc.raw.email || selectedDoc.raw.client_email || session.email}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-slate-500 font-bold uppercase tracking-wider text-[9px]">Document Details</p>
-                    <p className="text-slate-300 mt-0.5">Status: <span className="font-bold text-[#D4AF37] uppercase">{selectedDoc.status}</span></p>
-                    <p className="text-slate-400">Date Shared: {formatDate(selectedDoc.published_at)}</p>
-                    <p className="text-slate-400">Representative: Netgain Studio Accounts</p>
-                  </div>
-                </div>
-
-                {/* Interactive preview based on document types */}
-                <div className="border-t border-[#152e23]/60 pt-5 text-xs leading-relaxed space-y-4">
-                  {selectedDoc.type === 'Quotation' && (
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gold uppercase tracking-wider">Project Proposal Title: "{selectedDoc.raw.projectTitle || 'Digital Development services'}"</h4>
-                      <p className="text-slate-300">{selectedDoc.raw.notes || 'Please find the services breakdown proposed for your Shopify/Meta Ads growth stack below:'}</p>
-                      
-                      {/* Services breakdown table */}
-                      <div className="border border-[#152e23]/60 rounded-lg overflow-hidden bg-black/25">
-                        <div className="grid grid-cols-3 bg-[#0e2119] p-2.5 font-bold border-b border-[#152e23] text-slate-300">
-                          <span>Service Name</span>
-                          <span>Pricing model</span>
-                          <span className="text-right">Price</span>
-                        </div>
-                        <div className="p-2.5 text-slate-300 space-y-2">
-                          <p>Service components are attached in the main proposal PDF. Please download for the fully detailed list.</p>
-                        </div>
-                      </div>
-                      <div className="text-right font-bold text-sm text-[#D4AF37] border-t border-[#152e23] pt-3">
-                        Total Proposed Value: {formatCurrency(selectedDoc.amount)}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedDoc.type === 'SOW' && (
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gold uppercase tracking-wider">Project Definition: "{selectedDoc.raw.project || 'Development Services'}"</h4>
-                      <div>
-                        <p className="text-slate-400 font-bold">Objectives</p>
-                        <p className="text-slate-300 whitespace-pre-line mt-1">{selectedDoc.raw.objectives || 'Full scale development and execution.'}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 font-bold">Key Deliverables</p>
-                        <p className="text-slate-300 whitespace-pre-line mt-1">{selectedDoc.raw.deliverables || 'Attached in contract'}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 font-bold">Milestones & Sprints</p>
-                        <p className="text-slate-300 whitespace-pre-line mt-1">{selectedDoc.raw.milestones || 'As detailed in proposal'}</p>
-                      </div>
-                      <div className="text-right font-bold text-sm text-[#D4AF37] border-t border-[#152e23] pt-3">
-                        Total Project Value: {formatCurrency(selectedDoc.amount)}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedDoc.type === 'Agreement' && (
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gold uppercase tracking-wider">Agreement Class: {selectedDoc.raw.type || 'Retainer Agreement'}</h4>
-                      <div>
-                        <p className="text-slate-400 font-bold">Engagement Scope</p>
-                        <p className="text-slate-300 whitespace-pre-line mt-1">{selectedDoc.raw.services || 'Comprehensive marketing & growth retainers.'}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 font-bold">Engagement Duration</p>
-                        <p className="text-slate-300 mt-1">{selectedDoc.raw.duration || '6 Months'}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 font-bold">Cancellation / Notice Terms</p>
-                        <p className="text-slate-300 mt-1">{selectedDoc.raw.cancellation || '30 days written notice.'}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 font-bold">Jurisdiction</p>
-                        <p className="text-slate-300 mt-1">{selectedDoc.raw.jurisdiction || 'Telangana, India'}</p>
-                      </div>
-                      <div className="text-right font-bold text-sm text-[#D4AF37] border-t border-[#152e23] pt-3">
-                        Total Value: {formatCurrency(selectedDoc.amount)}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedDoc.type === 'Invoice' && (
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gold uppercase tracking-wider">Outstanding Invoice Particulars</h4>
-                      <p className="text-slate-300">{selectedDoc.raw.notes || 'Tax invoice generated for payment.'}</p>
-                      <div className="border border-[#152e23]/60 rounded-lg overflow-hidden bg-black/25 p-3 space-y-2 text-slate-300">
-                        <div className="flex justify-between"><span>GST Applicable</span><span>{selectedDoc.raw.gst_pct || 18}%</span></div>
-                        <div className="flex justify-between"><span>Payment Terms</span><span>{selectedDoc.raw.payment_schedule_entry || 'Full payment'}</span></div>
-                        <div className="flex justify-between text-rose-400"><span>Due Date</span><span>{formatDate(selectedDoc.raw.due)}</span></div>
-                      </div>
-                      <div className="text-right font-bold text-sm text-[#D4AF37] border-t border-[#152e23] pt-3">
-                        Total Amount Due: {formatCurrency(selectedDoc.amount)}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedDoc.type === 'Marketing' && (
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-bold text-gold uppercase tracking-wider">Performance Audit Period: {selectedDoc.raw.period || 'June 2024'}</h4>
-                      <p className="text-slate-300">Report details and AI intelligence summaries are compiled inside the performance PDF and Excel worksheets. Please click "Download" to open the interactive spreadsheets.</p>
-                      <div className="flex gap-2">
-                        <Button onClick={() => handleDownloadPdf(selectedDoc)} variant="gold" size="sm" className="h-8 font-semibold text-black gap-2">
-                          <Download className="h-3.5 w-3.5" /> Download PDF Report
-                        </Button>
-                        <Button onClick={() => { toast({ title: 'Downloading Excel Worksheet' }); window.open(selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}&format=xlsx` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}&format=xlsx`, '_blank') }} variant="outline" size="sm" className="h-8 border-[#152e23] bg-transparent text-slate-300 gap-1.5">
-                          Download Excel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="bg-[#091510] border border-[#152e23] p-4 rounded-xl text-[11px] text-slate-400/90 leading-relaxed mt-4 print:hidden">
-                    <p className="font-bold text-white mb-1.5 flex items-center gap-1.5">
-                      <Scale className="h-3.5 w-3.5 text-gold" />
-                      Digital Signature Agreement
-                    </p>
-                    By clicking "Accept & Sign" or signing using the link, you verify that you have reviewed the details, checklists, and milestones proposed. Under the Digital Signatures Act, this represents a binding executive endorsement.
-                  </div>
-                </div>
-
-                {/* Digital Signature Rendered on Document if Signed */}
-                {selectedDoc.signed_at && (
-                  <div className="border-t-2 border-dashed border-emerald-500/30 pt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs mt-6 bg-emerald-950/5 p-4 rounded-xl border border-emerald-500/10">
-                    <div>
-                      <p className="text-emerald-400 font-bold flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Digitally Signed</p>
-                      <p className="text-slate-400 mt-1">IP: {selectedDoc.raw.ip_address || 'Verified Portal IP'}</p>
-                      <p className="text-slate-500 text-[10px]">{selectedDoc.raw.browser?.slice(0, 75)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-serif italic text-lg text-emerald-400 font-medium tracking-wide">/s/ {selectedDoc.raw.contact || 'Client Rep'}</p>
-                      <p className="text-slate-400 mt-0.5">Signed At: {formatDate(selectedDoc.signed_at)}</p>
-                    </div>
-                  </div>
-                )}
+              <div className="lg:col-span-3 bg-black border border-[#152e23] rounded-2xl overflow-hidden shadow-2xl relative h-[80vh] min-h-[600px]">
+                 <iframe 
+                   src={selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}#toolbar=0` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}#toolbar=0`} 
+                   className="w-full h-full border-0 bg-white"
+                   title={selectedDoc.title}
+                 />
               </div>
 
-              {/* Side controls (Signing / Change requests) */}
-              <div className="space-y-4 print:hidden">
-                <Card className="bg-[#091510] border-[#152e23] text-white">
-                  <CardHeader className="pb-3 border-b border-[#152e23]/50">
-                    <CardTitle className="text-xs font-bold text-gold uppercase tracking-wider">Document Control Panel</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-3">
+              {/* Sidebar Action Panel */}
+              <div className="lg:col-span-1 space-y-6">
+                <Card className="bg-[#121212] border-white/5 shadow-xl">
+                  <CardContent className="p-5 space-y-5">
                     
-                    {/* Status Display */}
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Current Status</span>
-                      {getStatusBadgeStyled(selectedDoc.status)}
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Portal Version</span>
-                      <span className="font-mono font-bold text-slate-300">V{selectedDoc.published_version}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs pb-3 border-b border-[#152e23]/30">
-                      <span className="text-slate-400">Date Published</span>
-                      <span className="font-semibold text-slate-300">{formatDate(selectedDoc.published_at)}</span>
+                    {/* Status & Version */}
+                    <div className="flex flex-col gap-2 pb-4 border-b border-white/5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400 font-medium">Status</span>
+                        {getStatusBadgeStyled(selectedDoc.status)}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400 font-medium">Version</span>
+                        <span className="font-mono font-bold text-slate-300">V{selectedDoc.published_version}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400 font-medium">Published</span>
+                        <span className="font-semibold text-slate-300 text-xs">{formatDate(selectedDoc.published_at)}</span>
+                      </div>
                     </div>
 
                     {/* Interactive signing controls if applicable and NOT signed */}
                     {!selectedDoc.signed_at && ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && selectedDoc.status !== 'rejected' && (
                       <div className="space-y-2 pt-2">
-                        <Button onClick={() => setShowSignModal(true)} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9">
-                          <FileSignature className="h-3.5 w-3.5" />
-                          Accept & Sign
-                        </Button>
+                        {selectedDoc.type === 'Quotation' ? (
+                          <Button onClick={handleApproveDoc} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                            {submittingAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                            Approve Quotation
+                          </Button>
+                        ) : (
+                          <Button onClick={() => setShowSignModal(true)} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                            <FileSignature className="h-3.5 w-3.5" />
+                            Accept & Sign
+                          </Button>
+                        )}
+                        
                         <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-[#152e23] bg-transparent text-slate-300 hover:bg-white/5 h-9">
                           Request Changes
                         </Button>

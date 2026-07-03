@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, Briefcase, FileText, Receipt, ClipboardList, HandshakeIcon,
   FolderOpen, Cpu, TrendingUp, MessageSquare, UserCog, Settings, ChevronLeft,
   ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar,
-  Sparkles, BookOpen, Brain
+  Sparkles, BookOpen, Brain, LifeBuoy
 } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -39,6 +39,7 @@ const navItems = [
       { href: '/finance', icon: DollarSign, label: 'Finance' },
       { href: '/meetings', icon: Calendar, label: 'Meetings' },
       { href: '/communications', icon: MessageSquare, label: 'Communications' },
+      { href: '/support', icon: LifeBuoy, label: 'Support Tickets' },
     ],
   },
   {

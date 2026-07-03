@@ -25,10 +25,13 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
 
-const STATUS_OPTS = ['draft', 'sent', 'approved', 'rejected', 'completed', 'signed']
+const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'needs revision', 'approved', 'rejected', 'completed', 'signed']
 const STATUS_LABELS: Record<string, string> = { 
   draft: 'Draft', 
   sent: 'Sent', 
+  published: 'Published',
+  viewed: 'Viewed',
+  'needs revision': 'Needs Revision',
   approved: 'Approved', 
   rejected: 'Rejected', 
   completed: 'Completed',

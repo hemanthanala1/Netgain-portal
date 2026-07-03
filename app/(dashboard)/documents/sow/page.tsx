@@ -43,7 +43,7 @@ type SOW = {
 }
 
 const mockSOWs: SOW[] = []
-const STATUS_OPTS = ['draft', 'sent', 'signed', 'completed', 'expired']
+const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'needs revision', 'signed', 'completed', 'expired', 'rejected']
 
 function compileDefaultSowTerms(companyDocs?: any) {
   const paymentTermsOneTime = companyDocs?.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'

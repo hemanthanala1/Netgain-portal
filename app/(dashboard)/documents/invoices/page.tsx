@@ -20,8 +20,8 @@ import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
-const STATUS_OPTS = ['draft', 'sent', 'paid', 'overdue', 'completed']
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', completed: 'Completed' }
+const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'paid', 'overdue', 'completed', 'rejected']
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', published: 'Published', viewed: 'Viewed', paid: 'Paid', overdue: 'Overdue', completed: 'Completed', rejected: 'Rejected' }
 
 type Invoice = {
   id: string; docId: string; client: string; contact: string; email: string; phone: string

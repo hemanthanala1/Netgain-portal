@@ -101,6 +101,10 @@ export default function ServicesPage() {
   const [submitting, setSubmitting]   = useState(false)
   const [deleting, setDeleting]       = useState(false)
 
+  // Bulk delete state
+  const [selectedSvcs, setSelectedSvcs] = useState<string[]>([])
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+
   // Filter
   const filtered = svcs.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase())
@@ -264,6 +268,28 @@ export default function ServicesPage() {
       setSvcs(svcs.filter(s => s.id !== deleteId))
       setDeleteId(null)
       toast({ title: 'Service deleted' })
+    } catch (err: any) {
+      toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedSvcs.length === 0) return
+    setDeleting(true)
+    try {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase.from('services').delete().in('id', selectedSvcs)
+        if (error) {
+          toast({ title: 'Error deleting services', description: error.message, variant: 'destructive' })
+          return
+        }
+      }
+      setSvcs(svcs.filter(s => !selectedSvcs.includes(s.id)))
+      setSelectedSvcs([])
+      setShowBulkDelete(false)
+      toast({ title: 'Selected services deleted' })
     } catch (err: any) {
       toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
     } finally {
@@ -527,6 +553,11 @@ export default function ServicesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search services..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {selectedSvcs.length > 0 && (
+          <Button variant="destructive" onClick={() => setShowBulkDelete(true)}>
+            <Trash2 className="h-4 w-4 mr-2" /> Delete ({selectedSvcs.length})
+          </Button>
+        )}
         <Button variant="outline" size="icon" onClick={() => setGridView(!gridView)}>
           {gridView ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
         </Button>
@@ -553,6 +584,15 @@ export default function ServicesPage() {
                   <div className="flex-1 min-w-0">
                     {/* Name + status */}
                     <div className="flex items-start gap-2 flex-wrap">
+                      <input 
+                        type="checkbox" 
+                        className="mt-1 h-3.5 w-3.5 rounded border-gray-300 text-gold focus:ring-gold"
+                        checked={selectedSvcs.includes(svc.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedSvcs([...selectedSvcs, svc.id])
+                          else setSelectedSvcs(selectedSvcs.filter(id => id !== svc.id))
+                        }}
+                      />
                       <h3 className="font-semibold text-sm leading-tight flex-1">{svc.name}</h3>
                       <Badge className={`text-[10px] shrink-0 ${svc.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
                         {svc.status}
@@ -1014,6 +1054,21 @@ export default function ServicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedSvcs.length} Services?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. These services will be permanently removed from your library.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} disabled={deleting} className="bg-destructive text-destructive-foreground">
+              {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</> : 'Delete Services'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

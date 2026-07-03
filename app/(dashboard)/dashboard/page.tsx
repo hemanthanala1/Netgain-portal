@@ -63,7 +63,8 @@ export default function DashboardPage() {
             { data: quotations },
             { data: sows },
             { data: agreements },
-            { data: dbServices }
+            { data: dbServices },
+            { data: clientNotifications }
           ] = await Promise.all([
             supabase.from('crm_clients').select('id, name, created_at'),
             supabase.from('invoices').select('id, amount, status, created, due, service_ids, client'),
@@ -71,7 +72,8 @@ export default function DashboardPage() {
             supabase.from('quotations').select('id, doc_id, client, created, amount, status'),
             supabase.from('sows').select('id, doc_id, client, created, status'),
             supabase.from('agreements').select('id, doc_id, client, created, status'),
-            supabase.from('services').select('id, name, base_price')
+            supabase.from('services').select('id, name, base_price'),
+            supabase.from('client_notifications').select('id, client_id, title, is_read, created_at')
           ])
 
           // 1. Client Metrics
@@ -198,6 +200,15 @@ export default function DashboardPage() {
                 task: `Follow up with ${q.client} on quotation ${q.doc_id}`,
                 due: 'Tomorrow',
                 priority: 'medium'
+              })
+            })
+          }
+          if (clientNotifications) {
+            clientNotifications.filter(n => !n.is_read).forEach(n => {
+              tasksList.push({
+                task: `Support Ticket: ${n.title} (from ${n.client_id})`,
+                due: 'Today',
+                priority: 'high'
               })
             })
           }
