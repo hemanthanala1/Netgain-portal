@@ -15,6 +15,7 @@ import { PromptViewer } from '@/components/ui/prompt-viewer'
 import { ApprovalBadge } from '@/components/ui/approval-badge'
 import { FileUpload } from '@/components/ui/file-upload'
 import { VersionTimeline } from '@/components/ui/version-timeline'
+import { ProjectManagerAutocomplete } from '@/components/ui/project-manager-autocomplete'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
   History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
@@ -841,7 +842,12 @@ export default function CampaignStrategyPage() {
             </div>
             <div className="sm:col-span-2 space-y-1">
               <Label>Project Manager</Label>
-              <Input placeholder="e.g. Devon S." value={quickPm} onChange={e => setQuickPm(e.target.value)} />
+              <ProjectManagerAutocomplete
+                value={quickPm}
+                onChange={setQuickPm}
+                onSelect={(manager) => setQuickPm(manager.name)}
+                placeholder="Search project managers..."
+              />
             </div>
             <div className="sm:col-span-2 space-y-1">
               <Label>Initial Tasks / Milestones</Label>
@@ -943,7 +949,13 @@ export default function CampaignStrategyPage() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Project Manager</Label>
-                            <Input value={editedPm} onChange={e => setEditedPm(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                            <ProjectManagerAutocomplete
+                              value={editedPm}
+                              onChange={setEditedPm}
+                              onSelect={(manager) => setEditedPm(manager.name)}
+                              placeholder="Search project managers..."
+                              className="text-xs"
+                            />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px] flex justify-between">Progress <span>{editedProgress}%</span></Label>
@@ -1645,7 +1657,12 @@ export default function CampaignStrategyPage() {
             </div>
             <div className="col-span-1 sm:col-span-2 space-y-1">
               <Label>Project Manager</Label>
-              <Input value={quickPm} onChange={e => setQuickPm(e.target.value)} />
+              <ProjectManagerAutocomplete
+                value={quickPm}
+                onChange={setQuickPm}
+                onSelect={(manager) => setQuickPm(manager.name)}
+                placeholder="Search project managers..."
+              />
             </div>
           </div>
           <DialogFooter>

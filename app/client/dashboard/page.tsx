@@ -779,46 +779,6 @@ export default function ClientDashboardPage() {
     }
   }
 
-  const handleToggleClientMilestone = async (project: Project, index: number) => {
-    const updatedMilestones = [...(project.milestones || [])]
-    const m = updatedMilestones[index]
-    if (!m) return
-    
-    if (m.endsWith(' ✅')) {
-      updatedMilestones[index] = m.replace(' ✅', ' ⏳')
-    } else if (m.endsWith(' ⏳')) {
-      updatedMilestones[index] = m.replace(' ⏳', ' ✅')
-    } else {
-      updatedMilestones[index] = m + ' ✅'
-    }
-    
-    const completedCount = updatedMilestones.filter(m => m.endsWith(' ✅')).length
-    const progress = Math.round((completedCount / updatedMilestones.length) * 100) || 0
-    
-    let updatedStack = project.stack;
-    try {
-      const stackObj = JSON.parse(project.stack || '{}')
-      stackObj.milestones = updatedMilestones
-      stackObj.progress = progress
-      updatedStack = JSON.stringify(stackObj)
-    } catch (e) {
-      updatedStack = JSON.stringify({ milestones: updatedMilestones, progress })
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ stack: updatedStack })
-        .eq('id', project.id)
-        
-      if (error) throw error
-      toast({ title: 'Task updated', description: 'Progress saved successfully.' })
-      fetchClientData(true)
-    } catch (err: any) {
-      toast({ title: 'Failed to update task', description: err.message, variant: 'destructive' })
-    }
-  }
-
   const handleSubmitRequirement = async () => {
     if (!activeSubmittingReq) return
     setSubmittingRequirementState(true)
@@ -1518,6 +1478,7 @@ export default function ClientDashboardPage() {
               <div>
                 <h1 className="text-xl font-bold text-white">Tasks & Sprints</h1>
                 <p className="text-xs text-slate-400 mt-1">Monitor the active milestones, checklists, and execution stages of your projects.</p>
+                <p className="text-[10px] text-slate-500 mt-1">Read-only in the client portal. Admin updates sync here in real time.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
@@ -1566,12 +1527,9 @@ export default function ClientDashboardPage() {
                           return (
                             <Card key={i} className="bg-[#091510] border-[#152e23]/60 p-4 flex items-center justify-between text-xs hover:border-gold/30 transition-colors">
                               <div className="flex items-center gap-3">
-                                <input 
-                                  type="checkbox" 
-                                  checked={isDone}
-                                  onChange={() => handleToggleClientMilestone(currentProj as any, i)}
-                                  className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
-                                />
+                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${isDone ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-slate-500/50 bg-slate-500/10 text-slate-500'}`} aria-hidden="true">
+                                  <Check className="h-3 w-3" />
+                                </span>
                                 <span className={`font-semibold ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>{cleanText}</span>
                               </div>
                               <div className="flex items-center gap-2">
