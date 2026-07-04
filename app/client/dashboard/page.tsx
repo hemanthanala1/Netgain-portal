@@ -1976,13 +1976,15 @@ export default function ClientDashboardPage() {
             </div>
 
             {/* Document body preview with iframe */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3 bg-black border border-[#152e23] rounded-2xl overflow-hidden shadow-2xl relative h-[80vh] min-h-[600px]">
+            <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
+              <div className="lg:col-span-3 bg-black border border-[#152e23] rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
                  <iframe 
                    id="doc-viewer-iframe"
                    src={selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}#toolbar=0` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}#toolbar=0`} 
                    className="w-full h-full border-0 bg-white"
+                   style={{ minHeight: '400px' }}
                    title={selectedDoc.title}
+                   scrolling="yes"
                  />
               </div>
 
@@ -2009,10 +2011,8 @@ export default function ClientDashboardPage() {
 
                     {/* Interactive signing controls if applicable and NOT signed */}
                     {!selectedDoc.signed_at && 
-                     selectedDoc.status?.toLowerCase() !== 'completed' && 
-                     selectedDoc.status?.toLowerCase() !== 'signed' && 
-                     ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && 
-                     selectedDoc.status?.toLowerCase() !== 'rejected' && (
+                     !['completed', 'signed', 'approved', 'needs revision', 'rejected'].includes(selectedDoc.status?.toLowerCase() || '') && 
+                     ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && (
                       <div className="space-y-2 pt-2">
                         {selectedDoc.type === 'Quotation' ? (
                           <Button onClick={handleApproveDoc} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
@@ -2035,16 +2035,29 @@ export default function ClientDashboardPage() {
                       </div>
                     )}
 
+                    {/* Needs revision state */}
+                    {selectedDoc.status?.toLowerCase() === 'needs revision' && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
+                        <AlertTriangle className="h-7 w-7 text-amber-400 mx-auto" />
+                        <p className="text-xs font-bold text-amber-400">Revision Requested</p>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Your change request has been sent to the Netgain team. We will update this document shortly.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Approved & Signed state message */}
                     {(selectedDoc.signed_at || 
-                      selectedDoc.status?.toLowerCase() === 'completed' || 
-                      selectedDoc.status?.toLowerCase() === 'signed') && (
+                      ['completed', 'signed', 'approved'].includes(selectedDoc.status?.toLowerCase() || '')) && (
                       <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
                         <CheckCircle2 className="h-7 w-7 text-emerald-400 mx-auto" />
-                        <p className="text-xs font-bold text-emerald-400">Approved & Signed</p>
+                        <p className="text-xs font-bold text-emerald-400">✅ Approved & Signed</p>
                         <p className="text-[10px] text-slate-400 leading-normal">
                           This document has been digitally signed and is legally binding.
                         </p>
+                        {selectedDoc.signed_at && (
+                          <p className="text-[9px] text-slate-500">Signed on {formatDate(selectedDoc.signed_at)}</p>
+                        )}
                       </div>
                     )}
 

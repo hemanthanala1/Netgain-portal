@@ -1059,7 +1059,7 @@ export default function QuotationsPage() {
                 <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><FileText className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No quotations found</p></td></tr>
               )}
               {filtered.map(q => (
-                <tr key={q.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                <tr key={q.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${q.status === 'needs revision' ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
                   <td className="py-3 px-4">
                     <span className="font-mono text-xs text-gold">{q.docId}</span>
                     {q.published ? (
@@ -1074,6 +1074,11 @@ export default function QuotationsPage() {
                       </div>
                     ) : (
                       <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+                    )}
+                    {q.status === 'needs revision' && (
+                      <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
+                        ⚠ Client requested changes
+                      </div>
                     )}
                   </td>
                   <td className="py-3 px-4"><p className="font-medium">{q.client}</p><p className="text-xs text-muted-foreground">{q.contact}</p></td>
@@ -1164,6 +1169,17 @@ export default function QuotationsPage() {
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
+            {/* Show revision notes prominently if status is needs revision */}
+            {historyDoc?.status === 'needs revision' && (() => {
+              const revEntry = (historyDoc as any).history?.slice().reverse().find((h: any) => h.action.startsWith('Client requested changes'))
+              return revEntry ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-3">
+                  <p className="text-xs font-bold text-amber-400 mb-1">⚠ Client Requested Changes</p>
+                  <p className="text-sm text-amber-200 leading-snug">{revEntry.action.replace('Client requested changes: ', '').replace(/^"|"$/g, '')}</p>
+                  <p className="text-[10px] text-amber-400/60 mt-1">{revEntry.date}</p>
+                </div>
+              ) : null
+            })()}
             {historyDoc?.history.slice().reverse().map((h, i) => (
               <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
                 onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
