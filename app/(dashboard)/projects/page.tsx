@@ -661,12 +661,16 @@ export default function CampaignStrategyPage() {
         approvalStatus: 'draft'
       })
 
+      const targetId = String(Date.now())
+
       const { data, error } = await supabase.from('projects').insert({
+        id: targetId,
         doc_id: docId,
         title: quickTitle.trim(),
         client: quickClient.trim(),
         status: quickStatus,
         stack: stackJson,
+        created: now,
         history: [{ date: now, action: 'Project created', canDownload: false }]
       }).select().single()
 
