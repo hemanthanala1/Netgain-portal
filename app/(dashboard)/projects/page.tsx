@@ -31,7 +31,7 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
-  prompt?: string; approvalStatus?: string; businessDetails?: CampaignStrategyForm; currentStage?: string
+  prompt?: string; approvalStatus?: string; businessDetails?: CampaignStrategyForm; currentStage?: string; sprintGoal?: string
 }
 
 const statusColors: Record<string, string> = {
@@ -69,6 +69,7 @@ export default function CampaignStrategyPage() {
   const [quickTimeline, setQuickTimeline] = useState('')
   const [quickPm, setQuickPm] = useState('')
   const [quickCurrentStage, setQuickCurrentStage] = useState('')
+  const [quickSprintGoal, setQuickSprintGoal] = useState('')
   const [quickTasks, setQuickTasks] = useState('')
   const [savingQuick, setSavingQuick] = useState(false)
 
@@ -490,9 +491,9 @@ export default function CampaignStrategyPage() {
           const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
           if (!error && data) {
             const mapped = data.map((p: any) => {
-              let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+              let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', sprintGoal: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
               if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
-              return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
+              return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', sprintGoal: extra.sprintGoal || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
             })
             setProjects(mapped); setCachedData('projects', mapped)
           }
@@ -517,9 +518,9 @@ export default function CampaignStrategyPage() {
       const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
       if (!error && data) {
         const mapped = data.map((p: any) => {
-          let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+          let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', sprintGoal: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
           if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
-          return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
+          return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', sprintGoal: extra.sprintGoal || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
         })
         setProjects(mapped)
         setCachedData('projects', mapped)
@@ -659,6 +660,7 @@ export default function CampaignStrategyPage() {
         milestones: taskList,
         pm: quickPm || 'Netgain Team',
         currentStage: quickCurrentStage,
+        sprintGoal: quickSprintGoal,
         startDate: now,
         approvalStatus: 'draft'
       })
@@ -680,7 +682,7 @@ export default function CampaignStrategyPage() {
 
       toast({ title: '✅ Project Created!', description: `${quickTitle} — ${docId}` })
       setShowQuickCreate(false)
-      setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickCurrentStage(''); setQuickTasks('')
+      setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickCurrentStage(''); setQuickSprintGoal(''); setQuickTasks('')
       setQuickType('Web Development'); setQuickStatus('planned')
       invalidateCache('dashboard')
     } catch (e: any) {
@@ -710,6 +712,7 @@ export default function CampaignStrategyPage() {
     setEditedSpent(p.spent || 0)
     setEditedTimeline(p.timeline || '')
     setQuickCurrentStage(p.currentStage || '')
+    setQuickSprintGoal(p.sprintGoal || '')
     setEditedProgress(p.progress || 0)
     setEditedStatus(p.status || 'planned')
 
@@ -788,6 +791,7 @@ export default function CampaignStrategyPage() {
                   setQuickTimeline(p.timeline)
                   setQuickPm(p.pm)
                   setQuickCurrentStage(p.currentStage || '')
+                  setQuickSprintGoal(p.sprintGoal || '')
                   setEditId(p.id)
                 }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -1669,6 +1673,10 @@ export default function CampaignStrategyPage() {
               <Input placeholder="e.g. Development & Integration" value={quickCurrentStage} onChange={e => setQuickCurrentStage(e.target.value)} />
             </div>
             <div className="col-span-1 sm:col-span-2 space-y-1">
+              <Label>Sprint Goal</Label>
+              <Textarea placeholder="e.g. Final API integrations and validation checks." value={quickSprintGoal} onChange={e => setQuickSprintGoal(e.target.value)} className="min-h-20" />
+            </div>
+            <div className="col-span-1 sm:col-span-2 space-y-1">
               <Label>Project Manager</Label>
               <ProjectManagerAutocomplete
                 value={quickPm}
@@ -1695,6 +1703,7 @@ export default function CampaignStrategyPage() {
                 milestones: target.milestones,
                 pm: quickPm || 'Netgain Team',
                 currentStage: quickCurrentStage,
+                sprintGoal: quickSprintGoal,
                 startDate: target.startDate,
                 approvalStatus: target.approvalStatus || 'draft'
               })
@@ -1708,6 +1717,7 @@ export default function CampaignStrategyPage() {
                 timeline: quickTimeline,
                 pm: quickPm || 'Netgain Team',
                 currentStage: quickCurrentStage,
+                sprintGoal: quickSprintGoal,
                 status: quickStatus,
                 history: newHistory
               }

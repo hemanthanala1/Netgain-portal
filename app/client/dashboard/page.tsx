@@ -65,6 +65,7 @@ interface Project {
   timeline?: string
   pm?: string
   currentStage?: string
+  sprintGoal?: string
 }
 
 interface ClientNotification {
@@ -248,7 +249,7 @@ export default function ClientDashboardPage() {
         const docClient = (p.client || '').toLowerCase().trim()
         return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
       }).map((p: any) => {
-        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.', currentStage: '' }
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.', currentStage: '', sprintGoal: '' }
         if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
         return {
           id: p.id,
@@ -265,7 +266,8 @@ export default function ClientDashboardPage() {
           spent: Number(extra.spent) || 0,
           timeline: extra.timeline,
           pm: extra.pm,
-          currentStage: extra.currentStage || ''
+          currentStage: extra.currentStage || '',
+          sprintGoal: extra.sprintGoal || ''
         }
       })
 
@@ -322,21 +324,39 @@ export default function ClientDashboardPage() {
     if (!session || !isSupabaseConfigured()) return
 
     const clientCompany = (session.company || '').toLowerCase().trim()
+    const refreshClientData = () => {
+      fetchClientData(true)
+    }
 
     // Subscribe to projects changes
     const projectChannel = supabase
       .channel('client-projects-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
-        fetchClientData(true)
+        refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirements' }, () => {
-        fetchClientData(true)
+        refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_files' }, () => {
-        fetchClientData(true)
+        refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
-        fetchClientData(true)
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sows' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agreements' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketing_reports' }, () => {
+        refreshClientData()
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'client_notifications' }, (payload) => {
         const n = payload.new as any
@@ -1294,7 +1314,7 @@ export default function ClientDashboardPage() {
                           <span className="text-slate-400">Current Stage</span>
                           <span className="text-[#D4AF37]">{stage}</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-snug">Sprint goal: Final API integrations and validation checks.</p>
+                        <p className="text-[10px] text-slate-500 leading-snug">Sprint goal: {proj.sprintGoal || 'Final API integrations and validation checks.'}</p>
                       </div>
 
                       <div className="space-y-1.5">

@@ -15,6 +15,10 @@ export default function ClientLoginPage() {
   const router = useRouter()
   const { toast } = useToast()
 
+  useEffect(() => {
+    void router.prefetch('/client/dashboard')
+  }, [router])
+
   // Redirect if already logged in
   useEffect(() => {
     const session = localStorage.getItem('netgain_client_session')
@@ -46,7 +50,7 @@ export default function ClientLoginPage() {
       // Save session
       localStorage.setItem('netgain_client_session', JSON.stringify(data.session))
       toast({ title: 'Welcome Back!', description: `Logged in successfully as ${data.session.name}.` })
-      router.push('/client/dashboard')
+      router.replace('/client/dashboard')
     } catch (err: any) {
       console.error(err)
       toast({ title: 'Login Failed', description: err.message || 'Incorrect email or password.', variant: 'destructive' })
@@ -91,6 +95,12 @@ export default function ClientLoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="bg-[#0A1612] border-[#1E3A2F] text-white focus-visible:ring-[#D4AF37] h-10"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      document.getElementById('password')?.focus()
+                    }
+                  }}
                 />
               </div>
 

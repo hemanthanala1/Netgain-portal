@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    void router.prefetch('/dashboard')
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,7 +42,7 @@ export default function LoginPage() {
           document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${data.session.expires_in}`
           document.cookie = `nbos-session=active; path=/`
           toast({ title: 'Welcome back!', description: 'Logged in successfully.' })
-          router.push('/dashboard')
+          router.replace('/dashboard')
         }
       } catch (err: any) {
         toast({ title: 'Auth Error', description: err.message || 'An error occurred during login', variant: 'destructive' })
@@ -47,7 +51,7 @@ export default function LoginPage() {
       // Demo mode — bypass auth if Supabase not configured
       await new Promise(r => setTimeout(r, 800))
       document.cookie = 'nbos-session=demo; path=/'
-      router.push('/dashboard')
+      router.replace('/dashboard')
     }
     setLoading(false)
   }
@@ -90,10 +94,8 @@ export default function LoginPage() {
                   autoComplete="email" 
                   onKeyDown={e => {
                     if (e.key === 'Enter') {
-                      if (!password) {
-                        e.preventDefault()
-                        document.getElementById('password')?.focus()
-                      }
+                      e.preventDefault()
+                      document.getElementById('password')?.focus()
                     }
                   }}
                 />
