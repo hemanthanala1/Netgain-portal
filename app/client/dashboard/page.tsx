@@ -79,6 +79,7 @@ export default function ClientDashboardPage() {
   const [sessionReady, setSessionReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -309,6 +310,44 @@ export default function ClientDashboardPage() {
 
   useEffect(() => {
     if (session) fetchClientData()
+  }, [session])
+
+  // ─── REAL-TIME SUBSCRIPTIONS ───
+  useEffect(() => {
+    if (!session || !isSupabaseConfigured()) return
+
+    const clientCompany = (session.company || '').toLowerCase().trim()
+
+    // Subscribe to projects changes
+    const projectChannel = supabase
+      .channel('client-projects-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+        fetchClientData(true)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirements' }, () => {
+        fetchClientData(true)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_files' }, () => {
+        fetchClientData(true)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        fetchClientData(true)
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'client_notifications' }, (payload) => {
+        const n = payload.new as any
+        if (n.client_id === clientCompany || n.client_id === session.email) {
+          setNotifications(prev => [n, ...prev])
+          // Show toast for new notification
+          toast({ title: n.title, description: n.message?.slice(0, 80) })
+        }
+      })
+      .subscribe((status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED')
+      })
+
+    return () => {
+      supabase.removeChannel(projectChannel)
+    }
   }, [session])
 
   const trackActivity = async (doc: ClientDoc, action: 'view' | 'download' | 'sign' | 'approve') => {
@@ -1067,6 +1106,10 @@ export default function ClientDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <span className={`hidden sm:inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+              {realtimeConnected ? 'Live' : 'Offline'}
+            </span>
             <Button
               onClick={handleRefresh}
               disabled={refreshing}

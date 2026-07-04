@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -57,6 +57,19 @@ export default function CampaignStrategyPage() {
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
+
+  // Quick Project Create States
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickTitle, setQuickTitle] = useState('')
+  const [quickClient, setQuickClient] = useState('')
+  const [quickType, setQuickType] = useState('Web Development')
+  const [quickStatus, setQuickStatus] = useState('planned')
+  const [quickBudget, setQuickBudget] = useState('')
+  const [quickTimeline, setQuickTimeline] = useState('')
+  const [quickPm, setQuickPm] = useState('')
+  const [quickTasks, setQuickTasks] = useState('')
+  const [savingQuick, setSavingQuick] = useState(false)
 
   // ─── PROJECT WORKSPACE STATES ───
   const [workspaceRequirements, setWorkspaceRequirements] = useState<any[]>([])
@@ -495,6 +508,47 @@ export default function CampaignStrategyPage() {
     loadProjects()
   }, [])
 
+  // ─── REAL-TIME SUBSCRIPTIONS ───
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+
+    const reloadProjects = async () => {
+      const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
+      if (!error && data) {
+        const mapped = data.map((p: any) => {
+          let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+          if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
+          return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
+        })
+        setProjects(mapped)
+        setCachedData('projects', mapped)
+      }
+    }
+
+    const channel = supabase
+      .channel('admin-projects-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => reloadProjects())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirements' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_files' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirement_submissions' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .subscribe((status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED')
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [detailProject])
+
   const saveCategories = async (updatedCats: string[]) => {
     setCategories(updatedCats)
     if (isSupabaseConfigured()) {
@@ -582,6 +636,54 @@ export default function CampaignStrategyPage() {
     finally { setGenerating(false) }
   }
 
+  const handleSaveQuickProject = async () => {
+    if (!quickTitle.trim() || !quickClient.trim()) {
+      toast({ title: 'Project Title and Client are required', variant: 'destructive' })
+      return
+    }
+    setSavingQuick(true)
+    try {
+      const docId = generateDocId('NG-PRJ')
+      const now = new Date().toISOString().slice(0, 10)
+      const taskList = quickTasks.trim()
+        ? quickTasks.split('\n').filter(t => t.trim()).map(t => `${t.trim()} ⏳`)
+        : ['Kickoff ⏳', 'Development ⏳', 'Review ⏳', 'Delivery ⏳']
+
+      const stackJson = JSON.stringify({
+        type: quickType,
+        budget: Number(quickBudget) || 0,
+        spent: 0,
+        timeline: quickTimeline,
+        progress: 0,
+        milestones: taskList,
+        pm: quickPm || 'Netgain Team',
+        startDate: now,
+        approvalStatus: 'draft'
+      })
+
+      const { data, error } = await supabase.from('projects').insert({
+        doc_id: docId,
+        title: quickTitle.trim(),
+        client: quickClient.trim(),
+        status: quickStatus,
+        stack: stackJson,
+        history: [{ date: now, action: 'Project created', canDownload: false }]
+      }).select().single()
+
+      if (error) throw error
+
+      toast({ title: '✅ Project Created!', description: `${quickTitle} — ${docId}` })
+      setShowQuickCreate(false)
+      setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickTasks('')
+      setQuickType('Web Development'); setQuickStatus('planned')
+      invalidateCache('dashboard')
+    } catch (e: any) {
+      toast({ title: 'Error creating project', description: e.message, variant: 'destructive' })
+    } finally {
+      setSavingQuick(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteId) return
     if (isSupabaseConfigured()) { await supabase.from('projects').delete().eq('id', deleteId) }
@@ -614,16 +716,23 @@ export default function CampaignStrategyPage() {
         <div>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-gold" />
-            <h1 className="text-2xl font-bold tracking-tight">Campaign Strategy Engine</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Projects & Campaign Strategy</h1>
+            <span className={`inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+              {realtimeConnected ? 'Live' : 'Connecting...'}
+            </span>
           </div>
-          <p className="text-muted-foreground text-sm mt-0.5">Create complete marketing strategies with AI-powered prompt generation</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Manage projects, tasks, requirements and campaign strategies</p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5 flex-1 sm:flex-initial">
-            Manage Categories
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5">
+            Categories
           </Button>
-          <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 flex-1 sm:flex-initial">
-            <Plus className="h-4 w-4" />New Strategy
+          <Button variant="outline" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5">
+            <Sparkles className="h-4 w-4" /> Campaign Strategy
+          </Button>
+          <Button variant="gold" size="sm" onClick={() => setShowQuickCreate(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" /> New Project
           </Button>
         </div>
       </div>
@@ -631,11 +740,12 @@ export default function CampaignStrategyPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Strategies', value: projects.length },
+          { label: 'Total Projects', value: projects.length },
           { label: 'Active', value: projects.filter(p => p.status === 'active').length },
           { label: 'Total Budget', value: formatCurrency(projects.reduce((s, p) => s + p.budget, 0)) },
           { label: 'Planned', value: projects.filter(p => p.status === 'planned').length },
         ].map(s => (
+
           <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.label}</p><p className="text-xl font-bold mt-1">{s.value}</p></CardContent></Card>
         ))}
       </div>
@@ -677,6 +787,77 @@ export default function CampaignStrategyPage() {
       </div>
 
       {/* ── CREATE DIALOG ──────────────────────────────────────────────── */}
+      {/* ── QUICK CREATE PROJECT DIALOG ── */}
+      <Dialog open={showQuickCreate} onOpenChange={setShowQuickCreate}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-gold" /> Create New Project
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-sm">
+            <div className="sm:col-span-2 space-y-1">
+              <Label>Project Title *</Label>
+              <Input placeholder="e.g. Netgain Website Redesign" value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 space-y-1">
+              <Label>Client Name *</Label>
+              <ClientAutocomplete value={quickClient} onChange={setQuickClient} onSelect={(c) => setQuickClient(c.name)} placeholder="Select or type client name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Project Type</Label>
+              <Select value={quickType} onValueChange={setQuickType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={quickStatus} onValueChange={setQuickStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="planned">Planned</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Budget (₹)</Label>
+              <Input type="number" placeholder="e.g. 150000" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Timeline</Label>
+              <Input placeholder="e.g. 3 months, Q3 2025" value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 space-y-1">
+              <Label>Project Manager</Label>
+              <Input placeholder="e.g. Devon S." value={quickPm} onChange={e => setQuickPm(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 space-y-1">
+              <Label>Initial Tasks / Milestones</Label>
+              <Textarea
+                placeholder={`Enter one task per line:\nKickoff Call\nWireframes\nDesign Review\nDevelopment\nLaunch`}
+                value={quickTasks}
+                onChange={e => setQuickTasks(e.target.value)}
+                className="h-28 text-xs resize-none"
+              />
+              <p className="text-[10px] text-muted-foreground">Leave blank to use default milestones</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
+            <Button variant="gold" onClick={handleSaveQuickProject} disabled={savingQuick || !quickTitle.trim() || !quickClient.trim()}>
+              {savingQuick ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : 'Create Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── CREATE CAMPAIGN DIALOG ── */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
