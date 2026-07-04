@@ -19,7 +19,7 @@ import { ProjectManagerAutocomplete } from '@/components/ui/project-manager-auto
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
   History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
-  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2, Briefcase
+  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2, Briefcase, Settings
 } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId } from '@/lib/utils'
 import { generateCampaignPrompt, copyToClipboard, downloadAsTextFile } from '@/lib/ai-utils'
@@ -58,6 +58,64 @@ export default function CampaignStrategyPage() {
   const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [realtimeConnected, setRealtimeConnected] = useState(false)
+
+  const [projectTypes, setProjectTypes] = useState<string[]>([
+    'Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 
+    'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'
+  ])
+  const [showManageTypes, setShowManageTypes] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const [editingTypeIndex, setEditingTypeIndex] = useState<number | null>(null)
+  const [editingTypeName, setEditingTypeName] = useState('')
+
+  const saveProjectTypes = async (updatedTypes: string[]) => {
+    setProjectTypes(updatedTypes)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, projectTypes: updatedTypes }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { projectTypes: updatedTypes } }])
+        }
+      } catch (err) {
+        console.error('Failed to save project types to db:', err)
+      }
+    }
+  }
+
+  const handleAddProjectType = () => {
+    if (!newTypeName.trim()) return
+    if (projectTypes.includes(newTypeName.trim())) {
+      toast({ title: 'Project type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...projectTypes, newTypeName.trim()]
+    saveProjectTypes(updated)
+    setNewTypeName('')
+    toast({ title: 'Project Type Added' })
+  }
+
+  const handleEditProjectType = (index: number) => {
+    if (!editingTypeName.trim()) return
+    if (projectTypes.includes(editingTypeName.trim()) && projectTypes[index] !== editingTypeName.trim()) {
+      toast({ title: 'Project type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...projectTypes]
+    updated[index] = editingTypeName.trim()
+    saveProjectTypes(updated)
+    setEditingTypeIndex(null)
+    setEditingTypeName('')
+    toast({ title: 'Project Type Updated' })
+  }
+
+  const handleDeleteProjectType = (typeToDelete: string) => {
+    const updated = projectTypes.filter(t => t !== typeToDelete)
+    saveProjectTypes(updated)
+    toast({ title: 'Project Type Deleted' })
+  }
 
   // Quick Project Create States
   const [showQuickCreate, setShowQuickCreate] = useState(false)
@@ -503,6 +561,9 @@ export default function CampaignStrategyPage() {
           if (settings?.docs?.campaignCategories) {
             setCategories(settings.docs.campaignCategories)
           }
+          if (settings?.docs?.projectTypes) {
+            setProjectTypes(settings.docs.projectTypes)
+          }
         } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
       setLoading(false)
@@ -735,6 +796,9 @@ export default function CampaignStrategyPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Manage project execution, tasks, requirements, files, and links in real-time</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 w-full sm:w-auto border-[#152e23] hover:bg-[#11241c]/50 hover:text-gold text-slate-300">
+            <Settings className="h-4 w-4 text-gold" /> Project Types
+          </Button>
           <Button variant="gold" size="sm" onClick={() => { setQuickCurrentStage(''); setShowQuickCreate(true) }} className="gap-1.5 w-full sm:w-auto">
             <Plus className="h-4 w-4" /> New Project
           </Button>
@@ -824,7 +888,7 @@ export default function CampaignStrategyPage() {
               <Select value={quickType} onValueChange={setQuickType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {projectTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -893,7 +957,7 @@ export default function CampaignStrategyPage() {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
               <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
               <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Tasks</TabsTrigger>
               <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
@@ -1386,7 +1450,7 @@ export default function CampaignStrategyPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
                         <Label>Report Title *</Label>
-                        <Input placeholder="e.g. SEO Report - June 2026" value={reportTitle} onChange={e => setReqTitle(e.target.value)} />
+                        <Input placeholder="e.g. SEO Report - June 2026" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
                       </div>
                       <div className="space-y-1">
                         <Label>Report Type</Label>
@@ -1644,7 +1708,7 @@ export default function CampaignStrategyPage() {
               <Select value={quickType} onValueChange={setQuickType}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {projectTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1791,6 +1855,79 @@ export default function CampaignStrategyPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowManageCategories(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Project Types Dialog */}
+      <Dialog open={showManageTypes} onOpenChange={setShowManageTypes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Project Types</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New Project Type"
+                value={newTypeName}
+                onChange={e => setNewTypeName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddProjectType() }}
+              />
+              <Button variant="gold" size="sm" onClick={handleAddProjectType}>
+                Add
+              </Button>
+            </div>
+            <div className="border rounded-lg border-border p-3 max-h-[300px] overflow-y-auto space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase">Existing Project Types</p>
+              {projectTypes.map((type, idx) => (
+                <div key={idx} className="flex items-center justify-between py-1 border-b border-border last:border-0">
+                  {editingTypeIndex === idx ? (
+                    <div className="flex items-center gap-2 w-full mr-2">
+                      <Input
+                        value={editingTypeName}
+                        onChange={e => setEditingTypeName(e.target.value)}
+                        className="h-8 text-sm"
+                        onKeyDown={e => { if (e.key === 'Enter') handleEditProjectType(idx) }}
+                      />
+                      <Button size="sm" className="h-8 px-2" onClick={() => handleEditProjectType(idx)}>Save</Button>
+                      <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground" onClick={() => setEditingTypeIndex(null)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm">{type}</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-gold"
+                          onClick={() => {
+                            setEditingTypeIndex(idx)
+                            setEditingTypeName(type)
+                          }}
+                          title="Edit Project Type"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        {type !== 'Other' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-400"
+                            onClick={() => handleDeleteProjectType(type)}
+                            title="Delete Project Type"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManageTypes(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

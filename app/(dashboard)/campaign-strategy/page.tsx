@@ -30,7 +30,7 @@ import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 type Project = {
-  id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
+  id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean; downloadUrl?: string; file_path?: string; fileName?: string; by?: string }[];
   prompt?: string; approvalStatus?: string; businessDetails?: CampaignStrategyForm
 }
 
@@ -801,7 +801,22 @@ export default function CampaignStrategyPage() {
 
             <TabsContent value="details" className="mt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input placeholder="e.g. FashionHub India" value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Business Name *</Label>
+                  <ClientAutocomplete 
+                    placeholder="e.g. FashionHub India" 
+                    value={form.businessName} 
+                    onChange={v => setForm({...form, businessName: v})} 
+                    onSelect={client => setForm({
+                      ...form, 
+                      businessName: client.business || client.name, 
+                      website: client.website || form.website, 
+                      phone: client.phone || form.phone, 
+                      email: client.email || form.email, 
+                      location: client.address || form.location
+                    })} 
+                  />
+                </div>
                 <div className="space-y-1"><Label>Business Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 ..." value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
@@ -1364,10 +1379,23 @@ export default function CampaignStrategyPage() {
               )}
             </TabsContent>
 
-            {/* ── ORIGINAL VERSIONS TAB ── */}
             <TabsContent value="versions" className="mt-4">
               <VersionTimeline
-                versions={(detailProject?.history || []).filter(h => h.canDownload).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: true, canRestore: true }))}
+                versions={(detailProject?.history || []).filter(h => h.canDownload).map((h, i) => ({ 
+                  version: i + 1, 
+                  date: h.date, 
+                  action: h.action, 
+                  canDownload: true, 
+                  canRestore: false,
+                  downloadUrl: h.downloadUrl || h.file_path
+                }))}
+                onDownload={(v: any) => {
+                  if (v.downloadUrl) {
+                    window.open(v.downloadUrl, '_blank')
+                  } else {
+                    toast({ title: 'No download URL available' })
+                  }
+                }}
               />
             </TabsContent>
           </Tabs>
@@ -1379,7 +1407,22 @@ export default function CampaignStrategyPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Strategy Details</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
+            <div className="col-span-1 sm:col-span-2 space-y-1">
+              <Label>Business Name *</Label>
+              <ClientAutocomplete 
+                placeholder="Business Name" 
+                value={form.businessName} 
+                onChange={v => setForm({...form, businessName: v})} 
+                onSelect={client => setForm({
+                  ...form, 
+                  businessName: client.business || client.name, 
+                  website: client.website || form.website, 
+                  phone: client.phone || form.phone, 
+                  email: client.email || form.email, 
+                  location: client.address || form.location
+                })} 
+              />
+            </div>
             <div className="space-y-1"><Label>Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Monthly Budget (₹)</Label><Input type="number" value={form.monthlyBudget} onChange={e => setForm({...form, monthlyBudget: e.target.value})} /></div>
             <div className="space-y-1"><Label>Timeline</Label><Input value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>

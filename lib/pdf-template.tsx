@@ -288,7 +288,7 @@ function Footer({ company, tagline, docType, invoiceFooter }: { company: PdfPayl
 }
 
 // ── Render markdown-lite content ──────────────────────────────────────────
-function RenderContent({ text, isSigned }: { text: string; isSigned: boolean }) {
+function RenderContent({ text, docType, isSigned }: { text: string; docType?: string; isSigned: boolean }) {
   const lines = text.split('\n')
   return (
     <>
@@ -296,8 +296,8 @@ function RenderContent({ text, isSigned }: { text: string; isSigned: boolean }) 
         const t = line.trim()
         if (!t) return <View key={i} style={s.spacer4} />
         
-        // Strip manual signature elements on signed copies
-        if (isSigned) {
+        // Strip manual signature elements on signed copies or for SOW/Agreement documents
+        if (isSigned || docType === 'SOW' || docType === 'Agreement') {
           const lower = t.toLowerCase();
           if (
             t.includes('____') || 
@@ -305,8 +305,10 @@ function RenderContent({ text, isSigned }: { text: string; isSigned: boolean }) 
             lower.includes('signatures') || 
             t.includes('__FOUNDER_NAME__') || 
             t.includes('__COMPANY_NAME__') ||
-            t.includes('Prepared By') ||
-            t.includes('Accepted By')
+            lower.includes('prepared by') ||
+            lower.includes('accepted by') ||
+            t.includes('|---|---|') ||
+            (t.startsWith('|') && t.endsWith('|') && (lower.includes('signature') || lower.includes('date') || lower.includes('name') || lower.includes('company')))
           ) {
             return null
           }
@@ -463,7 +465,7 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
         {data.content && data.content.trim() && (
           <>
             <View style={s.spacer8} />
-            <RenderContent text={data.content} isSigned={!!data.signatureDetails} />
+            <RenderContent text={data.content} docType={data.docType} isSigned={!!data.signatureDetails} />
           </>
         )}
 

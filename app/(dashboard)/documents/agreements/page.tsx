@@ -271,41 +271,52 @@ export default function AgreementsPage() {
   }
 
   function buildContent(f: typeof form, client: string) {
-    return [
+    const parts = [
       `## Agreement Details`,
       `**Agreement Type:** ${f.type}`,
       `**Client:** ${client}${f.contact ? ` (Attn: ${f.contact})` : ''}`,
-      `**Duration:** ${f.duration || 'As agreed'}`,
-      `**Contract Value:** ${f.value > 0 ? formatCurrency(f.value) : 'As per schedule'}`,
-      '',
-      '## Scope of Services',
-      ...(f.services || '').split('\n').filter(Boolean).map(s => `- ${s.trim()}`),
-      '',
-      '## Intellectual Property',
-      f.ip,
-      '',
-      '## Payment Schedule',
-      '__PAYMENT_SCHEDULE__',
-      '',
+      f.duration ? `**Duration:** ${f.duration}` : '',
+      f.value > 0 ? `**Contract Value:** ${formatCurrency(f.value)}` : '',
+    ].filter(Boolean)
+
+    if (f.services && f.services.trim()) {
+      const cleanSvc = f.services.split('\n').filter(Boolean).map(s => s.trim().startsWith('-') || s.trim().startsWith('•') ? s : `- ${s.trim()}`).join('\n')
+      parts.push('## Scope of Services', cleanSvc)
+    }
+
+    if (f.ip && f.ip.trim()) {
+      parts.push('## Intellectual Property', f.ip)
+    }
+
+    parts.push('## Payment Schedule', '__PAYMENT_SCHEDULE__')
+
+    parts.push(
       '## Confidentiality',
-      'Both parties agree to maintain strict confidentiality of all proprietary information, business processes, and client data shared during this engagement.',
-      '',
-      '## Cancellation Policy',
-      f.cancellation,
-      '',
-      '## Governing Law',
-      `This agreement is governed by the laws of **${f.jurisdiction}**. Any disputes shall be resolved through arbitration in ${f.jurisdiction}.`,
-      '',
+      'Both parties agree to maintain strict confidentiality of all proprietary information, business processes, and client data shared during this engagement.'
+    )
+
+    if (f.cancellation && f.cancellation.trim()) {
+      parts.push('## Cancellation Policy', f.cancellation)
+    }
+
+    if (f.jurisdiction && f.jurisdiction.trim()) {
+      parts.push(
+        '## Governing Law',
+        `This agreement is governed by the laws of **${f.jurisdiction}**. Any disputes shall be resolved through arbitration in ${f.jurisdiction}.`
+      )
+    }
+
+    parts.push(
       '---',
-      '',
       '**SIGNATURES**',
-      '',
       `| __COMPANY_NAME__ | ${client} |`,
       `|---|---|`,
       '| Signature: _________________ | Signature: _________________ |',
       '| Name: __FOUNDER_NAME__ | Name: _________________ |',
-      '| Date: _________________ | Date: _________________ |',
-    ].join('\n')
+      '| Date: _________________ | Date: _________________ |'
+    )
+
+    return parts.join('\n\n')
   }
 
   async function downloadPdf(agr: Agreement) {

@@ -1395,27 +1395,41 @@ export default function QuotationsPage() {
 }
 
 function buildContentBody(q: Quote, svcs: any[]) {
-  const lines = [
+  const parts = [
     '## Why Netgain?',
     'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
-    '',
-    '## Service Breakdown',
-    ...svcs.flatMap((s: any, i: number) => [
-      `### ${i+1}. ${s.name}`,
-      `**Category:** ${s.category}  |  **Timeline:** ${s.timeline}  |  **Model:** ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
-      '',
-      ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
-      '',
-    ]),
-    '## Payment Terms',
-    `- One-time services: ${q.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'}`,
-    `- Monthly retainers: ${q.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'}`,
-    '- Accepted: NEFT / IMPS / UPI / Cheque',
-    '',
-    q.notes ? `## Additional Notes\n${q.notes}` : '',
-    '',
-    '## Validity',
-    `This quotation is valid for **${q.validityDays !== undefined && q.validityDays !== null ? q.validityDays : 14} days** from the date of issue.`,
   ]
-  return lines.join('\n')
+
+  if (svcs && svcs.length > 0) {
+    const servicesPart = [
+      '## Service Breakdown',
+      ...svcs.flatMap((s: any, i: number) => [
+        `### ${i+1}. ${s.name}`,
+        `**Category:** ${s.category}  |  **Timeline:** ${s.timeline}  |  **Model:** ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
+        '',
+        ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
+      ])
+    ].join('\n')
+    parts.push(servicesPart)
+  }
+
+  if (q.paymentTermsOneTime || q.paymentTermsMonthly) {
+    const paymentPart = [
+      '## Payment Terms',
+      ...(q.paymentTermsOneTime ? [`- One-time services: ${q.paymentTermsOneTime}`] : []),
+      ...(q.paymentTermsMonthly ? [`- Monthly retainers: ${q.paymentTermsMonthly}`] : []),
+      '- Accepted: NEFT / IMPS / UPI / Cheque'
+    ].join('\n')
+    parts.push(paymentPart)
+  }
+
+  if (q.notes && q.notes.trim()) {
+    parts.push(`## Additional Notes\n${q.notes}`)
+  }
+
+  if (q.validityDays !== undefined && q.validityDays !== null && String(q.validityDays).trim() !== '') {
+    parts.push(`## Validity\nThis quotation is valid for **${q.validityDays} days** from the date of issue.`)
+  }
+
+  return parts.join('\n\n')
 }

@@ -293,39 +293,46 @@ export default function SOWPage() {
   }
 
   function buildPayload(f: typeof form, clientName: string, project: string, docId: string) {
-    const content = [
+    const contentParts = [
       '## Project Overview',
       `**Project:** ${project}`,
       `**Client:** ${clientName}${f.contact ? ` (Attn: ${f.contact})` : ''}`,
-      `**Timeline:** ${f.timeline || 'To be defined in kickoff'}`,
-      `**Contract Value:** ${f.value ? formatCurrency(Number(f.value)) : 'As per quotation'}`,
-      '',
-      '## Objectives',
-      f.objectives || "To deliver a high-quality solution that meets the client's business goals.",
-      '',
-      '## Deliverables',
-      ...(f.deliverables || '').split('\n').filter(Boolean).map(d => `- ${d}`),
-      '',
-      f.milestones ? `## Project Milestones\n${f.milestones.split('\n').filter(Boolean).map((m, i) => `**Milestone ${i + 1}:** ${m}`).join('\n')}` : '',
-      '',
-      '## Payment Terms',
-      f.payment,
-      '',
-      '## Revision Policy',
-      f.revisions,
-      '',
-      '## Exclusions',
-      ...(f.exclusions || '').split(',').map(e => `- ${e.trim()}`),
-      '',
-      '## Jurisdiction',
-      `This agreement shall be governed by the laws of **${f.jurisdiction}**.`,
-      '',
+      f.timeline ? `**Timeline:** ${f.timeline}` : '',
+      f.value ? `**Contract Value:** ${formatCurrency(Number(f.value))}` : '',
+    ].filter(Boolean)
+
+    if (f.objectives && f.objectives.trim()) {
+      contentParts.push('## Objectives', f.objectives)
+    }
+    if (f.deliverables && f.deliverables.trim()) {
+      const cleanedDel = f.deliverables.split('\n').filter(Boolean).map(d => d.trim().startsWith('-') || d.trim().startsWith('•') ? d : `- ${d}`).join('\n')
+      contentParts.push('## Deliverables', cleanedDel)
+    }
+    if (f.milestones && f.milestones.trim()) {
+      contentParts.push('## Project Milestones', f.milestones.split('\n').filter(Boolean).map((m, i) => `**Milestone ${i + 1}:** ${m}`).join('\n'))
+    }
+    if (f.payment && f.payment.trim()) {
+      contentParts.push('## Payment Terms', f.payment)
+    }
+    if (f.revisions && f.revisions.trim()) {
+      contentParts.push('## Revision Policy', f.revisions)
+    }
+    if (f.exclusions && f.exclusions.trim()) {
+      contentParts.push('## Exclusions', f.exclusions.split(',').map(e => e.trim()).filter(Boolean).map(e => `- ${e}`).join('\n'))
+    }
+    if (f.jurisdiction && f.jurisdiction.trim()) {
+      contentParts.push('## Jurisdiction', `This agreement shall be governed by the laws of **${f.jurisdiction}**.`)
+    }
+
+    contentParts.push(
       '---',
       `| __COMPANY_NAME__ | ${clientName} |`,
       `|---|---|`,
       '| Signature: _________________ | Signature: _________________ |',
-      '| Date: _________________ | Date: _________________ |',
-    ].filter(l => l !== null).join('\n')
+      '| Date: _________________ | Date: _________________ |'
+    )
+
+    const content = contentParts.join('\n\n')
     return {
       docType: 'SOW',
       clientName: f.contact || clientName,
