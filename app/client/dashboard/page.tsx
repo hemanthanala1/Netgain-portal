@@ -519,14 +519,18 @@ export default function ClientDashboardPage() {
       const updatedHistory = [
         ...(selectedDoc.raw.history || []),
         { date: new Date().toISOString().split('T')[0], action: `Client signed via Netgain E-Sign (${verificationId})` },
-        { date: new Date().toISOString().split('T')[0], action: 'Status changed to completed' }
+        { date: new Date().toISOString().split('T')[0], action: 'Status changed to signed' }
       ]
 
       const { error: updateDocError } = await supabase
         .from(tableName)
         .update({
-          status: 'completed',
+          status: 'signed',
           is_locked: true,
+          signed_at: new Date().toISOString(),
+          ip_address: ip,
+          browser: browser,
+          device: device,
           history: updatedHistory
         })
         .eq('id', selectedDoc.id)
@@ -582,7 +586,19 @@ export default function ClientDashboardPage() {
       try {
         const tableMap: Record<string, string> = { Quotation: 'quotations', Invoice: 'invoices', SOW: 'sows', Agreement: 'agreements', Marketing: 'marketing_reports' }
         const tableName = tableMap[selectedDoc.type]
-        await supabase.from(tableName).update({ status: 'needs revision' }).eq('id', selectedDoc.id)
+        
+        const updatedHistory = [
+          ...(selectedDoc.raw.history || []),
+          { 
+            date: new Date().toISOString().split('T')[0], 
+            action: `Client requested changes: "${revisionNotes}"` 
+          }
+        ]
+
+        await supabase.from(tableName).update({ 
+          status: 'needs revision',
+          history: updatedHistory
+        }).eq('id', selectedDoc.id)
         
         await supabase.from('client_notifications').insert({
           client_id: session?.company || session?.email,
@@ -591,6 +607,17 @@ export default function ClientDashboardPage() {
           type: 'support',
           is_read: false
         })
+
+        // Add timeline event in document_timeline table for Vault page activity logs
+        const docType = selectedDoc.type === 'SOW' ? 'SOW' : selectedDoc.type === 'Agreement' ? 'Agreement' : 'Quotation'
+        await supabase.from('document_timeline').insert({
+          document_type: docType,
+          document_id: selectedDoc.id,
+          event: 'needs_revision',
+          user_name: session?.name || 'Client',
+          notes: revisionNotes
+        })
+
         toast({ title: 'Revision Requested', description: 'Your request has been sent to our team.' })
         setShowRevisionModal(false)
         setRevisionNotes('')
@@ -1257,7 +1284,11 @@ export default function ClientDashboardPage() {
                     </div>
 
                     {/* Interactive signing controls if applicable and NOT signed */}
-                    {!selectedDoc.signed_at && ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && selectedDoc.status !== 'rejected' && (
+                    {!selectedDoc.signed_at && 
+                     selectedDoc.status?.toLowerCase() !== 'completed' && 
+                     selectedDoc.status?.toLowerCase() !== 'signed' && 
+                     ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && 
+                     selectedDoc.status?.toLowerCase() !== 'rejected' && (
                       <div className="space-y-2 pt-2">
                         {selectedDoc.type === 'Quotation' ? (
                           <Button onClick={handleApproveDoc} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
@@ -1277,6 +1308,19 @@ export default function ClientDashboardPage() {
                         <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
                           Decline / Reject
                         </Button>
+                      </div>
+                    )}
+
+                    {/* Approved & Signed state message */}
+                    {(selectedDoc.signed_at || 
+                      selectedDoc.status?.toLowerCase() === 'completed' || 
+                      selectedDoc.status?.toLowerCase() === 'signed') && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
+                        <CheckCircle2 className="h-7 w-7 text-emerald-400 mx-auto" />
+                        <p className="text-xs font-bold text-emerald-400">Approved & Signed</p>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          This document has been digitally signed and is legally binding.
+                        </p>
                       </div>
                     )}
 
