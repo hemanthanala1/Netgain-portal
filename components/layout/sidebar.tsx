@@ -55,7 +55,8 @@ const navItems = [
   {
     label: 'Intelligence',
     items: [
-      { href: '/projects', icon: TrendingUp, label: 'Campaign Strategy' },
+      { href: '/projects', icon: Briefcase, label: 'Project Workspace' },
+      { href: '/campaign-strategy', icon: TrendingUp, label: 'Campaign Strategy' },
       { href: '/prd', icon: FileCode2, label: 'Dev Blueprint' },
       { href: '/marketing', icon: Brain, label: 'Marketing Intelligence' },
     ],

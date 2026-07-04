@@ -13,15 +13,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { PromptViewer } from '@/components/ui/prompt-viewer'
 import { ApprovalBadge } from '@/components/ui/approval-badge'
+import { WorkflowSteps } from '@/components/ui/workflow-steps'
 import { FileUpload } from '@/components/ui/file-upload'
 import { VersionTimeline } from '@/components/ui/version-timeline'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
   History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
-  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2, Briefcase
+  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2
 } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId } from '@/lib/utils'
-import { generateCampaignPrompt, copyToClipboard, downloadAsTextFile } from '@/lib/ai-utils'
+import { generateCampaignPrompt, copyToClipboard, downloadAsTextFile, WORKFLOW_STEPS } from '@/lib/ai-utils'
 import type { CampaignStrategyForm } from '@/lib/ai-types'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
@@ -587,7 +588,8 @@ export default function CampaignStrategyPage() {
     toast({ title: 'Category Deleted' })
   }
 
-  const filtered = projects.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
+  const campaignStrategies = projects.filter(p => Boolean(p.prompt || p.businessDetails))
+  const filtered = campaignStrategies.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase()))
 
   const handleGeneratePrompt = () => {
     const prompt = generateCampaignPrompt(form)
@@ -718,18 +720,17 @@ export default function CampaignStrategyPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-gold" />
-            <h1 className="text-2xl font-bold tracking-tight">Project Workspace Manager</h1>
-            <span className={`inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-              {realtimeConnected ? 'Live' : 'Connecting...'}
-            </span>
+            <TrendingUp className="h-5 w-5 text-gold" />
+            <h1 className="text-2xl font-bold tracking-tight">Campaign Strategy Engine</h1>
           </div>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage project execution, tasks, requirements, files, and links in real-time</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Create complete marketing strategies with AI-powered prompt generation</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="gold" size="sm" onClick={() => setShowQuickCreate(true)} className="gap-1.5 w-full sm:w-auto">
-            <Plus className="h-4 w-4" /> New Project
+          <Button variant="outline" size="sm" onClick={() => setShowManageCategories(true)} className="gap-1.5 flex-1 sm:flex-initial">
+            Manage Categories
+          </Button>
+          <Button variant="gold" size="sm" onClick={() => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) }} className="gap-1.5 flex-1 sm:flex-initial">
+            <Plus className="h-4 w-4" />New Strategy
           </Button>
         </div>
       </div>
@@ -737,10 +738,10 @@ export default function CampaignStrategyPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Projects', value: projects.length },
-          { label: 'Active', value: projects.filter(p => p.status === 'active').length },
-          { label: 'Total Budget', value: formatCurrency(projects.reduce((s, p) => s + p.budget, 0)) },
-          { label: 'Planned', value: projects.filter(p => p.status === 'planned').length },
+          { label: 'Total Strategies', value: campaignStrategies.length },
+          { label: 'Active', value: campaignStrategies.filter(p => p.status === 'active').length },
+          { label: 'Total Budget', value: formatCurrency(campaignStrategies.reduce((s, p) => s + p.budget, 0)) },
+          { label: 'Planned', value: campaignStrategies.filter(p => p.status === 'planned').length },
         ].map(s => (
 
           <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.label}</p><p className="text-xl font-bold mt-1">{s.value}</p></CardContent></Card>
@@ -775,16 +776,7 @@ export default function CampaignStrategyPage() {
               </div>
               <div className="flex gap-2 justify-end border-t border-border pt-3" onClick={e => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)} title="View Details"><Eye className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => {
-                  setQuickTitle(p.title)
-                  setQuickClient(p.client)
-                  setQuickType(p.type)
-                  setQuickStatus(p.status)
-                  setQuickBudget(String(p.budget))
-                  setQuickTimeline(p.timeline)
-                  setQuickPm(p.pm)
-                  setEditId(p.id)
-                }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm(p.businessDetails || emptyForm); setEditId(p.id) }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             </CardContent>
@@ -793,76 +785,79 @@ export default function CampaignStrategyPage() {
       </div>
 
       {/* ── CREATE DIALOG ──────────────────────────────────────────────── */}
-      {/* ── QUICK CREATE PROJECT DIALOG ── */}
-      <Dialog open={showQuickCreate} onOpenChange={setShowQuickCreate}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* ── CREATE CAMPAIGN DIALOG ── */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-gold" /> Create New Project
-            </DialogTitle>
+            <DialogTitle>New Campaign Strategy</DialogTitle>
+            <div className="mt-3"><WorkflowSteps steps={WORKFLOW_STEPS} currentStep={currentStep} /></div>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-sm">
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Project Title *</Label>
-              <Input placeholder="e.g. Netgain Website Redesign" value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Client Name *</Label>
-              <ClientAutocomplete value={quickClient} onChange={setQuickClient} onSelect={(c) => setQuickClient(c.name)} placeholder="Select or type client name" />
-            </div>
-            <div className="space-y-1">
-              <Label>Project Type</Label>
-              <Select value={quickType} onValueChange={setQuickType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={quickStatus} onValueChange={setQuickStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planned">Planned</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Budget (₹)</Label>
-              <Input type="number" placeholder="e.g. 150000" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Timeline</Label>
-              <Input placeholder="e.g. 3 months, Q3 2025" value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Project Manager</Label>
-              <Input placeholder="e.g. Devon S." value={quickPm} onChange={e => setQuickPm(e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Initial Tasks / Milestones</Label>
-              <Textarea
-                placeholder={`Enter one task per line:\nKickoff Call\nWireframes\nDesign Review\nDevelopment\nLaunch`}
-                value={quickTasks}
-                onChange={e => setQuickTasks(e.target.value)}
-                className="h-28 text-xs resize-none"
+
+          <Tabs defaultValue="details" className="mt-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="details" className="flex-1">Business Details</TabsTrigger>
+              <TabsTrigger value="prompt" className="flex-1">AI Prompt</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input placeholder="e.g. FashionHub India" value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Business Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 ..." value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input placeholder="contact@business.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Location</Label><Input placeholder="City, State" value={form.location} onChange={e => setForm({...form, location: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Description</Label><Textarea className="h-20 resize-none" placeholder="What does the business do? What's the value proposition?" value={form.businessDescription} onChange={e => setForm({...form, businessDescription: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Products</Label><Textarea className="h-16 resize-none" placeholder="Key products..." value={form.products} onChange={e => setForm({...form, products: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Services</Label><Textarea className="h-16 resize-none" placeholder="Key services..." value={form.services} onChange={e => setForm({...form, services: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Current Offers / Promotions</Label><Input placeholder="Any active offers..." value={form.offers} onChange={e => setForm({...form, offers: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Competitors</Label><Textarea className="h-16 resize-none" placeholder="List key competitors..." value={form.competitors} onChange={e => setForm({...form, competitors: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Current Marketing Activities</Label><Textarea className="h-16 resize-none" placeholder="What marketing is currently being done?" value={form.currentMarketing} onChange={e => setForm({...form, currentMarketing: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Monthly Budget (₹)</Label><Input type="number" value={form.monthlyBudget} onChange={e => setForm({...form, monthlyBudget: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Platform Budget Allocation</Label><Input placeholder="e.g. Meta: 50%, Google: 30%, SEO: 20%" value={form.platformBudget} onChange={e => setForm({...form, platformBudget: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Target Audience</Label><Textarea className="h-16 resize-none" placeholder="Demographics, interests, behaviors..." value={form.targetAudience} onChange={e => setForm({...form, targetAudience: e.target.value})} /></div>
+                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Goals</Label><Textarea className="h-16 resize-none" placeholder="What are the key business goals?" value={form.businessGoals} onChange={e => setForm({...form, businessGoals: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 3 months, 6 months" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
+                <div className="space-y-1"><Label>Additional Notes</Label><Textarea className="h-12 resize-none" placeholder="Anything else..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} /></div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-6 pt-4 border-t border-border">
+                <Button variant="gold" className="gap-1.5" onClick={handleGeneratePrompt} disabled={!form.businessName}>
+                  <Sparkles className="h-4 w-4" />Generate Prompt
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                  <a href="/ai-hub/skills" target="_blank"><Download className="h-3.5 w-3.5" />Download Skill</a>
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="prompt" className="mt-4">
+              <PromptViewer
+                prompt={generatedPrompt}
+                title="Campaign Strategy Prompt"
+                downloadFilename={`Campaign_Prompt_${form.businessName.replace(/\s+/g, '_')}.txt`}
               />
-              <p className="text-[10px] text-muted-foreground">Leave blank to use default milestones</p>
-            </div>
-          </div>
+              {generatedPrompt && (
+                <div className="mt-4 flex items-center gap-3">
+                  <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                    <a href="/ai-hub/skills" target="_blank"><Download className="h-3.5 w-3.5" />Download Marketing Strategy.skill</a>
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                    <a href="https://claude.ai" target="_blank" rel="noopener"><ExternalLink className="h-3.5 w-3.5" />Open Claude</a>
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
-            <Button variant="gold" onClick={handleSaveQuickProject} disabled={savingQuick || !quickTitle.trim() || !quickClient.trim()}>
-              {savingQuick ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : 'Create Project'}
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button variant="gold" onClick={handleCreateProject} disabled={generating || !form.businessName}>
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : 'Save Strategy'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Detail Dialog */}
 
       {/* ── DETAIL DIALOG ──────────────────────────────────────────────── */}
       <Dialog open={!!detailProject} onOpenChange={open => { if (!open) { setDetailProject(null); setGeneratedPrompt('') } }}>
@@ -880,13 +875,9 @@ export default function CampaignStrategyPage() {
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
-              <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
-              <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Tasks</TabsTrigger>
-              <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
-              <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
-              <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
-              <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
-              <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Timeline</TabsTrigger>
+              <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Business Info</TabsTrigger>
+              <TabsTrigger value="prompt" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-gold data-[state=active]:text-black">AI Prompt Builder</TabsTrigger>
+              <TabsTrigger value="versions" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Campaign History</TabsTrigger>
             </TabsList>
 
             {/* ── OVERVIEW TAB ── */}
@@ -988,268 +979,27 @@ export default function CampaignStrategyPage() {
                     </div>
                   </div>
 
+                  <WorkflowSteps steps={WORKFLOW_STEPS} currentStep={detailProject?.prompt ? 3 : 1} />
                 </>
               )}
             </TabsContent>
-
-            {/* ── TASKS TAB ── */}
-            <TabsContent value="workspace-tasks" className="mt-4 space-y-4">
-              {detailProject && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Tasks & Milestones</h4>
-                    <span className="text-[10px] text-slate-500">{detailProject.milestones.length} tasks</span>
+            <TabsContent value="workspace-requirements" className="mt-4 space-y-4">
+              <div className="rounded-xl border border-[#152e23] bg-[#091510] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Workspace Requirements</h4>
+                    <p className="mt-1 text-xs text-slate-400">Manage the brief items, files, and approvals that need follow-up.</p>
                   </div>
-                  
-                  <div className="space-y-2">
-                    {detailProject.milestones.map((m, idx) => {
-                      const isDone = m.endsWith(' ✅')
-                      const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
-                      return (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded bg-[#0b1b15] border border-[#152e23]/60 hover:border-gold/30">
-                          <div className="flex items-center gap-3">
-                            <input 
-                              type="checkbox" 
-                              checked={isDone}
-                              onChange={() => handleToggleMilestone(detailProject, idx)}
-                              className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
-                            />
-                            <span className={`text-sm ${isDone ? 'line-through text-slate-500' : 'text-slate-200 font-semibold'}`}>{cleanLabel}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-slate-400 hover:text-gold hover:bg-gold/10"
-                              onClick={() => {
-                                const newLabel = window.prompt("Edit task description:", cleanLabel);
-                                if (newLabel && newLabel.trim() !== "") {
-                                  const updatedMilestones = [...detailProject.milestones];
-                                  updatedMilestones[idx] = `${newLabel.trim()} ${isDone ? '✅' : '⏳'}`;
-                                  saveProjectDetails({ ...detailProject, milestones: updatedMilestones });
-                                }
-                              }}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-500/10"
-                              onClick={() => handleDeleteMilestone(detailProject, idx)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {detailProject.milestones.length === 0 && (
-                      <p className="text-sm text-slate-500 text-center py-6">No tasks created yet.</p>
-                    )}
-                  </div>
-
-                  {/* Add Milestone Inline Form */}
-                  <div className="flex gap-2 pt-2">
-                    <Input 
-                      placeholder="Add new task (e.g. Figma Review)" 
-                      value={newMilestoneText}
-                      onChange={e => setNewMilestoneText(e.target.value)}
-                      className="h-10 text-sm bg-[#091510] border-[#152e23]"
-                    />
-                    <Button 
-                      variant="gold" 
-                      className="h-10 px-5 font-bold"
-                      onClick={() => handleAddMilestone(detailProject)}
-                    >
-                      Add Task
-                    </Button>
-                  </div>
+                  <Badge variant="secondary" className="bg-[#11241c] text-slate-300 border border-[#152e23]">
+                    {workspaceRequirements.length} items
+                  </Badge>
                 </div>
-              )}
-            </TabsContent>
-
-            {/* ── REQUIREMENTS REQUEST TAB ── */}
-            <TabsContent value="workspace-reqs" className="mt-4 space-y-4">
-              {detailProject && (
-                <div className="space-y-4">
-                  {/* Top Header and Toggle Request Form */}
-                  <div className="flex justify-between items-center bg-[#091510] border border-[#152e23] p-3 rounded-xl">
-                    <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Requirements Request System</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Request guidelines, brand details, logos, or hosting details from the client.</p>
-                    </div>
-                    <Button variant="gold" size="sm" onClick={() => setShowReqForm(!showReqForm)} className="h-8 text-xs gap-1">
-                      <Plus className="h-3.5 w-3.5" /> {showReqForm ? 'Close Form' : 'Request Info'}
-                    </Button>
-                  </div>
-
-                  {/* Create Request Form */}
-                  {showReqForm && (
-                    <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
-                      <h5 className="text-xs font-bold text-gold">New Requirement Details</h5>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                        <div className="space-y-1">
-                          <Label>Requirement Title *</Label>
-                          <Input placeholder="e.g. Brand Guidelines PDF" value={reqTitle} onChange={e => setReqTitle(e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Category</Label>
-                          <Select value={reqCategory} onValueChange={setReqCategory}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {['Logo', 'Brand Guidelines', 'Brand Colors', 'Fonts', 'Business Description', 'Competitor Websites', 'Social Media Links', 'Hosting Details', 'Domain Details', 'Google Analytics Access', 'Meta Business Access', 'Google Ads Access', 'Images', 'Videos', 'PDFs', 'Documents', 'Custom Request'].map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label>Instructions / Description</Label>
-                          <Textarea placeholder="Explain what guidelines or files are needed..." value={reqDesc} onChange={e => setReqDesc(e.target.value)} className="h-16" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Priority</Label>
-                          <Select value={reqPriority} onValueChange={setReqPriority}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Due Date</Label>
-                          <Input type="date" value={reqDueDate} onChange={e => setReqDueDate(e.target.value)} />
-                        </div>
-                        
-                        {/* Checkboxes */}
-                        <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#152e23]">
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input type="checkbox" checked={reqAllowFile} onChange={e => setReqAllowFile(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
-                            <span>Allow File Upload</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input type="checkbox" checked={reqAllowLink} onChange={e => setReqAllowLink(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
-                            <span>Allow Link URL</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input type="checkbox" checked={reqAllowText} onChange={e => setReqAllowText(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
-                            <span>Allow Text Note</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input type="checkbox" checked={reqIsRequired} onChange={e => setReqIsRequired(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
-                            <span>Is Required</span>
-                          </label>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 justify-end border-t border-[#152e23] pt-3">
-                        <Button variant="outline" size="sm" onClick={() => setShowReqForm(false)}>Cancel</Button>
-                        <Button variant="gold" size="sm" onClick={() => handleCreateRequirement(detailProject.id, detailProject.client)}>Submit Request</Button>
-                      </div>
-                    </Card>
-                  )}
-
-                  {/* Submission Review Modal Overlay */}
-                  {reviewingSub && (
-                    <Card className="bg-[#121f1a] border-[#1e3a2f] p-4 space-y-3 relative">
-                      <button onClick={() => setReviewingSub(null)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
-                      <h5 className="text-xs font-bold text-[#D4AF37] uppercase">Review Client Submission</h5>
-                      <div className="text-xs space-y-1.5 bg-[#070e0b]/60 p-3 rounded border border-[#1e3a2f]/40 font-mono">
-                        <div><span className="text-slate-500">Submitted By:</span> <span className="text-white">{reviewingSub.submitted_by}</span></div>
-                        <div><span className="text-slate-500">Submitted At:</span> <span className="text-white">{new Date(reviewingSub.submitted_at).toLocaleString('en-IN')}</span></div>
-                        {reviewingSub.text_response && <div><span className="text-slate-500">Text Response:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.text_response}"</p></div>}
-                        {reviewingSub.links && reviewingSub.links.length > 0 && (
-                          <div>
-                            <span className="text-slate-500">Links:</span> 
-                            <div className="flex flex-col gap-1 mt-1 font-sans">
-                              {reviewingSub.links.map((link: string, i: number) => (
-                                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{link}</a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {reviewingSub.file_paths && reviewingSub.file_paths.length > 0 && (
-                          <div>
-                            <span className="text-slate-500">Uploaded Files:</span> 
-                            <div className="flex flex-col gap-1.5 mt-1 font-sans">
-                              {reviewingSub.file_paths.map((file: string, i: number) => (
-                                <a key={i} href={file} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline flex items-center gap-1.5 border border-[#152e23] p-1.5 rounded bg-black/40"><Download className="h-3.5 w-3.5" />{file.split('/').pop()}</a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {reviewingSub.notes && <div><span className="text-slate-500">Notes:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.notes}"</p></div>}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs">Feedback Comments (Required on revision)</Label>
-                        <Textarea 
-                          placeholder="Approve with note, or request specific changes..." 
-                          value={reviewComment}
-                          onChange={e => setReviewComment(e.target.value)}
-                          className="h-16 text-xs bg-[#0b1b15] border-[#1e3a2f]"
-                        />
-                      </div>
-                      <div className="flex gap-2 justify-end pt-2 border-t border-[#1e3a2f]/40">
-                        <Button variant="outline" size="sm" onClick={() => setReviewingSub(null)} className="h-8 text-xs">Close</Button>
-                        <Button variant="outline" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Decline')} className="h-8 text-xs text-red-400 border-red-500/20 hover:bg-red-500/10">Request Revision</Button>
-                        <Button variant="gold" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Approve')} className="h-8 text-xs px-4">Approve submission</Button>
-                      </div>
-                    </Card>
-                  )}
-
-                  {/* List of active requests */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
-                            <th className="text-left py-2 px-3 font-semibold">Title</th>
-                            <th className="text-left py-2 px-3 font-semibold">Category</th>
-                            <th className="text-left py-2 px-3 font-semibold">Priority</th>
-                            <th className="text-left py-2 px-3 font-semibold">Due Date</th>
-                            <th className="text-left py-2 px-3 font-semibold">Status</th>
-                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workspaceRequirements.map((req: any) => {
-                            const sub = workspaceSubmissions.find(s => s.requirement_id === req.id)
-                            return (
-                              <tr key={req.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
-                                <td className="py-2.5 px-3">
-                                  <p className="font-semibold text-slate-200">{req.title}</p>
-                                  {req.description && <p className="text-[10px] text-slate-500 truncate max-w-[200px]">{req.description}</p>}
-                                </td>
-                                <td className="py-2.5 px-3"><span className="px-1.5 py-0.5 rounded border border-[#152e23] bg-black/20 text-slate-400 text-[10px]">{req.category}</span></td>
-                                <td className="py-2.5 px-3">
-                                  <span className={`capitalize ${req.priority === 'high' ? 'text-red-400 font-bold' : req.priority === 'medium' ? 'text-yellow-400' : 'text-slate-400'}`}>{req.priority}</span>
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-400">{req.due_date ? formatDate(req.due_date) : '—'}</td>
-                                <td className="py-2.5 px-3">
-                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10' : 'text-slate-400 bg-slate-500/10'}`}>{req.status}</span>
-                                </td>
-                                <td className="py-2.5 px-3 text-right">
-                                  {sub ? (
-                                    <Button variant="outline" size="sm" onClick={() => setReviewingSub(sub)} className="h-7 text-[10px] border-gold/20 text-gold hover:bg-gold/15">Review Submission</Button>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-500 italic pr-2">Awaiting client response</span>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                          {workspaceRequirements.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No requirement requests published yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                <div className="mt-4 rounded-lg border border-dashed border-[#152e23] bg-black/10 px-4 py-8 text-center text-xs text-slate-500">
+                  {workspaceRequirements.length === 0
+                    ? 'No requirement requests published yet.'
+                    : 'Requirements are loaded, but the detailed table is not currently rendered.'}
                 </div>
-              )}
+              </div>
             </TabsContent>
 
             {/* ── FILES & DOCUMENTS TAB ── */}
@@ -1597,6 +1347,29 @@ export default function CampaignStrategyPage() {
               )}
             </TabsContent>
 
+            {/* ── ORIGINAL AI PROMPT TAB ── */}
+            <TabsContent value="prompt" className="mt-4">
+              <PromptViewer
+                prompt={detailProject?.prompt || generatedPrompt}
+                title="Campaign Strategy Prompt"
+                downloadFilename={`Campaign_Prompt_${detailProject?.title?.replace(/\s+/g, '_')}.txt`}
+              />
+              {!detailProject?.prompt && !generatedPrompt && detailProject?.businessDetails && (
+                <Button variant="gold" className="gap-1.5 mt-4" onClick={() => {
+                  const prompt = generateCampaignPrompt(detailProject.businessDetails!)
+                  setGeneratedPrompt(prompt)
+                }}>
+                  <Sparkles className="h-4 w-4" />Generate Prompt from Details
+                </Button>
+              )}
+            </TabsContent>
+
+            {/* ── ORIGINAL VERSIONS TAB ── */}
+            <TabsContent value="versions" className="mt-4">
+              <VersionTimeline
+                versions={(detailProject?.history || []).filter(h => h.canDownload).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: true, canRestore: true }))}
+              />
+            </TabsContent>
           </Tabs>
         </DialogContent>
       </Dialog>
@@ -1604,49 +1377,13 @@ export default function CampaignStrategyPage() {
       {/* Edit Dialog */}
       <Dialog open={!!editId} onOpenChange={open => !open && setEditId(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Project Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 text-sm">
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Project Title *</Label>
-              <Input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Client Name *</Label>
-              <Input value={quickClient} onChange={e => setQuickClient(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Project Type</Label>
-              <Select value={quickType} onValueChange={setQuickType}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['Web Development', 'Mobile App', 'Digital Marketing', 'Brand Identity', 'E-Commerce', 'SEO & Content', 'UI/UX Design', 'Custom Software', 'Other'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={quickStatus} onValueChange={setQuickStatus}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planned">Planned</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Budget (₹)</Label>
-              <Input type="number" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Timeline</Label>
-              <Input value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Project Manager</Label>
-              <Input value={quickPm} onChange={e => setQuickPm(e.target.value)} />
-            </div>
+          <DialogHeader><DialogTitle>Edit Strategy Details</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Business Name *</Label><Input value={form.businessName} onChange={e => setForm({...form, businessName: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Category</Label><Select value={form.businessCategory} onValueChange={v => setForm({...form, businessCategory: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1"><Label>Monthly Budget (₹)</Label><Input type="number" value={form.monthlyBudget} onChange={e => setForm({...form, monthlyBudget: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Timeline</Label><Input value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Website</Label><Input value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button>
@@ -1654,44 +1391,15 @@ export default function CampaignStrategyPage() {
               if (!editId) return
               const target = projects.find(p => p.id === editId)
               if (!target) return
-              const newHistory = [...target.history, { date: new Date().toISOString().slice(0, 10), action: 'Project details updated', canDownload: false }]
-              
-              const extraJson = JSON.stringify({
-                type: quickType,
-                budget: Number(quickBudget) || 0,
-                spent: target.spent,
-                timeline: quickTimeline,
-                progress: target.progress,
-                milestones: target.milestones,
-                pm: quickPm || 'Netgain Team',
-                startDate: target.startDate,
-                approvalStatus: target.approvalStatus || 'draft'
-              })
-
-              const updated = {
-                ...target,
-                title: quickTitle,
-                client: quickClient,
-                type: quickType,
-                budget: Number(quickBudget) || 0,
-                timeline: quickTimeline,
-                pm: quickPm || 'Netgain Team',
-                status: quickStatus,
-                history: newHistory
-              }
-
+              const newHistory = [...target.history, { date: new Date().toISOString().slice(0, 10), action: 'Strategy details updated', canDownload: true }]
+              const updated = { ...target, title: form.businessName, client: form.businessName, type: form.businessCategory, budget: Number(form.monthlyBudget) || 0, timeline: form.timeline, history: newHistory, businessDetails: form }
               if (isSupabaseConfigured()) {
-                await supabase.from('projects').update({
-                  title: quickTitle,
-                  client: quickClient,
-                  status: quickStatus,
-                  stack: extraJson,
-                  history: newHistory
-                }).eq('id', editId)
+                const extraJson = JSON.stringify({ type: form.businessCategory, budget: Number(form.monthlyBudget) || 0, spent: target.spent, timeline: form.timeline, progress: target.progress, milestones: target.milestones, startDate: target.startDate, pm: target.pm, prompt: target.prompt, approvalStatus: target.approvalStatus, businessDetails: form })
+                await supabase.from('projects').update({ title: form.businessName, client: form.businessName, stack: extraJson, history: newHistory }).eq('id', editId)
               }
               const updatedList = projects.map(p => p.id === editId ? updated : p)
               setProjects(updatedList); setCachedData('projects', updatedList); invalidateCache('dashboard')
-              setEditId(null); toast({ title: '✅ Project Updated' })
+              setEditId(null); toast({ title: 'Strategy Updated' })
             }}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
@@ -1699,16 +1407,7 @@ export default function CampaignStrategyPage() {
 
       {/* Delete */}
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. All workspace tasks, files, links and requirements will remain in database but the project reference will be lost.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete Project</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Strategy?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
       {/* Manage Categories Dialog */}
       <Dialog open={showManageCategories} onOpenChange={setShowManageCategories}>
