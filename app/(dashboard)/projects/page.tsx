@@ -19,7 +19,7 @@ import { VersionTimeline } from '@/components/ui/version-timeline'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
   History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
-  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText
+  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2
 } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId } from '@/lib/utils'
 import { generateCampaignPrompt, copyToClipboard, downloadAsTextFile, WORKFLOW_STEPS } from '@/lib/ai-utils'
@@ -57,6 +57,406 @@ export default function CampaignStrategyPage() {
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  // ─── PROJECT WORKSPACE STATES ───
+  const [workspaceRequirements, setWorkspaceRequirements] = useState<any[]>([])
+  const [workspaceSubmissions, setWorkspaceSubmissions] = useState<any[]>([])
+  const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([])
+  const [workspaceLinks, setWorkspaceLinks] = useState<any[]>([])
+  const [workspaceReports, setWorkspaceReports] = useState<any[]>([])
+  const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false)
+
+  // Requirements Request Form States
+  const [reqTitle, setReqTitle] = useState('')
+  const [reqDesc, setReqDesc] = useState('')
+  const [reqCategory, setReqCategory] = useState('Logo')
+  const [reqPriority, setReqPriority] = useState('medium')
+  const [reqDueDate, setReqDueDate] = useState('')
+  const [reqAllowFile, setReqAllowFile] = useState(true)
+  const [reqAllowLink, setReqAllowLink] = useState(false)
+  const [reqAllowText, setReqAllowText] = useState(true)
+  const [reqAllowMultiple, setReqAllowMultiple] = useState(false)
+  const [reqIsRequired, setReqIsRequired] = useState(true)
+  const [showReqForm, setShowReqForm] = useState(false)
+
+  // Review Form States
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewingSub, setReviewingSub] = useState<any | null>(null)
+
+  // Files Upload Form States
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [fileCategory, setFileCategory] = useState('Other Documents')
+  const [fileVersion, setFileVersion] = useState('1')
+  const [fileVisibility, setFileVisibility] = useState('Published to Client')
+  const [uploadingFileState, setUploadingFileState] = useState(false)
+
+  // Reports Form States
+  const [uploadReportFile, setUploadReportFile] = useState<File | null>(null)
+  const [reportTitle, setReportTitle] = useState('')
+  const [reportType, setReportType] = useState('Marketing Report')
+  const [reportVersion, setReportVersion] = useState('1')
+  const [reportVisibility, setReportVisibility] = useState('Published to Client')
+  const [uploadingReportState, setUploadingReportState] = useState(false)
+
+  // Links Form States
+  const [linkTitle, setLinkTitle] = useState('')
+  const [linkCategory, setLinkCategory] = useState('Live Website')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkDesc, setLinkDesc] = useState('')
+  const [linkVisibility, setLinkVisibility] = useState('Published to Client')
+
+  // Overview Editing States
+  const [editingOverview, setEditingOverview] = useState(false)
+  const [editedPm, setEditedPm] = useState('')
+  const [editedBudget, setEditedBudget] = useState(0)
+  const [editedSpent, setEditedSpent] = useState(0)
+  const [editedTimeline, setEditedTimeline] = useState('')
+  const [editedProgress, setEditedProgress] = useState(0)
+  const [editedStatus, setEditedStatus] = useState('')
+  const [newMilestoneText, setNewMilestoneText] = useState('')
+
+  // ─── PROJECT WORKSPACE HANDLERS ───
+  const fetchProjectWorkspaceData = async (projectId: string) => {
+    if (!isSupabaseConfigured()) return
+    setLoadingWorkspace(true)
+    try {
+      const [reqs, files, links, reps, timeline] = await Promise.all([
+        supabase.from('project_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_links').select('*').eq('project_id', projectId).order('published_at', { ascending: false }),
+        supabase.from('project_reports').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+      ])
+
+      const reqList = reqs.data || []
+      setWorkspaceRequirements(reqList)
+      setWorkspaceFiles(files.data || [])
+      setWorkspaceLinks(links.data || [])
+      setWorkspaceReports(reps.data || [])
+      setWorkspaceTimeline(timeline.data || [])
+
+      if (reqList.length > 0) {
+        const reqIds = reqList.map((r: any) => r.id)
+        const { data: subs } = await supabase.from('project_requirement_submissions').select('*').in('requirement_id', reqIds)
+        setWorkspaceSubmissions(subs || [])
+      } else {
+        setWorkspaceSubmissions([])
+      }
+    } catch (e) {
+      console.error('Error fetching workspace data:', e)
+    } finally {
+      setLoadingWorkspace(false)
+    }
+  }
+
+  const logWorkspaceActivity = async (projectId: string, action: string, notes: string = '') => {
+    if (!isSupabaseConfigured()) return
+    try {
+      await supabase.from('project_activity_timeline').insert({
+        project_id: projectId,
+        user_name: 'Admin Team',
+        action,
+        notes
+      })
+      // Refresh timeline locally
+      const { data } = await supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+      setWorkspaceTimeline(data || [])
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const notifyClient = async (clientCompanyOrEmail: string, title: string, message: string) => {
+    if (!isSupabaseConfigured()) return
+    try {
+      await supabase.from('client_notifications').insert({
+        client_id: clientCompanyOrEmail,
+        title,
+        message,
+        type: 'support',
+        is_read: false
+      })
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const saveProjectDetails = async (updated: Project) => {
+    if (isSupabaseConfigured()) {
+      try {
+        const extraJson = JSON.stringify({ 
+          type: updated.type, 
+          budget: updated.budget, 
+          spent: updated.spent, 
+          timeline: updated.timeline, 
+          progress: updated.progress, 
+          milestones: updated.milestones, 
+          startDate: updated.startDate, 
+          pm: updated.pm, 
+          prompt: updated.prompt, 
+          approvalStatus: updated.approvalStatus, 
+          businessDetails: updated.businessDetails 
+        })
+        const { error } = await supabase.from('projects').update({ 
+          status: updated.status, 
+          stack: extraJson 
+        }).eq('id', updated.id)
+
+        if (!error) {
+          setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
+          setDetailProject(updated)
+          toast({ title: 'Project details updated' })
+          await logWorkspaceActivity(updated.id, 'Project Details Updated', `Status: ${updated.status}, Progress: ${updated.progress}%`)
+        }
+      } catch (e: any) {
+        toast({ title: 'Error updating project', description: e.message, variant: 'destructive' })
+      }
+    }
+  }
+
+  const handleToggleMilestone = async (project: Project, index: number) => {
+    const updatedMilestones = [...project.milestones]
+    const m = updatedMilestones[index]
+    if (m.endsWith(' ✅')) {
+      updatedMilestones[index] = m.replace(' ✅', ' ⏳')
+    } else if (m.endsWith(' ⏳')) {
+      updatedMilestones[index] = m.replace(' ⏳', ' ✅')
+    } else {
+      updatedMilestones[index] = m + ' ✅'
+    }
+    
+    const completedCount = updatedMilestones.filter(m => m.endsWith(' ✅')).length
+    const progress = Math.round((completedCount / updatedMilestones.length) * 100) || 0
+
+    const updated = { ...project, milestones: updatedMilestones, progress }
+    await saveProjectDetails(updated)
+  }
+
+  const handleAddMilestone = async (project: Project) => {
+    if (!newMilestoneText.trim()) return
+    const updatedMilestones = [...project.milestones, `${newMilestoneText.trim()} ⏳`]
+    const completedCount = updatedMilestones.filter(m => m.endsWith(' ✅')).length
+    const progress = Math.round((completedCount / updatedMilestones.length) * 100) || 0
+
+    const updated = { ...project, milestones: updatedMilestones, progress }
+    await saveProjectDetails(updated)
+    setNewMilestoneText('')
+  }
+
+  const handleDeleteMilestone = async (project: Project, index: number) => {
+    const updatedMilestones = project.milestones.filter((_, i) => i !== index)
+    const completedCount = updatedMilestones.filter(m => m.endsWith(' ✅')).length
+    const progress = Math.round((completedCount / updatedMilestones.length) * 100) || 0
+
+    const updated = { ...project, milestones: updatedMilestones, progress }
+    await saveProjectDetails(updated)
+  }
+
+  const handleCreateRequirement = async (projectId: string, clientName: string) => {
+    if (!reqTitle.trim()) return
+    try {
+      const { error } = await supabase.from('project_requirements').insert({
+        project_id: projectId,
+        title: reqTitle,
+        description: reqDesc,
+        category: reqCategory,
+        priority: reqPriority,
+        due_date: reqDueDate || null,
+        allow_file: reqAllowFile,
+        allow_link: reqAllowLink,
+        allow_text: reqAllowText,
+        allow_multiple: reqAllowMultiple,
+        is_required: reqIsRequired,
+        status: 'pending'
+      })
+
+      if (error) throw error
+
+      toast({ title: 'Requirement Request Created' })
+      setReqTitle('')
+      setReqDesc('')
+      setReqDueDate('')
+      setShowReqForm(false)
+      
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Requirement Requested', `Requested: ${reqTitle} (${reqCategory})`)
+      await notifyClient(clientName, `New Requirement Requested: ${reqTitle}`, `Please provide the requested ${reqCategory} details for your project.`)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleReviewSubmission = async (projectId: string, clientName: string, subId: string, reqId: string, action: 'Approve' | 'Decline') => {
+    try {
+      const status = action === 'Approve' ? 'completed' : 'needs revision'
+      
+      await supabase.from('project_requirements').update({ status }).eq('id', reqId)
+      await supabase.from('project_requirement_submissions').update({
+        feedback: reviewComment,
+        feedback_by: 'Admin Team',
+        feedback_at: new Date().toISOString()
+      }).eq('id', subId)
+
+      toast({ title: `Submission ${action}d` })
+      setReviewComment('')
+      setReviewingSub(null)
+
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, `Requirement ${action}d`, `Requirement status set to ${status}. Feedback: "${reviewComment}"`)
+      await notifyClient(clientName, `Requirement ${action}d`, `Your submission has been ${action.toLowerCase()}d by our team. Feedback: "${reviewComment}"`)
+    } catch (e: any) {
+      toast({ title: 'Error reviewing submission', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleUploadFile = async (projectId: string, clientName: string) => {
+    if (!uploadFile) return
+    setUploadingFileState(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+      formData.append('projectId', projectId)
+      formData.append('category', fileCategory)
+      formData.append('uploadedBy', 'Admin Team')
+
+      const res = await fetch('/api/project-files/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+
+      await supabase.from('project_files').insert({
+        project_id: projectId,
+        name: data.fileName || uploadFile.name,
+        file_path: data.url,
+        category: fileCategory,
+        version: parseInt(fileVersion) || 1,
+        visibility: fileVisibility,
+        uploaded_by: 'Admin Team'
+      })
+
+      toast({ title: 'File uploaded successfully', description: uploadFile.name })
+      setUploadFile(null)
+
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'File Uploaded', `Uploaded ${uploadFile.name} (${fileCategory}) - Visibility: ${fileVisibility}`)
+
+      if (fileVisibility === 'Published to Client') {
+        await notifyClient(clientName, 'New Project File Published', `We have uploaded a new file to your workspace: ${uploadFile.name}`)
+      }
+    } catch (e: any) {
+      toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setUploadingFileState(false)
+    }
+  }
+
+  const handleUploadReport = async (projectId: string, clientName: string) => {
+    if (!uploadReportFile || !reportTitle.trim()) return
+    setUploadingReportState(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadReportFile)
+      formData.append('projectId', projectId)
+      formData.append('category', 'Reports')
+      formData.append('uploadedBy', 'Admin Team')
+
+      const res = await fetch('/api/project-files/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+
+      await supabase.from('project_reports').insert({
+        project_id: projectId,
+        title: reportTitle,
+        report_type: reportType,
+        file_path: data.url,
+        version: parseInt(reportVersion) || 1,
+        visibility: reportVisibility,
+        uploaded_by: 'Admin Team'
+      })
+
+      toast({ title: 'Report uploaded successfully', description: reportTitle })
+      setUploadReportFile(null)
+      setReportTitle('')
+
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Report Uploaded', `Uploaded report: ${reportTitle} (${reportType}) - Visibility: ${reportVisibility}`)
+
+      if (reportVisibility === 'Published to Client') {
+        await notifyClient(clientName, 'New Performance Report Uploaded', `A new ${reportType} report has been published to your workspace: ${reportTitle}`)
+      }
+    } catch (e: any) {
+      toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setUploadingReportState(false)
+    }
+  }
+
+  const handleAddLink = async (projectId: string, clientName: string) => {
+    if (!linkTitle.trim() || !linkUrl.trim()) return
+    try {
+      await supabase.from('project_links').insert({
+        project_id: projectId,
+        title: linkTitle,
+        category: linkCategory,
+        description: linkDesc,
+        url: linkUrl,
+        visibility: linkVisibility
+      })
+
+      toast({ title: 'Resource Link Published' })
+      setLinkTitle('')
+      setLinkUrl('')
+      setLinkDesc('')
+
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Link Added', `Added resource link: ${linkTitle} (${linkCategory}) - Visibility: ${linkVisibility}`)
+
+      if (linkVisibility === 'Published to Client') {
+        await notifyClient(clientName, 'New Resource Link Added', `A new link has been shared with you: ${linkTitle}`)
+      }
+    } catch (e: any) {
+      toast({ title: 'Error adding link', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleUpdateFileVisibility = async (projectId: string, fileId: string, fileName: string, visibility: string) => {
+    try {
+      await supabase.from('project_files').update({ visibility }).eq('id', fileId)
+      toast({ title: 'File visibility updated' })
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'File Visibility Updated', `Set visibility of ${fileName} to ${visibility}`)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleUpdateReportVisibility = async (projectId: string, reportId: string, reportTitle: string, visibility: string) => {
+    try {
+      await supabase.from('project_reports').update({ visibility }).eq('id', reportId)
+      toast({ title: 'Report visibility updated' })
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Report Visibility Updated', `Set visibility of report "${reportTitle}" to ${visibility}`)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleUpdateLinkVisibility = async (projectId: string, linkId: string, linkTitle: string, visibility: string) => {
+    try {
+      await supabase.from('project_links').update({ visibility }).eq('id', linkId)
+      toast({ title: 'Link visibility updated' })
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Link Visibility Updated', `Set visibility of link "${linkTitle}" to ${visibility}`)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
 
   const emptyForm: CampaignStrategyForm = {
     businessName: '', businessCategory: 'Digital Marketing', website: '', phone: '', email: '',
@@ -195,6 +595,16 @@ export default function CampaignStrategyPage() {
     if (p.businessDetails) setForm(p.businessDetails)
     setGeneratedPrompt(p.prompt || '')
     setActiveTab('overview')
+
+    // Initialize workspace editing states
+    setEditedPm(p.pm || '')
+    setEditedBudget(p.budget || 0)
+    setEditedSpent(p.spent || 0)
+    setEditedTimeline(p.timeline || '')
+    setEditedProgress(p.progress || 0)
+    setEditedStatus(p.status || 'planned')
+
+    fetchProjectWorkspaceData(p.id)
   }
 
   return (
@@ -355,39 +765,702 @@ export default function CampaignStrategyPage() {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="prompt">Prompt</TabsTrigger>
-              <TabsTrigger value="documents">Docs</TabsTrigger>
-              <TabsTrigger value="approval" className="hidden sm:block">Approval</TabsTrigger>
-              <TabsTrigger value="activity" className="hidden sm:block">Activity</TabsTrigger>
-              <TabsTrigger value="versions" className="hidden sm:block">Versions</TabsTrigger>
+            <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
+              <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
+              <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
+              <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
+              <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
+              <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
+              <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Timeline</TabsTrigger>
+              <TabsTrigger value="prompt" className="text-xs px-3 py-1.5 data-[state=state]:bg-gold data-[state=active]:bg-gold data-[state=active]:text-black">AI Prompt</TabsTrigger>
+              <TabsTrigger value="versions" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Versions</TabsTrigger>
             </TabsList>
 
+            {/* ── OVERVIEW TAB ── */}
             <TabsContent value="overview" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Budget</p><p className="text-sm font-bold">{formatCurrency(detailProject?.budget || 0)}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Timeline</p><p className="text-sm font-bold">{detailProject?.timeline || 'N/A'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Progress</p><p className="text-sm font-bold">{detailProject?.progress}%</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Type</p><p className="text-sm font-bold">{detailProject?.type}</p></CardContent></Card>
-              </div>
-              <WorkflowSteps steps={WORKFLOW_STEPS} currentStep={detailProject?.prompt ? 3 : 1} />
-            </TabsContent>
+              {detailProject && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
+                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-slate-300">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
+                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
+                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-slate-300">{detailProject.pm || 'N/A'}</p></CardContent></Card>
+                  </div>
 
-            <TabsContent value="details" className="mt-4">
-              {detailProject?.businessDetails ? (
-                <div className="space-y-3 text-sm">
-                  {Object.entries(detailProject.businessDetails).filter(([, v]) => v).map(([key, value]) => (
-                    <div key={key} className="flex gap-3 py-2 border-b border-border last:border-0">
-                      <span className="text-xs text-muted-foreground w-32 shrink-0 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                      <span className="text-xs">{String(value)}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Left Column: Milestones Checklist */}
+                    <div className="md:col-span-2 space-y-3">
+                      <div className="flex justify-between items-center border-b border-border pb-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Milestones Checklist</h4>
+                        <span className="text-[10px] text-slate-500">{detailProject.milestones.length} milestones</span>
+                      </div>
+                      
+                      <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                        {detailProject.milestones.map((m, idx) => {
+                          const isDone = m.endsWith(' ✅')
+                          const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-2 rounded bg-[#0b1b15] border border-[#152e23]/60 hover:border-gold/30">
+                              <div className="flex items-center gap-2">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isDone}
+                                  onChange={() => handleToggleMilestone(detailProject, idx)}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
+                                />
+                                <span className={`text-xs ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>{cleanLabel}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-red-400 hover:text-red-400 hover:bg-red-500/10"
+                                onClick={() => handleDeleteMilestone(detailProject, idx)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )
+                        })}
+                        {detailProject.milestones.length === 0 && (
+                          <p className="text-xs text-slate-500 text-center py-4">No milestones created yet.</p>
+                        )}
+                      </div>
+
+                      {/* Add Milestone Inline Form */}
+                      <div className="flex gap-2 pt-1">
+                        <Input 
+                          placeholder="Add new milestone (e.g. Figma Review)" 
+                          value={newMilestoneText}
+                          onChange={e => setNewMilestoneText(e.target.value)}
+                          className="h-8 text-xs bg-[#091510] border-[#152e23]"
+                        />
+                        <Button 
+                          variant="gold" 
+                          size="sm" 
+                          className="h-8 text-xs px-3"
+                          onClick={() => handleAddMilestone(detailProject)}
+                        >
+                          Add
+                        </Button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : <p className="text-sm text-muted-foreground py-8 text-center">No business details stored for this strategy.</p>}
+
+                    {/* Right Column: Quick Stats Editor */}
+                    <div className="space-y-4 bg-[#091510] border border-[#152e23] rounded-xl p-4">
+                      <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Edit Details</h4>
+                        <Button variant="ghost" size="sm" onClick={() => setEditingOverview(!editingOverview)} className="text-gold h-6 text-[10px]">
+                          {editingOverview ? 'Cancel' : 'Edit'}
+                        </Button>
+                      </div>
+
+                      {editingOverview ? (
+                        <div className="space-y-3 text-xs">
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Status</Label>
+                            <Select value={editedStatus} onValueChange={setEditedStatus}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="active" className="text-xs">Active</SelectItem>
+                                <SelectItem value="planned" className="text-xs">Planned</SelectItem>
+                                <SelectItem value="completed" className="text-xs">Completed</SelectItem>
+                                <SelectItem value="paused" className="text-xs">Paused</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Budget (₹)</Label>
+                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Spent (₹)</Label>
+                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Timeline (e.g. 8 Weeks)</Label>
+                            <Input value={editedTimeline} onChange={e => setEditedTimeline(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Project Manager</Label>
+                            <Input value={editedPm} onChange={e => setEditedPm(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] flex justify-between">Progress <span>{editedProgress}%</span></Label>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="100" 
+                              value={editedProgress} 
+                              onChange={e => setEditedProgress(Number(e.target.value))}
+                              className="w-full accent-gold bg-[#0b1b15]" 
+                            />
+                          </div>
+                          <Button 
+                            variant="gold" 
+                            size="sm" 
+                            className="w-full h-8 text-xs mt-2"
+                            onClick={() => {
+                              const updated = { 
+                                ...detailProject, 
+                                pm: editedPm, 
+                                budget: editedBudget, 
+                                spent: editedSpent, 
+                                timeline: editedTimeline, 
+                                progress: editedProgress,
+                                status: editedStatus
+                              }
+                              saveProjectDetails(updated)
+                              setEditingOverview(false)
+                            }}
+                          >
+                            Save Workspace Changes
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 text-xs font-sans">
+                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Status</span><span className="capitalize text-emerald-400 font-semibold">{detailProject.status}</span></div>
+                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Timeline</span><span className="font-semibold">{detailProject.timeline || 'Not set'}</span></div>
+                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Type</span><span className="font-semibold text-slate-300">{detailProject.type}</span></div>
+                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Date Created</span><span className="font-semibold text-slate-300">{formatDate(detailProject.startDate)}</span></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <WorkflowSteps steps={WORKFLOW_STEPS} currentStep={detailProject?.prompt ? 3 : 1} />
+                </>
+              )}
             </TabsContent>
 
+            {/* ── REQUIREMENTS REQUEST TAB ── */}
+            <TabsContent value="workspace-reqs" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  {/* Top Header and Toggle Request Form */}
+                  <div className="flex justify-between items-center bg-[#091510] border border-[#152e23] p-3 rounded-xl">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Requirements Request System</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Request guidelines, brand details, logos, or hosting details from the client.</p>
+                    </div>
+                    <Button variant="gold" size="sm" onClick={() => setShowReqForm(!showReqForm)} className="h-8 text-xs gap-1">
+                      <Plus className="h-3.5 w-3.5" /> {showReqForm ? 'Close Form' : 'Request Info'}
+                    </Button>
+                  </div>
+
+                  {/* Create Request Form */}
+                  {showReqForm && (
+                    <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                      <h5 className="text-xs font-bold text-gold">New Requirement Details</h5>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <Label>Requirement Title *</Label>
+                          <Input placeholder="e.g. Brand Guidelines PDF" value={reqTitle} onChange={e => setReqTitle(e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Category</Label>
+                          <Select value={reqCategory} onValueChange={setReqCategory}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {['Logo', 'Brand Guidelines', 'Brand Colors', 'Fonts', 'Business Description', 'Competitor Websites', 'Social Media Links', 'Hosting Details', 'Domain Details', 'Google Analytics Access', 'Meta Business Access', 'Google Ads Access', 'Images', 'Videos', 'PDFs', 'Documents', 'Custom Request'].map(cat => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>Instructions / Description</Label>
+                          <Textarea placeholder="Explain what guidelines or files are needed..." value={reqDesc} onChange={e => setReqDesc(e.target.value)} className="h-16" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Priority</Label>
+                          <Select value={reqPriority} onValueChange={setReqPriority}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Due Date</Label>
+                          <Input type="date" value={reqDueDate} onChange={e => setReqDueDate(e.target.value)} />
+                        </div>
+                        
+                        {/* Checkboxes */}
+                        <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#152e23]">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={reqAllowFile} onChange={e => setReqAllowFile(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
+                            <span>Allow File Upload</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={reqAllowLink} onChange={e => setReqAllowLink(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
+                            <span>Allow Link URL</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={reqAllowText} onChange={e => setReqAllowText(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
+                            <span>Allow Text Note</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={reqIsRequired} onChange={e => setReqIsRequired(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
+                            <span>Is Required</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end border-t border-[#152e23] pt-3">
+                        <Button variant="outline" size="sm" onClick={() => setShowReqForm(false)}>Cancel</Button>
+                        <Button variant="gold" size="sm" onClick={() => handleCreateRequirement(detailProject.id, detailProject.client)}>Submit Request</Button>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Submission Review Modal Overlay */}
+                  {reviewingSub && (
+                    <Card className="bg-[#121f1a] border-[#1e3a2f] p-4 space-y-3 relative">
+                      <button onClick={() => setReviewingSub(null)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                      <h5 className="text-xs font-bold text-[#D4AF37] uppercase">Review Client Submission</h5>
+                      <div className="text-xs space-y-1.5 bg-[#070e0b]/60 p-3 rounded border border-[#1e3a2f]/40 font-mono">
+                        <div><span className="text-slate-500">Submitted By:</span> <span className="text-white">{reviewingSub.submitted_by}</span></div>
+                        <div><span className="text-slate-500">Submitted At:</span> <span className="text-white">{new Date(reviewingSub.submitted_at).toLocaleString('en-IN')}</span></div>
+                        {reviewingSub.text_response && <div><span className="text-slate-500">Text Response:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.text_response}"</p></div>}
+                        {reviewingSub.links && reviewingSub.links.length > 0 && (
+                          <div>
+                            <span className="text-slate-500">Links:</span> 
+                            <div className="flex flex-col gap-1 mt-1 font-sans">
+                              {reviewingSub.links.map((link: string, i: number) => (
+                                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{link}</a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {reviewingSub.file_paths && reviewingSub.file_paths.length > 0 && (
+                          <div>
+                            <span className="text-slate-500">Uploaded Files:</span> 
+                            <div className="flex flex-col gap-1.5 mt-1 font-sans">
+                              {reviewingSub.file_paths.map((file: string, i: number) => (
+                                <a key={i} href={file} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline flex items-center gap-1.5 border border-[#152e23] p-1.5 rounded bg-black/40"><Download className="h-3.5 w-3.5" />{file.split('/').pop()}</a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {reviewingSub.notes && <div><span className="text-slate-500">Notes:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.notes}"</p></div>}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs">Feedback Comments (Required on revision)</Label>
+                        <Textarea 
+                          placeholder="Approve with note, or request specific changes..." 
+                          value={reviewComment}
+                          onChange={e => setReviewComment(e.target.value)}
+                          className="h-16 text-xs bg-[#0b1b15] border-[#1e3a2f]"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end pt-2 border-t border-[#1e3a2f]/40">
+                        <Button variant="outline" size="sm" onClick={() => setReviewingSub(null)} className="h-8 text-xs">Close</Button>
+                        <Button variant="outline" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Decline')} className="h-8 text-xs text-red-400 border-red-500/20 hover:bg-red-500/10">Request Revision</Button>
+                        <Button variant="gold" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Approve')} className="h-8 text-xs px-4">Approve submission</Button>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* List of active requests */}
+                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                            <th className="text-left py-2 px-3 font-semibold">Title</th>
+                            <th className="text-left py-2 px-3 font-semibold">Category</th>
+                            <th className="text-left py-2 px-3 font-semibold">Priority</th>
+                            <th className="text-left py-2 px-3 font-semibold">Due Date</th>
+                            <th className="text-left py-2 px-3 font-semibold">Status</th>
+                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workspaceRequirements.map((req: any) => {
+                            const sub = workspaceSubmissions.find(s => s.requirement_id === req.id)
+                            return (
+                              <tr key={req.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                                <td className="py-2.5 px-3">
+                                  <p className="font-semibold text-slate-200">{req.title}</p>
+                                  {req.description && <p className="text-[10px] text-slate-500 truncate max-w-[200px]">{req.description}</p>}
+                                </td>
+                                <td className="py-2.5 px-3"><span className="px-1.5 py-0.5 rounded border border-[#152e23] bg-black/20 text-slate-400 text-[10px]">{req.category}</span></td>
+                                <td className="py-2.5 px-3">
+                                  <span className={`capitalize ${req.priority === 'high' ? 'text-red-400 font-bold' : req.priority === 'medium' ? 'text-yellow-400' : 'text-slate-400'}`}>{req.priority}</span>
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-400">{req.due_date ? formatDate(req.due_date) : '—'}</td>
+                                <td className="py-2.5 px-3">
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10' : 'text-slate-400 bg-slate-500/10'}`}>{req.status}</span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  {sub ? (
+                                    <Button variant="outline" size="sm" onClick={() => setReviewingSub(sub)} className="h-7 text-[10px] border-gold/20 text-gold hover:bg-gold/15">Review Submission</Button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-500 italic pr-2">Awaiting client response</span>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                          {workspaceRequirements.length === 0 && (
+                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No requirement requests published yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── FILES & DOCUMENTS TAB ── */}
+            <TabsContent value="workspace-files" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  {/* File Uploader Card */}
+                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                    <h4 className="text-xs font-bold text-gold uppercase">Upload Project Document / Resource File</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="space-y-1">
+                        <Label>Select File *</Label>
+                        <Input 
+                          type="file" 
+                          onChange={e => setUploadFile(e.target.files ? e.target.files[0] : null)} 
+                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Category</Label>
+                        <Select value={fileCategory} onValueChange={setFileCategory}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['Proposal', 'Quotation', 'Scope of Work', 'Agreement', 'Invoice', 'Reports', 'Design Files', 'Development Files', 'Source Code', 'Testing Reports', 'Training Documents', 'Manuals', 'Other Documents'].map(cat => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Version</Label>
+                        <Input type="number" value={fileVersion} onChange={e => setFileVersion(e.target.value)} className="h-8" />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label>Visibility</Label>
+                        <Select value={fileVisibility} onValueChange={setFileVisibility}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Internal Only">Internal Only</SelectItem>
+                            <SelectItem value="Published to Client">Published to Client</SelectItem>
+                            <SelectItem value="Hidden">Hidden</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button 
+                          variant="gold" 
+                          className="w-full h-8 text-xs font-bold" 
+                          onClick={() => handleUploadFile(detailProject.id, detailProject.client)}
+                          disabled={uploadingFileState || !uploadFile}
+                        >
+                          {uploadingFileState ? 'Uploading...' : 'Upload & Register File'}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Registered Files List */}
+                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                            <th className="text-left py-2 px-3 font-semibold">File Name</th>
+                            <th className="text-left py-2 px-3 font-semibold">Category</th>
+                            <th className="text-left py-2 px-3 font-semibold">Version</th>
+                            <th className="text-left py-2 px-3 font-semibold">Upload Date</th>
+                            <th className="text-left py-2 px-3 font-semibold">Visibility</th>
+                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workspaceFiles.map((file: any) => (
+                            <tr key={file.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={file.name}>{file.name}</td>
+                              <td className="py-2 px-3 text-slate-400">{file.category}</td>
+                              <td className="py-2 px-3 text-slate-400">V{file.version}</td>
+                              <td className="py-2 px-3 text-slate-400">{formatDate(file.uploaded_at)}</td>
+                              <td className="py-2 px-3">
+                                <Select value={file.visibility} onValueChange={v => handleUpdateFileVisibility(detailProject.id, file.id, file.name, v)}>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
+                                    <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
+                                    <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                          {workspaceFiles.length === 0 && (
+                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No workspace files uploaded yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── REPORTS TAB ── */}
+            <TabsContent value="workspace-reports" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  {/* Upload Reports form */}
+                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                    <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="space-y-1">
+                        <Label>Report Title *</Label>
+                        <Input placeholder="e.g. SEO Report - June 2026" value={reportTitle} onChange={e => setReqTitle(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Report Type</Label>
+                        <Select value={reportType} onValueChange={setReportType}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['Marketing Report', 'SEO Report', 'Google Ads Report', 'Meta Ads Report', 'Analytics Report', 'Performance Report', 'Custom Report'].map(t => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Select PDF / Excel File *</Label>
+                        <Input 
+                          type="file" 
+                          onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
+                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Version</Label>
+                        <Input type="number" value={reportVersion} onChange={e => setReportVersion(e.target.value)} className="h-8" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Visibility</Label>
+                        <Select value={reportVisibility} onValueChange={setReportVisibility}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Internal Only">Internal Only</SelectItem>
+                            <SelectItem value="Published to Client">Published to Client</SelectItem>
+                            <SelectItem value="Hidden">Hidden</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button 
+                          variant="gold" 
+                          className="w-full h-8 text-xs font-bold" 
+                          onClick={() => handleUploadReport(detailProject.id, detailProject.client)}
+                          disabled={uploadingReportState || !uploadReportFile || !reportTitle.trim()}
+                        >
+                          {uploadingReportState ? 'Uploading...' : 'Publish Report'}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Reports List */}
+                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                            <th className="text-left py-2 px-3 font-semibold">Report Title</th>
+                            <th className="text-left py-2 px-3 font-semibold">Type</th>
+                            <th className="text-left py-2 px-3 font-semibold">Version</th>
+                            <th className="text-left py-2 px-3 font-semibold">Date Uploaded</th>
+                            <th className="text-left py-2 px-3 font-semibold">Visibility</th>
+                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workspaceReports.map((rep: any) => (
+                            <tr key={rep.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
+                              <td className="py-2 px-3 text-slate-400">{rep.report_type}</td>
+                              <td className="py-2 px-3 text-slate-400">V{rep.version}</td>
+                              <td className="py-2 px-3 text-slate-400">{formatDate(rep.uploaded_at)}</td>
+                              <td className="py-2 px-3">
+                                <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
+                                    <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
+                                    <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                          {workspaceReports.length === 0 && (
+                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No reports generated yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── LINKS TAB ── */}
+            <TabsContent value="workspace-links" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  {/* Add Link form */}
+                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                    <h4 className="text-xs font-bold text-gold uppercase">Publish Resource / Deliverable Link</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="space-y-1">
+                        <Label>Link Title *</Label>
+                        <Input placeholder="e.g. Figma UI Designs" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Category</Label>
+                        <Select value={linkCategory} onValueChange={setLinkCategory}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['Live Website', 'Staging Website', 'Figma', 'Canva', 'Google Drive', 'GitHub Repository', 'Hosting', 'Analytics', 'Search Console', 'Google Ads', 'Meta Ads', 'Meeting Recordings', 'Training Videos', 'Other'].map(t => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>URL Address *</Label>
+                        <Input placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label>Description</Label>
+                        <Input placeholder="Optional brief details about the resource link..." value={linkDesc} onChange={e => setLinkDesc(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Visibility</Label>
+                        <Select value={linkVisibility} onValueChange={setLinkVisibility}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Internal Only">Internal Only</SelectItem>
+                            <SelectItem value="Published to Client">Published to Client</SelectItem>
+                            <SelectItem value="Hidden">Hidden</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="sm:col-span-3 flex justify-end pt-2 border-t border-[#152e23]">
+                        <Button 
+                          variant="gold" 
+                          className="h-8 text-xs font-bold px-6" 
+                          onClick={() => handleAddLink(detailProject.id, detailProject.client)}
+                          disabled={!linkTitle.trim() || !linkUrl.trim()}
+                        >
+                          Publish Resource Link
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Links List */}
+                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                            <th className="text-left py-2 px-3 font-semibold">Title</th>
+                            <th className="text-left py-2 px-3 font-semibold">Category</th>
+                            <th className="text-left py-2 px-3 font-semibold">URL</th>
+                            <th className="text-left py-2 px-3 font-semibold">Visibility</th>
+                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workspaceLinks.map((link: any) => (
+                            <tr key={link.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                              <td className="py-2 px-3">
+                                <p className="font-semibold text-slate-200">{link.title}</p>
+                                {link.description && <p className="text-[10px] text-slate-500">{link.description}</p>}
+                              </td>
+                              <td className="py-2 px-3 text-slate-400">{link.category}</td>
+                              <td className="py-2 px-3 truncate max-w-[200px]" title={link.url}>
+                                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1 font-mono text-[10px]"><Link2 className="h-3 w-3 shrink-0" /> {link.url}</a>
+                              </td>
+                              <td className="py-2 px-3">
+                                <Select value={link.visibility} onValueChange={v => handleUpdateLinkVisibility(detailProject.id, link.id, link.title, v)}>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
+                                    <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
+                                    <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="py-2 px-3 text-right">
+                                <a href={link.url} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                          {workspaceLinks.length === 0 && (
+                            <tr><td colSpan={5} className="text-center py-8 text-slate-500 italic">No workspace links shared yet.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── TIMELINE TAB ── */}
+            <TabsContent value="workspace-timeline" className="mt-4 space-y-3">
+              {detailProject && (
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Audit & Timeline Logs</h4>
+                  
+                  <div className="relative pl-4 border-l border-[#152e23] space-y-4 max-h-[300px] overflow-y-auto">
+                    {workspaceTimeline.map((item, idx) => (
+                      <div key={item.id || idx} className="relative text-xs">
+                        <div className="absolute -left-[20px] top-1 h-2 w-2 rounded-full bg-gold border border-black" />
+                        <div className="flex justify-between font-bold text-slate-200">
+                          <span className="text-xs font-semibold">{item.action}</span>
+                          <span className="text-[10px] text-slate-500 font-normal">{new Date(item.created_at).toLocaleString('en-IN')}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400">By {item.user_name}</p>
+                        {item.notes && <p className="text-[10px] text-slate-500 mt-1 italic font-mono bg-[#0b1b15]/60 p-1.5 rounded border border-[#152e23]/30">"{item.notes}"</p>}
+                      </div>
+                    ))}
+                    {workspaceTimeline.length === 0 && (
+                      <p className="text-xs text-slate-500 italic py-4 text-center">No timeline activity logs recorded.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── ORIGINAL AI PROMPT TAB ── */}
             <TabsContent value="prompt" className="mt-4">
               <PromptViewer
                 prompt={detailProject?.prompt || generatedPrompt}
@@ -404,37 +1477,7 @@ export default function CampaignStrategyPage() {
               )}
             </TabsContent>
 
-            <TabsContent value="documents" className="mt-4">
-              <div className="text-center py-8">
-                <FileText className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">Upload generated strategy documents</p>
-                <FileUpload
-                  accept=".pdf,.doc,.docx,.xlsx"
-                  label="Upload Generated Document"
-                  description="Upload the strategy PDF generated by Claude"
-                  onFilesSelected={files => {
-                    if (files.length > 0) toast({ title: 'Document Uploaded', description: `${files[0].name} attached to this strategy.` })
-                  }}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="approval" className="mt-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-border">
-                  <div><p className="text-sm font-semibold">Approval Status</p><p className="text-xs text-muted-foreground mt-0.5">Current status of this strategy</p></div>
-                  <ApprovalBadge status={detailProject?.approvalStatus || 'draft'} size="md" />
-                </div>
-                <div className="text-xs text-muted-foreground text-center py-4">Approval workflow will be enhanced with API integration.</div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="activity" className="mt-4">
-              <VersionTimeline
-                versions={(detailProject?.history || []).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: h.canDownload }))}
-              />
-            </TabsContent>
-
+            {/* ── ORIGINAL VERSIONS TAB ── */}
             <TabsContent value="versions" className="mt-4">
               <VersionTimeline
                 versions={(detailProject?.history || []).filter(h => h.canDownload).map((h, i) => ({ version: i + 1, date: h.date, action: h.action, canDownload: true, canRestore: true }))}

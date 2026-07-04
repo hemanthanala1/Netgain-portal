@@ -811,8 +811,8 @@ export default function AgreementsPage() {
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
             {historyDoc?.history.slice().reverse().map((h, i) => (
-              <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${h.canDownload ? 'border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group' : 'border-transparent bg-muted/20 cursor-default'}`}
-                onClick={() => { if (h.canDownload && historyDoc) handleDownload(historyDoc) }}
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
+                onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
               >
                 <div className="flex-1 flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
@@ -821,16 +821,14 @@ export default function AgreementsPage() {
                     <p className="text-xs text-muted-foreground">{h.date}</p>
                   </div>
                 </div>
-                {h.canDownload && (
-                  <Button variant="ghost" size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
-                    disabled={downloadingId === historyDoc?.id}
-                    onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
-                    title="Download this version"
-                  >
-                    {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  </Button>
-                )}
+                <Button variant="ghost" size="icon"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
+                  disabled={downloadingId === historyDoc?.id}
+                  onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
+                  title="Download document version"
+                >
+                  {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                </Button>
               </div>
             ))}
           </div>

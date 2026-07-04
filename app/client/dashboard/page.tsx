@@ -16,8 +16,10 @@ import {
   FolderOpen, Building2, User, Loader2, RefreshCw, LogOut, FileSignature,
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
-  Coins, TrendingUp, Menu, PenTool, Type
+  Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink
 } from 'lucide-react'
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
 import {
@@ -56,6 +58,12 @@ interface Project {
   status: string
   created: string
   history: { date: string; action: string }[]
+  progress?: number
+  milestones?: string[]
+  budget?: number
+  spent?: number
+  timeline?: string
+  pm?: string
 }
 
 interface ClientNotification {
@@ -78,6 +86,30 @@ export default function ClientDashboardPage() {
   // Data States
   const [docs, setDocs] = useState<ClientDoc[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+
+  // ─── PROJECT WORKSPACE CLIENT STATES ───
+  const [workspaceRequirements, setWorkspaceRequirements] = useState<any[]>([])
+  const [workspaceSubmissions, setWorkspaceSubmissions] = useState<any[]>([])
+  const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([])
+  const [workspaceLinks, setWorkspaceLinks] = useState<any[]>([])
+  const [workspaceReports, setWorkspaceReports] = useState<any[]>([])
+  const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  const [workspaceMeetings, setWorkspaceMeetings] = useState<any[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+  // Client Submissions Form States
+  const [activeSubmittingReq, setActiveSubmittingReq] = useState<any | null>(null)
+  const [clientTextResponse, setClientTextResponse] = useState('')
+  const [clientLinksInput, setClientLinksInput] = useState('')
+  const [clientUploadFiles, setClientUploadFiles] = useState<File[]>([])
+  const [clientSubmissionNotes, setClientSubmissionNotes] = useState('')
+  const [submittingRequirementState, setSubmittingRequirementState] = useState(false)
+
+  // Client General File Upload Form States
+  const [clientGeneralFile, setClientGeneralFile] = useState<File | null>(null)
+  const [clientFileCategory, setClientFileCategory] = useState('Brand Logo')
+  const [clientFileNotes, setClientFileNotes] = useState('')
+  const [uploadingClientFile, setUploadingClientFile] = useState(false)
   const [notifications, setNotifications] = useState<ClientNotification[]>([])
   const [companySettings, setCompanySettings] = useState<any>(null)
   const [clientDetails, setClientDetails] = useState<any>(null)
@@ -210,12 +242,61 @@ export default function ClientDashboardPage() {
       const matchedProjects: Project[] = (projRes.data || []).filter(p => {
         const docClient = (p.client || '').toLowerCase().trim()
         return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
-      }).map((p: any) => ({
-        id: p.id, docId: p.doc_id, title: p.title, client: p.client, stack: p.stack || 'Custom Stack', status: p.status || 'active', created: p.created_at, history: p.history || []
-      }))
+      }).map((p: any) => {
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.' }
+        if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
+        return {
+          id: p.id,
+          docId: p.doc_id,
+          title: p.title,
+          client: p.client,
+          stack: p.stack || 'Custom Stack',
+          status: p.status || 'active',
+          created: p.created_at,
+          history: Array.isArray(p.history) ? p.history : [],
+          progress: Number(extra.progress) || 0,
+          milestones: Array.isArray(extra.milestones) ? extra.milestones : [],
+          budget: Number(extra.budget) || 0,
+          spent: Number(extra.spent) || 0,
+          timeline: extra.timeline,
+          pm: extra.pm
+        }
+      })
 
       setProjects(matchedProjects)
       
+      if (matchedProjects.length > 0) {
+        setSelectedProjectId(prev => prev || matchedProjects[0].id)
+        
+        const projIds = matchedProjects.map(p => p.id)
+        const [reqs, pFiles, pLinks, pReps, pTime] = await Promise.all([
+          supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
+          supabase.from('project_files').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
+          supabase.from('project_links').select('*').in('project_id', projIds).order('published_at', { ascending: false }),
+          supabase.from('project_reports').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
+          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).order('created_at', { ascending: false })
+        ])
+
+        const reqList = reqs.data || []
+        setWorkspaceRequirements(reqList)
+        setWorkspaceFiles(pFiles.data || [])
+        setWorkspaceLinks(pLinks.data || [])
+        setWorkspaceReports(pReps.data || [])
+        setWorkspaceTimeline(pTime.data || [])
+
+        if (reqList.length > 0) {
+          const reqIds = reqList.map((r: any) => r.id)
+          const { data: subs } = await supabase.from('project_requirement_submissions').select('*').in('requirement_id', reqIds)
+          setWorkspaceSubmissions(subs || [])
+        } else {
+          setWorkspaceSubmissions([])
+        }
+      }
+
+      // Fetch client meetings
+      const { data: meets } = await supabase.from('meetings').select('*').or(`client_email.eq."${clientEmail}",client_name.eq."${session.company}"`).order('meeting_date', { ascending: false })
+      setWorkspaceMeetings(meets || [])
+
       if (notifRes.data) {
         setNotifications(notifRes.data)
       }
@@ -630,6 +711,151 @@ export default function ClientDashboardPage() {
     }
   }
 
+  const logWorkspaceActivityClient = async (projectId: string, action: string, notes: string = '') => {
+    if (!isSupabaseConfigured()) return
+    try {
+      await supabase.from('project_activity_timeline').insert({
+        project_id: projectId,
+        user_name: session?.name || 'Client',
+        action,
+        notes
+      })
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const notifyAdmin = async (projectId: string, title: string, message: string) => {
+    if (!isSupabaseConfigured()) return
+    try {
+      await supabase.from('client_notifications').insert({
+        client_id: 'admin',
+        title,
+        message,
+        type: 'support',
+        is_read: false
+      })
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleSubmitRequirement = async () => {
+    if (!activeSubmittingReq) return
+    setSubmittingRequirementState(true)
+    try {
+      const uploadedUrls: string[] = []
+
+      if (clientUploadFiles.length > 0) {
+        for (const file of clientUploadFiles) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('projectId', selectedProjectId || '')
+          formData.append('category', 'Requirements')
+          formData.append('uploadedBy', session?.name || 'Client')
+
+          const res = await fetch('/api/project-files/upload', {
+            method: 'POST',
+            body: formData
+          })
+          const data = await res.json()
+          if (!res.ok || data.error) throw new Error(data.error || 'File upload failed')
+          uploadedUrls.push(data.url)
+
+          await supabase.from('project_files').insert({
+            project_id: selectedProjectId || '',
+            name: data.fileName || file.name,
+            file_path: data.url,
+            category: 'Other Documents',
+            version: 1,
+            visibility: 'Published to Client',
+            uploaded_by: session?.name || 'Client'
+          })
+        }
+      }
+
+      const parsedLinks = clientLinksInput.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+      const { error: subError } = await supabase.from('project_requirement_submissions').insert({
+        requirement_id: activeSubmittingReq.id,
+        text_response: clientTextResponse,
+        links: parsedLinks,
+        file_paths: uploadedUrls,
+        notes: clientSubmissionNotes,
+        submitted_by: session?.name || 'Client'
+      })
+
+      if (subError) throw subError
+
+      await supabase.from('project_requirements').update({
+        status: 'submitted'
+      }).eq('id', activeSubmittingReq.id)
+
+      toast({ title: 'Requirement Submitted Successfully', description: activeSubmittingReq.title })
+      
+      setActiveSubmittingReq(null)
+      setClientTextResponse('')
+      setClientLinksInput('')
+      setClientUploadFiles([])
+      setClientSubmissionNotes('')
+
+      fetchClientData(true)
+
+      if (selectedProjectId) {
+        const proj = projects.find(p => p.id === selectedProjectId)
+        await logWorkspaceActivityClient(selectedProjectId, 'Requirement Submitted', `Submitted: ${activeSubmittingReq.title}`)
+        await notifyAdmin(selectedProjectId, `Requirement Submitted - ${proj?.title || 'Project'}`, `Client has submitted details for requirement: "${activeSubmittingReq.title}"`)
+      }
+    } catch (e: any) {
+      toast({ title: 'Submission Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setSubmittingRequirementState(false)
+    }
+  }
+
+  const handleClientUploadFile = async () => {
+    if (!clientGeneralFile || !selectedProjectId) return
+    setUploadingClientFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', clientGeneralFile)
+      formData.append('projectId', selectedProjectId)
+      formData.append('category', clientFileCategory)
+      formData.append('uploadedBy', session?.name || 'Client')
+
+      const res = await fetch('/api/project-files/upload', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+
+      await supabase.from('project_files').insert({
+        project_id: selectedProjectId,
+        name: data.fileName || clientGeneralFile.name,
+        file_path: data.url,
+        category: clientFileCategory,
+        version: 1,
+        visibility: 'Published to Client',
+        uploaded_by: session?.name || 'Client'
+      })
+
+      toast({ title: 'Asset uploaded successfully', description: clientGeneralFile.name })
+      setClientGeneralFile(null)
+      setClientFileNotes('')
+
+      fetchClientData(true)
+
+      const proj = projects.find(p => p.id === selectedProjectId)
+      await logWorkspaceActivityClient(selectedProjectId, 'Client File Uploaded', `Uploaded asset: ${clientGeneralFile.name} (${clientFileCategory})`)
+      await notifyAdmin(selectedProjectId, `New File Uploaded - ${proj?.title || 'Project'}`, `Client has uploaded asset "${clientGeneralFile.name}" under category "${clientFileCategory}"`)
+    } catch (e: any) {
+      toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setUploadingClientFile(false)
+    }
+  }
+
   const handleRefresh = () => {
     if (session) fetchClientData(true)
   }
@@ -637,13 +863,16 @@ export default function ClientDashboardPage() {
   // Sidebar link details
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'projects', label: 'Projects', icon: Briefcase, badge: projects.length },
+    { id: 'workspace-reqs', label: 'Requirements', icon: FileSignature, badge: workspaceRequirements.filter(r => r.status === 'pending' || r.status === 'needs revision').length },
+    { id: 'workspace-tasks', label: 'Tasks & Progress', icon: CheckCircle2 },
+    { id: 'workspace-files', label: 'Files & Documents', icon: FolderOpen },
+    { id: 'workspace-reports', label: 'Reports', icon: TrendingUp },
     { id: 'quotations', label: 'Quotations', icon: FileText, badge: docs.filter(d => d.type === 'Quotation').length },
     { id: 'sow', label: 'Scope of Work', icon: Briefcase, badge: docs.filter(d => d.type === 'SOW').length },
     { id: 'agreements', label: 'Agreements', icon: UserCheck, badge: docs.filter(d => d.type === 'Agreement').length },
     { id: 'invoices', label: 'Invoices', icon: Coins, badge: docs.filter(d => d.type === 'Invoice').length },
-    { id: 'marketing', label: 'Marketing Reports', icon: TrendingUp, badge: docs.filter(d => d.type === 'Marketing').length },
-    { id: 'projects', label: 'Projects', icon: Briefcase, badge: projects.length },
-    { id: 'documents', label: 'Documents Vault', icon: FolderOpen },
+    { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.filter(n => !n.is_read).length },
     { id: 'support', label: 'Support', icon: HelpCircle },
     { id: 'profile', label: 'Company Profile', icon: User }
@@ -982,20 +1211,30 @@ export default function ClientDashboardPage() {
         {/* Projects View */}
         {activeTab === 'projects' && !selectedDoc && (
           <div className="p-6 space-y-6">
-            <div>
-              <h1 className="text-xl font-bold text-white">Active Projects</h1>
-              <p className="text-xs text-slate-400 mt-1">Track timelines, delivery checklists, and managers assigned to your executions.</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-white">Project Workspaces</h1>
+                <p className="text-xs text-slate-400 mt-1">Track sprint milestones, progress, and managers assigned to your executions.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {projects.map(proj => {
+              {projects.filter(p => selectedProjectId ? p.id === selectedProjectId : true).map(proj => {
                 const stage = proj.status === 'active' ? 'Development & Integration' : 'Deployment'
-                const progressVal = proj.status === 'active' ? 70 : 100
+                const progressVal = proj.progress || 0
                 return (
                   <Card key={proj.id} className="bg-[#091510] border-[#152e23]/80 text-white relative overflow-hidden">
                     <CardHeader className="border-b border-[#152e23]/50 pb-3 flex flex-row items-center justify-between">
                       <div>
-                        <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 text-[9px] uppercase tracking-wider mb-1.5">{proj.stack}</Badge>
+                        <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 text-[9px] uppercase tracking-wider mb-1.5">{proj.stack?.includes('{') ? 'Strategy Engine' : proj.stack}</Badge>
                         <CardTitle className="text-base font-bold text-white">{proj.title}</CardTitle>
                         <p className="text-[10px] text-slate-400 font-mono mt-0.5">Project ID: {proj.docId}</p>
                       </div>
@@ -1030,16 +1269,16 @@ export default function ClientDashboardPage() {
                       </div>
 
                       {/* Project updates timeline */}
-                      {proj.history.length > 0 && (
+                      {workspaceTimeline.filter(t => t.project_id === proj.id).length > 0 && (
                         <div className="border-t border-[#152e23]/40 pt-4 space-y-3.5">
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Latest Project Check-ins</p>
                           <div className="space-y-2.5">
-                            {proj.history.slice(0, 3).map((hist, i) => (
+                            {workspaceTimeline.filter(t => t.project_id === proj.id).slice(0, 3).map((hist, i) => (
                               <div key={i} className="flex gap-2.5 items-start text-[11px]">
                                 <span className="text-gold font-bold shrink-0 mt-0.5">▪</span>
                                 <div>
                                   <p className="text-slate-300 leading-snug">{hist.action}</p>
-                                  <p className="text-[9px] text-slate-500 mt-0.5">{formatDate(hist.date)}</p>
+                                  {hist.notes && <p className="text-[9px] text-slate-500 mt-0.5">"{hist.notes}"</p>}
                                 </div>
                               </div>
                             ))}
@@ -1055,6 +1294,446 @@ export default function ClientDashboardPage() {
                   <Briefcase className="h-8 w-8 mx-auto text-slate-600 mb-2" />
                   <p className="text-sm font-semibold text-slate-400">No active projects linked</p>
                   <p className="text-xs text-slate-500 mt-1">Once project kick-off commences, checklists and sprints will display here.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Workspace: Requirements Tab */}
+        {activeTab === 'workspace-reqs' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-white">Project Requirements</h1>
+                <p className="text-xs text-slate-400 mt-1">Provide information, logo assets, brand guidelines, and access credentials requested by Netgain Studio.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Submission Form Overlay */}
+            {activeSubmittingReq && (
+              <Card className="bg-[#0b1b15] border-[#152e23] p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                  <h3 className="text-xs font-bold text-gold uppercase">Submit Requirement: {activeSubmittingReq.title}</h3>
+                  <button onClick={() => setActiveSubmittingReq(null)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                </div>
+                {activeSubmittingReq.description && <p className="text-xs text-slate-300 italic">Instructions: {activeSubmittingReq.description}</p>}
+
+                <div className="space-y-4 text-xs">
+                  {activeSubmittingReq.allow_text && (
+                    <div className="space-y-1">
+                      <Label>Text Response / Details</Label>
+                      <Textarea placeholder="Type requested information here..." value={clientTextResponse} onChange={e => setClientTextResponse(e.target.value)} className="bg-black/20 border-[#152e23] text-white" />
+                    </div>
+                  )}
+
+                  {activeSubmittingReq.allow_link && (
+                    <div className="space-y-1">
+                      <Label>Submit Resource Links (one URL per line)</Label>
+                      <Textarea placeholder="https://figma.com/...&#10;https://drive.google.com/..." value={clientLinksInput} onChange={e => setClientLinksInput(e.target.value)} className="h-16 bg-black/20 border-[#152e23] text-white" />
+                    </div>
+                  )}
+
+                  {activeSubmittingReq.allow_file && (
+                    <div className="space-y-1 border border-dashed border-[#152e23] rounded-xl p-4 bg-black/10">
+                      <Label className="text-gold font-bold mb-1.5 block">Drag & Drop or Select Files</Label>
+                      <Input 
+                        type="file" 
+                        onChange={e => setClientUploadFiles(e.target.files ? Array.from(e.target.files) : [])} 
+                        className="bg-transparent border-none file:bg-gold file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                      />
+                      {clientUploadFiles.length > 0 && (
+                        <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                          <p className="font-semibold text-slate-300">Selected files:</p>
+                          {clientUploadFiles.map((f, i) => <p key={i}>• {f.name} ({(f.size/1024/1024).toFixed(2)} MB)</p>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <Label>Additional Notes for Netgain Team</Label>
+                    <Input placeholder="Any extra comments..." value={clientSubmissionNotes} onChange={e => setClientSubmissionNotes(e.target.value)} className="bg-black/20 border-[#152e23] text-white" />
+                  </div>
+
+                  <div className="flex gap-2 justify-end border-t border-[#152e23] pt-3">
+                    <Button variant="outline" size="sm" onClick={() => setActiveSubmittingReq(null)}>Cancel</Button>
+                    <Button variant="gold" size="sm" onClick={handleSubmitRequirement} disabled={submittingRequirementState}>
+                      {submittingRequirementState ? 'Submitting...' : 'Submit Information'}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* List of Requirement Requests */}
+            <div className="grid grid-cols-1 gap-4">
+              {workspaceRequirements
+                .filter(r => selectedProjectId ? r.project_id === selectedProjectId : true)
+                .map((req: any) => {
+                  const sub = workspaceSubmissions.find(s => s.requirement_id === req.id)
+                  return (
+                    <Card key={req.id} className="bg-[#091510] border-[#152e23]/80 p-5 text-xs text-slate-300 relative overflow-hidden">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white">{req.title}</span>
+                            {req.is_required && <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px]">Required</Badge>}
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-mono ${req.priority === 'high' ? 'text-red-400 bg-red-500/10' : 'text-slate-400 bg-slate-500/10'}`}>{req.priority} Priority</span>
+                          </div>
+                          {req.description && <p className="text-slate-400 text-xs mt-1">{req.description}</p>}
+                          {req.due_date && <p className="text-[10px] text-slate-500 font-mono mt-1"><Clock className="h-3 w-3 inline mr-1" />Due Date: {formatDate(req.due_date)}</p>}
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10 border border-red-500/20' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10 border border-purple-500/20' : 'text-slate-400 bg-slate-500/10 border border-slate-500/20'}`}>{req.status === 'needs revision' ? 'revision needed' : req.status}</span>
+                          
+                          {['pending', 'needs revision'].includes(req.status) && (
+                            <Button variant="gold" size="sm" onClick={() => setActiveSubmittingReq(req)} className="h-8 text-xs font-semibold px-4">Provide Details</Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {sub && (sub.feedback || sub.notes) && (
+                        <div className="mt-3.5 pt-3 border-t border-[#152e23]/50 space-y-2 text-[11px] leading-relaxed">
+                          {sub.notes && <p className="text-slate-400">Your Submission Notes: "{sub.notes}"</p>}
+                          {sub.feedback && (
+                            <div className="p-2.5 bg-red-950/15 border border-red-900/20 rounded-lg text-slate-300">
+                              <span className="font-bold text-red-400 uppercase text-[9px] block mb-0.5">Admin Review Comment:</span>
+                              "{sub.feedback}"
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  )
+                })}
+              
+              {workspaceRequirements.filter(r => selectedProjectId ? r.project_id === selectedProjectId : true).length === 0 && (
+                <div className="text-center py-12 border border-dashed border-[#152e23] bg-[#091510]/10 rounded-2xl">
+                  <FileCheck2 className="h-8 w-8 mx-auto text-slate-600 mb-2" />
+                  <p className="text-sm font-semibold text-slate-400">No requirements requested</p>
+                  <p className="text-xs text-slate-500 mt-1">Excellent! Netgain Studio has not requested any outstanding assets or files at this stage.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Workspace: Tasks & Progress Tab */}
+        {activeTab === 'workspace-tasks' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-white">Tasks & Sprints</h1>
+                <p className="text-xs text-slate-400 mt-1">Monitor the active milestones, checklists, and execution stages of your projects.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {(() => {
+              const currentProj = projects.find(p => p.id === selectedProjectId)
+              if (!currentProj) {
+                return <div className="text-center py-8 text-slate-500 text-xs">No active project workspace selected.</div>
+              }
+              const stage = currentProj.status === 'active' ? 'Development & Sprints' : currentProj.status === 'completed' ? 'Completed & Deployed' : 'Planned / Backlog'
+              return (
+                <div className="space-y-6 max-w-4xl">
+                  <Card className="bg-[#091510] border-[#152e23]/80 p-5 space-y-4">
+                    <div className="flex justify-between items-center text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Current Project Phase</span>
+                        <h3 className="text-sm font-bold text-white mt-0.5">{stage}</h3>
+                      </div>
+                      <Badge className="bg-gold/15 text-gold border border-gold/25 text-[10px] capitalize px-2 py-0.5">{currentProj.status}</Badge>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Workspace Checklist Progress</span>
+                        <span className="font-semibold text-gold">{currentProj.progress || 0}%</span>
+                      </div>
+                      <Progress value={currentProj.progress || 0} className="h-2 bg-black/40" />
+                    </div>
+                  </Card>
+
+                  {/* Tasks / Milestones List */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Project Milestones</h3>
+                    <div className="grid grid-cols-1 gap-3">
+                      {(currentProj as any).milestones && (currentProj as any).milestones.length > 0 ? (
+                        (currentProj as any).milestones.map((m: string, i: number) => {
+                          const isDone = m.endsWith(' ✅')
+                          const cleanText = m.replace(' ✅', '').replace(' ⏳', '')
+                          return (
+                            <Card key={i} className="bg-[#091510] border-[#152e23]/60 p-4 flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-3">
+                                <div className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${isDone ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' : 'border-slate-600 bg-black/20 text-slate-500'}`}>
+                                  {isDone && <Check className="h-2.5 w-2.5" />}
+                                </div>
+                                <span className={`font-semibold ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>{cleanText}</span>
+                              </div>
+                              <Badge className={`text-[9px] ${isDone ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'}`}>{isDone ? 'Completed' : 'Awaiting'}</Badge>
+                            </Card>
+                          )
+                        })
+                      ) : (
+                        <div className="text-center py-8 text-slate-500 italic">No milestones defined for this project yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Workspace: Files & Documents Tab */}
+        {activeTab === 'workspace-files' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-white">Files & Document Workspace</h1>
+                <p className="text-xs text-slate-400 mt-1">Review shared project documents, or upload brand guidelines, logos, and assets directly.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-6">
+                <Card className="bg-[#091510] border-[#152e23]/80 p-5 space-y-3">
+                  <h3 className="text-xs font-bold text-gold uppercase tracking-wider">Upload Brand Asset / Reference File</h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div className="space-y-1 sm:col-span-2 border border-dashed border-[#152e23] rounded-xl p-4 bg-black/10">
+                      <Label className="text-slate-400 block mb-1.5">Select Files (Brand guidelines, design references, ZIPs, etc.)</Label>
+                      <Input 
+                        type="file" 
+                        onChange={e => setClientGeneralFile(e.target.files ? e.target.files[0] : null)}
+                        className="bg-transparent border-none file:bg-gold file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-2 flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <Label>Category</Label>
+                        <Select value={clientFileCategory} onValueChange={setClientFileCategory}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Brand Logo">Brand Logo</SelectItem>
+                            <SelectItem value="Brand Colors">Brand Colors</SelectItem>
+                            <SelectItem value="Reference Images">Reference Images</SelectItem>
+                            <SelectItem value="Business Documents">Business Documents</SelectItem>
+                            <SelectItem value="Marketing Assets">Marketing Assets</SelectItem>
+                            <SelectItem value="Other Documents">Other Documents</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button 
+                        variant="gold" 
+                        className="h-8 text-xs font-bold w-full"
+                        onClick={handleClientUploadFile}
+                        disabled={uploadingClientFile || !clientGeneralFile}
+                      >
+                        {uploadingClientFile ? 'Uploading...' : 'Upload Asset'}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Shared Assets & Files</h3>
+                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                            <th className="text-left py-2.5 px-4 font-semibold">Name</th>
+                            <th className="text-left py-2.5 px-4 font-semibold">Category</th>
+                            <th className="text-left py-2.5 px-4 font-semibold">Uploaded By</th>
+                            <th className="text-left py-2.5 px-4 font-semibold">Upload Date</th>
+                            <th className="text-right py-2.5 px-4 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workspaceFiles
+                            .filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client')
+                            .map((file: any) => (
+                              <tr key={file.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
+                                <td className="py-3 px-4 font-semibold text-white truncate max-w-[180px]">{file.name}</td>
+                                <td className="py-3 px-4">{file.category}</td>
+                                <td className="py-3 px-4 text-slate-400">{file.uploaded_by}</td>
+                                <td className="py-3 px-4 text-slate-400">{formatDate(file.uploaded_at)}</td>
+                                <td className="py-3 px-4 text-right">
+                                  <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                  </a>
+                                </td>
+                              </tr>
+                            ))}
+
+                          {workspaceLinks
+                            .filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client')
+                            .map((link: any) => (
+                              <tr key={link.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
+                                <td className="py-3 px-4 font-semibold text-white truncate max-w-[180px]">
+                                  <p>{link.title}</p>
+                                  {link.description && <p className="text-[10px] text-slate-500 font-normal">{link.description}</p>}
+                                </td>
+                                <td className="py-3 px-4"><span className="text-gold font-bold">{link.category} Link</span></td>
+                                <td className="py-3 px-4 text-slate-400">Admin Team</td>
+                                <td className="py-3 px-4 text-slate-400">{formatDate(link.published_at)}</td>
+                                <td className="py-3 px-4 text-right">
+                                  <a href={link.url} target="_blank" rel="noopener noreferrer">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                  </a>
+                                </td>
+                              </tr>
+                            ))}
+
+                          {workspaceFiles.filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client').length === 0 &&
+                           workspaceLinks.filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client').length === 0 && (
+                            <tr><td colSpan={5} className="text-center py-10 text-slate-500">No shared files or resource links in this project.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-slate-500">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Reports Tab */}
+        {activeTab === 'workspace-reports' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-white">Performance Reports</h1>
+                <p className="text-xs text-slate-400 mt-1">Download and review performance audits, SEO checkups, and marketing reports generated for your campaigns.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                        <th className="text-left py-2.5 px-4 font-semibold">Report Title</th>
+                        <th className="text-left py-2.5 px-4 font-semibold">Report Type</th>
+                        <th className="text-left py-2.5 px-4 font-semibold">Version</th>
+                        <th className="text-left py-2.5 px-4 font-semibold">Publication Date</th>
+                        <th className="text-right py-2.5 px-4 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {workspaceReports
+                        .filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client')
+                        .map((rep: any) => (
+                          <tr key={rep.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
+                            <td className="py-3.5 px-4 font-semibold text-white">{rep.title}</td>
+                            <td className="py-3.5 px-4"><Badge className="bg-gold/10 text-gold border border-gold/20 text-[9px] capitalize">{rep.report_type}</Badge></td>
+                            <td className="py-3.5 px-4 text-slate-400">V{rep.version}</td>
+                            <td className="py-3.5 px-4 text-slate-400">{formatDate(rep.uploaded_at)}</td>
+                            <td className="py-3.5 px-4 text-right">
+                              <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
+                                <Button variant="outline" size="sm" className="h-7 text-[10px] border-[#152e23] bg-transparent text-slate-300">Download PDF</Button>
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      {workspaceReports.filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client').length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-slate-500">
+                            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30 text-[#D4AF37]" />
+                            <p className="font-semibold">No performance reports published yet</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Once SEO audits or performance sprints compile, they will appear here.</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-slate-500">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Meetings Tab */}
+        {activeTab === 'meetings' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div>
+              <h1 className="text-xl font-bold text-white">Consultations & Meetings</h1>
+              <p className="text-xs text-slate-400 mt-1">Review upcoming bookings, review recordings, or check details of completed milestones meetings.</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {workspaceMeetings.map((meet: any) => {
+                const dateStr = new Date(`${meet.meeting_date}T00:00:00`).toLocaleString('en-IN', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })
+                const isUpcoming = meet.status === 'upcoming'
+                return (
+                  <Card key={meet.id} className="bg-[#091510] border-[#152e23]/80 p-5 text-xs text-slate-300 relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">{meet.event_type || 'Consultation Meeting'}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${isUpcoming ? 'text-[#D4AF37] bg-gold/10' : 'text-slate-500 bg-slate-500/10'}`}>{meet.status}</span>
+                        </div>
+                        <p className="text-slate-400 font-medium">{dateStr} at {meet.meeting_time.slice(0,5)} ({meet.meeting_duration} Mins)</p>
+                        {meet.notes && <p className="text-slate-500 mt-1.5 italic font-mono">Agenda Notes: "{meet.notes}"</p>}
+                      </div>
+
+                      {isUpcoming && meet.meet_link && (
+                        <a href={meet.meet_link} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                          <Button variant="gold" size="sm" className="h-8 font-semibold px-4 gap-1.5">Join Call <ExternalLink className="h-3.5 w-3.5" /></Button>
+                        </a>
+                      )}
+                    </div>
+                  </Card>
+                )
+              })}
+              {workspaceMeetings.length === 0 && (
+                <div className="text-center py-12 border border-dashed border-[#152e23] bg-[#091510]/10 rounded-2xl">
+                  <Calendar className="h-8 w-8 mx-auto text-slate-600 mb-2" />
+                  <p className="text-sm font-semibold text-slate-400">No scheduled meetings</p>
+                  <p className="text-xs text-slate-500 mt-1">Need to schedule a sync? Contact your Netgain account executive to schedule a call.</p>
                 </div>
               )}
             </div>
