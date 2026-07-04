@@ -16,7 +16,7 @@ import {
   FolderOpen, Building2, User, Loader2, RefreshCw, LogOut, FileSignature,
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, Scale,
-  Coins, TrendingUp
+  Coins, TrendingUp, Menu
 } from 'lucide-react'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
@@ -72,6 +72,7 @@ export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('dashboard')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   
   // Data States
   const [docs, setDocs] = useState<ClientDoc[]>([])
@@ -384,15 +385,31 @@ export default function ClientDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070e0b] text-slate-100 flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#070e0b] text-slate-100 flex flex-col md:flex-row font-sans relative overflow-hidden">
+      {/* Mobile Sidebar overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 border-r border-[#152e23] bg-[#091510] flex flex-col shrink-0">
-        <div className="p-5 flex items-center gap-2.5 border-b border-[#152e23]">
-          <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center font-black text-black shadow-lg">N</div>
-          <div>
-            <p className="text-sm font-bold text-white tracking-wide">NETGAIN PORTAL</p>
-            <p className="text-[9px] text-[#D4AF37] tracking-widest -mt-0.5">SECURE CLIENT SUITE</p>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-[#152e23] bg-[#091510] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div className="p-5 flex items-center justify-between border-b border-[#152e23]">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center font-black text-black shadow-lg">N</div>
+            <div>
+              <p className="text-sm font-bold text-white tracking-wide">NETGAIN PORTAL</p>
+              <p className="text-[9px] text-[#D4AF37] tracking-widest -mt-0.5">SECURE CLIENT SUITE</p>
+            </div>
           </div>
+          <button 
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden p-1 text-slate-400 hover:text-white focus:outline-none"
+          >
+            <X className="h-5 w-5 text-gold" />
+          </button>
         </div>
 
         {/* Company/Rep Overview card */}
@@ -412,7 +429,7 @@ export default function ClientDashboardPage() {
             return (
               <button
                 key={item.id}
-                onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null) }}
+                onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setMobileMenuOpen(false) }}
                 className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-gold text-black shadow-lg font-bold' : 'text-slate-400 hover:bg-[#11241c] hover:text-white'}`}
               >
                 <div className="flex items-center gap-3">
@@ -438,10 +455,16 @@ export default function ClientDashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-[#070e0b] relative">
-        <header className="h-16 border-b border-[#152e23] bg-[#091510]/50 backdrop-blur flex items-center justify-between px-6 sticky top-0 z-40">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[#D4AF37]" />
-            <span className="text-xs text-slate-400 font-semibold">{session?.company} Dashboard Suite</span>
+        <header className="h-16 border-b border-[#152e23] bg-[#091510]/50 backdrop-blur flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-1.5 -ml-1 text-slate-400 hover:text-white md:hidden focus:outline-none"
+            >
+              <Menu className="h-5 w-5 text-gold" />
+            </button>
+            <Building2 className="h-4 w-4 text-[#D4AF37] shrink-0" />
+            <span className="text-xs text-slate-400 font-semibold truncate max-w-[150px] sm:max-w-xs">{session?.company} Dashboard Suite</span>
           </div>
 
           <div className="flex items-center gap-3">

@@ -76,10 +76,12 @@ CREATE TABLE IF NOT EXISTS public.client_notifications (
     client_id TEXT NOT NULL,               -- Can be company name or client email
     title TEXT NOT NULL,
     message TEXT NOT NULL,
+    type TEXT DEFAULT 'support',
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
+ALTER TABLE public.client_notifications ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'support';
 ALTER TABLE public.client_notifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Full Access Notifications" ON public.client_notifications FOR ALL USING (true) WITH CHECK (true);
 

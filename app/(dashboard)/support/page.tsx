@@ -13,7 +13,7 @@ interface SupportTicket {
   title: string
   message: string
   created_at: string
-  read: boolean
+  is_read: boolean
 }
 
 export default function SupportPage() {
@@ -51,11 +51,11 @@ export default function SupportPage() {
     
     const { error } = await supabase
       .from('client_notifications')
-      .update({ read: true })
+      .update({ is_read: true })
       .eq('id', id)
       
     if (!error) {
-      setTickets(tickets.map(t => t.id === id ? { ...t, read: true } : t))
+      setTickets(tickets.map(t => t.id === id ? { ...t, is_read: true } : t))
       toast({ title: 'Marked as read' })
     }
   }
@@ -81,18 +81,18 @@ export default function SupportPage() {
       ) : (
         <div className="space-y-4">
           {tickets.map(ticket => (
-            <Card key={ticket.id} className={`bg-[#121212] border-white/5 transition-all ${!ticket.read ? 'border-gold/30 shadow-[0_0_15px_rgba(212,175,55,0.1)]' : ''}`}>
+            <Card key={ticket.id} className={`bg-[#121212] border-white/5 transition-all ${!ticket.is_read ? 'border-gold/30 shadow-[0_0_15px_rgba(212,175,55,0.1)]' : ''}`}>
               <CardHeader className="pb-2 flex flex-row items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3">
                     <CardTitle className="text-base text-gold">{ticket.title}</CardTitle>
-                    {!ticket.read && <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">New</Badge>}
+                    {!ticket.is_read && <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">New</Badge>}
                   </div>
                   <CardDescription className="text-xs mt-1">
                     {new Date(ticket.created_at).toLocaleString()}
                   </CardDescription>
                 </div>
-                {!ticket.read && (
+                {!ticket.is_read && (
                   <Button variant="outline" size="sm" onClick={() => markAsRead(ticket.id)} className="h-8 text-xs border-gold/20 text-gold hover:bg-gold/10">
                     <CheckCircle2 className="h-3 w-3 mr-1.5" /> Mark Read
                   </Button>
