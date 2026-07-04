@@ -142,35 +142,39 @@ export function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
         ))}
       </div>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-20 z-10 hidden md:flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground transition-colors"
-      >
-        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
-      </button>
+      {/* User Footer & Collapse toggle */}
+      <div className="border-t border-white/5 p-3 space-y-1.5 shrink-0">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className={cn(
+            "hidden md:flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-white/50 hover:bg-white/5 hover:text-white transition-all",
+            collapsed && "justify-center px-0"
+          )}
+          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-gold" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-gold" />}
+          {!collapsed && <span>Collapse Sidebar</span>}
+        </button>
 
-      {/* User Footer */}
-      {!collapsed && (
-        <div className="border-t border-white/5 p-3">
-          <Link href="/profile" onClick={onMobileClose}>
-            <div className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-white/5 transition-colors cursor-pointer">
-              <Avatar className="h-7 w-7 shrink-0">
-                {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
-                <AvatarFallback className="gold-gradient text-white text-[10px] font-bold">
-                  {user ? getInitials(user.name) : 'U'}
-                </AvatarFallback>
-              </Avatar>
+        <Link href="/profile" onClick={onMobileClose} title={collapsed ? "View Profile" : undefined}>
+          <div className={cn("flex items-center gap-2 rounded-lg p-2 hover:bg-white/5 transition-colors cursor-pointer", collapsed && "justify-center")}>
+            <Avatar className="h-7 w-7 shrink-0">
+              {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
+              <AvatarFallback className="gold-gradient text-white text-[10px] font-bold">
+                {user ? getInitials(user.name) : 'U'}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed && (
               <div className="overflow-hidden">
-                <p className="text-xs font-semibold text-white whitespace-nowrap">
+                <p className="text-xs font-semibold text-white whitespace-nowrap font-sans">
                   {user?.name ? (user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')) : 'User'}
                 </p>
-                <p className="text-[10px] text-white/40 whitespace-nowrap">{user?.role || 'Loading...'}</p>
+                <p className="text-[10px] text-white/40 whitespace-nowrap font-sans">{user?.role || 'Loading...'}</p>
               </div>
-            </div>
-          </Link>
-        </div>
-      )}
+            )}
+          </div>
+        </Link>
+      </div>
     </motion.aside>
   )
 }

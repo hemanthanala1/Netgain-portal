@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
         email: account.email,
         name: client.name,
         company: client.business || client.name,
-        phone: client.phone || ''
+        phone: client.phone || '',
+        website: client.website || '',
+        address: client.address || '',
+        gst: client.gst || ''
       }
     })
   } catch (err: any) {

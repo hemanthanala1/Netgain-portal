@@ -548,7 +548,36 @@ export default function ServicesPage() {
       </div>
 
       {/* ── Search + View Toggle ── */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
+        <div className="flex items-center gap-2 px-3 shrink-0 border border-input rounded-md h-10 bg-muted/20 hover:bg-muted/40 transition-colors">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 rounded border-gray-300 text-gold focus:ring-gold cursor-pointer"
+            checked={filtered.length > 0 && filtered.every(s => selectedSvcs.includes(s.id))}
+            ref={(el) => {
+              if (el) {
+                const allSelected = filtered.length > 0 && filtered.every(s => selectedSvcs.includes(s.id))
+                const someSelected = filtered.some(s => selectedSvcs.includes(s.id))
+                el.indeterminate = someSelected && !allSelected
+              }
+            }}
+            onChange={(e) => {
+              if (e.target.checked) {
+                // Select all filtered services
+                const newSelections = new Set([...selectedSvcs, ...filtered.map(s => s.id)])
+                setSelectedSvcs(Array.from(newSelections))
+              } else {
+                // Deselect all filtered services
+                const filteredIds = filtered.map(s => s.id)
+                setSelectedSvcs(selectedSvcs.filter(id => !filteredIds.includes(id)))
+              }
+            }}
+          />
+          <span className="text-xs text-muted-foreground select-none font-medium pr-1">
+            {filtered.length > 0 && filtered.every(s => selectedSvcs.includes(s.id)) ? 'Deselect All' : 'Select All'}
+          </span>
+        </div>
+
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search services..." value={search} onChange={e => setSearch(e.target.value)} />

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,8 +15,8 @@ import {
   Search, FileText, Download, Clock, CheckCircle2, AlertTriangle, FileCheck2,
   FolderOpen, Building2, User, Loader2, RefreshCw, LogOut, FileSignature,
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
-  Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, Scale,
-  Coins, TrendingUp, Menu
+  Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
+  Coins, TrendingUp, Menu, PenTool, Type
 } from 'lucide-react'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
@@ -73,12 +73,14 @@ export default function ClientDashboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
   // Data States
   const [docs, setDocs] = useState<ClientDoc[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [notifications, setNotifications] = useState<ClientNotification[]>([])
   const [companySettings, setCompanySettings] = useState<any>(null)
+  const [clientDetails, setClientDetails] = useState<any>(null)
   
   // UI Interaction States
   const [search, setSearch] = useState('')
@@ -89,6 +91,22 @@ export default function ClientDashboardPage() {
   const [showRevisionModal, setShowRevisionModal] = useState(false)
   const [revisionNotes, setRevisionNotes] = useState('')
   const [submittingAction, setSubmittingAction] = useState(false)
+
+  // E-Signature Pad states
+  const [sigType, setSigType] = useState<'draw' | 'type'>('draw')
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [drawHistory, setDrawHistory] = useState<string[]>([])
+  const [drawSaved, setDrawSaved] = useState(false)
+  const [savedDrawData, setSavedDrawData] = useState<string | null>(null)
+  const [selectedFont, setSelectedFont] = useState('DancingScript')
+  const [typeSaved, setTypeSaved] = useState(false)
+
+  const fonts = [
+    { name: 'Dancing Script', value: 'DancingScript', family: 'Dancing Script, cursive' },
+    { name: 'Alex Brush', value: 'AlexBrush', family: 'Alex Brush, cursive' },
+    { name: 'Sacramento', value: 'Sacramento', family: 'Sacramento, cursive' }
+  ]
   
   // Support Form State
   const [supportSubject, setSupportSubject] = useState('')
@@ -137,7 +155,7 @@ export default function ClientDashboardPage() {
       }
 
       // Fetch from Supabase tables
-      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, compRes] = await Promise.all([
+      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, compRes, clientRes] = await Promise.all([
         supabase.from('quotations').select('*'),
         supabase.from('sows').select('*'),
         supabase.from('agreements').select('*'),
@@ -146,11 +164,16 @@ export default function ClientDashboardPage() {
         supabase.from('projects').select('*'),
         supabase.from('client_notifications').select('*').or(`client_id.eq."${session.company}",client_id.eq."${session.email}"`).order('created_at', { ascending: false }),
         supabase.from('document_tokens').select('*').eq('status', 'active'),
-        supabase.from('company_settings').select('*').limit(1).single()
+        supabase.from('company_settings').select('*').limit(1).single(),
+        session.clientId ? supabase.from('crm_clients').select('website, address, gst').eq('id', session.clientId).maybeSingle() : Promise.resolve({ data: null })
       ])
       
       if (compRes.data) {
         setCompanySettings(compRes.data)
+      }
+
+      if (clientRes && clientRes.data) {
+        setClientDetails(clientRes.data)
       }
 
       // Build token lookup map
@@ -277,6 +300,21 @@ export default function ClientDashboardPage() {
     trackActivity(doc, 'download')
   }
 
+  const printDocument = () => {
+    const iframe = document.getElementById('doc-viewer-iframe') as HTMLIFrameElement
+    if (iframe && iframe.contentWindow) {
+      try {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      } catch (err) {
+        console.error('Error printing from iframe', err)
+        window.print()
+      }
+    } else {
+      window.print()
+    }
+  }
+
   const handleApproveDoc = () => {
     if (selectedDoc) {
       trackActivity(selectedDoc, 'approve')
@@ -284,13 +322,257 @@ export default function ClientDashboardPage() {
     }
   }
 
-  const submitSignature = () => {
-    if (selectedDoc) {
-      trackActivity(selectedDoc, 'sign')
+  // Canvas drawing mouse/touch coordinates
+  const getCoordinates = (e: any, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    
+    // Scale coordinates based on canvas internal resolution
+    const x = (clientX - rect.left) * (canvas.width / rect.width)
+    const y = (clientY - rect.top) * (canvas.height / rect.height)
+    
+    return { x, y }
+  }
+
+  // Draw event listeners
+  const startDrawing = (e: any) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.strokeStyle = '#D4AF37'
+    ctx.lineWidth = 3
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    const { x, y } = getCoordinates(e, canvas)
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    setIsDrawing(true)
+  }
+
+  const draw = (e: any) => {
+    if (!isDrawing) return
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const { x, y } = getCoordinates(e, canvas)
+    ctx.lineTo(x, y)
+    ctx.stroke()
+  }
+
+  const stopDrawing = () => {
+    if (!isDrawing) return
+    setIsDrawing(false)
+    const canvas = canvasRef.current
+    if (canvas) {
+      setDrawHistory(prev => [...prev, canvas.toDataURL()])
+    }
+  }
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setDrawHistory([])
+    setDrawSaved(false)
+    setSavedDrawData(null)
+  }
+
+  const undoCanvas = () => {
+    const canvas = canvasRef.current
+    if (!canvas || drawHistory.length === 0) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const newHistory = drawHistory.slice(0, -1)
+    setDrawHistory(newHistory)
+    setDrawSaved(false)
+    setSavedDrawData(null)
+
+    if (newHistory.length > 0) {
+      const img = new Image()
+      img.src = newHistory[newHistory.length - 1]
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0)
+      }
+    }
+  }
+
+  const saveDrawnSignature = () => {
+    const canvas = canvasRef.current
+    if (!canvas || drawHistory.length === 0) {
+      toast({ title: 'No signature found', description: 'Please draw your signature first.', variant: 'destructive' })
+      return
+    }
+    setSavedDrawData(canvas.toDataURL('image/png'))
+    setDrawSaved(true)
+    toast({ title: 'Signature Saved', description: 'Draw signature saved successfully.' })
+  }
+
+  const saveTypedSignature = () => {
+    if (!signerName.trim()) {
+      toast({ title: 'Text empty', description: 'Please type your name for the signature.', variant: 'destructive' })
+      return
+    }
+    setTypeSaved(true)
+    toast({ title: 'Signature Saved', description: 'Typed signature font details saved.' })
+  }
+
+  const submitSignature = async () => {
+    if (!selectedDoc) return
+
+    if (sigType === 'draw' && !drawSaved) {
+      toast({ title: 'Signature Required', description: 'Please draw and click "Save Signature".', variant: 'destructive' })
+      return
+    }
+
+    if (sigType === 'type' && !typeSaved) {
+      toast({ title: 'Signature Required', description: 'Please type and click "Save Signature".', variant: 'destructive' })
+      return
+    }
+
+    setSubmittingAction(true)
+    try {
+      // 1. Fetch IP Address
+      let ip = '127.0.0.1'
+      try { 
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        ip = ipData.ip || '127.0.0.1' 
+      } catch {}
+
+      // 2. Browser/OS fingerprinting
+      const ua = navigator.userAgent
+      let browser = 'Unknown Browser'
+      let os = 'Unknown OS'
+      if (ua.includes('Firefox')) browser = 'Firefox'
+      else if (ua.includes('Chrome') && !ua.includes('Chromium')) browser = 'Chrome'
+      else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari'
+      else if (ua.includes('Edge')) browser = 'Edge'
+
+      if (ua.includes('Windows')) os = 'Windows'
+      else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+      else if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS'
+      else if (ua.includes('Linux')) os = 'Linux'
+      else if (ua.includes('Android')) os = 'Android'
+
+      const device = window.innerWidth < 768 ? 'Mobile' : 'Desktop'
+
+      // 3. Generate verification ID
+      const randomBytes = Math.random().toString(36).substring(2, 10).toUpperCase()
+      const verificationId = `CERT-${randomBytes.slice(0, 4)}-${randomBytes.slice(4, 8)}`
+
+      // 4. Generate document hash
+      let documentHash = ''
+      try {
+        const docString = JSON.stringify(selectedDoc.raw)
+        const msgBuffer = new TextEncoder().encode(docString)
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        documentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      } catch (err) {
+        console.error('Hash generation failed, falling back', err)
+        documentHash = 'hash-fallback-' + Math.random().toString(36).substring(2, 12)
+      }
+
+      const docType = selectedDoc.type === 'SOW' ? 'SOW' : 'Agreement'
+      const currentVersion = selectedDoc.published_version || 1
+
+      // 5. Store signature details in `document_signatures`
+      const { error: sigError } = await supabase
+        .from('document_signatures')
+        .insert({
+          document_type: docType,
+          document_id: selectedDoc.id,
+          client_name: signerName,
+          company: session?.company || null,
+          email: session?.email || 'client@netgainstudio.com',
+          phone: session?.phone || null,
+          signature_type: sigType === 'draw' ? 'drawn' : 'typed',
+          signature_image: sigType === 'draw' ? savedDrawData : null,
+          signature_text: sigType === 'type' ? signerName : null,
+          signature_font: sigType === 'type' ? selectedFont : 'DancingScript',
+          browser,
+          operating_system: os,
+          device_type: device,
+          ip_address: ip,
+          document_version: currentVersion,
+          created_by: selectedDoc.raw.published_by || 'Founder',
+          document_hash: documentHash,
+          agreement_accepted: signingAgreed,
+          verification_id: verificationId
+        })
+
+      if (sigError) throw sigError
+
+      // 6. Update SOW/Agreement table status to completed and lock it
+      const tableMap: Record<string, string> = { Quotation: 'quotations', Invoice: 'invoices', SOW: 'sows', Agreement: 'agreements', Marketing: 'marketing_reports' }
+      const tableName = tableMap[selectedDoc.type]
+      const updatedHistory = [
+        ...(selectedDoc.raw.history || []),
+        { date: new Date().toISOString().split('T')[0], action: `Client signed via Netgain E-Sign (${verificationId})` },
+        { date: new Date().toISOString().split('T')[0], action: 'Status changed to completed' }
+      ]
+
+      const { error: updateDocError } = await supabase
+        .from(tableName)
+        .update({
+          status: 'completed',
+          is_locked: true,
+          history: updatedHistory
+        })
+        .eq('id', selectedDoc.id)
+
+      if (updateDocError) throw updateDocError
+
+      // 7. Update timeline
+      await supabase.from('document_timeline').insert([
+        {
+          document_type: docType,
+          document_id: selectedDoc.id,
+          event: 'viewed',
+          user_name: signerName,
+          notes: `Client viewed the document from IP: ${ip} (${browser} on ${os})`
+        },
+        {
+          document_type: docType,
+          document_id: selectedDoc.id,
+          event: 'signed',
+          user_name: signerName,
+          notes: `Client e-signed using ${sigType === 'draw' ? 'Drawn Signature' : 'Typed Signature'} (${browser} on ${os})`
+        },
+        {
+          document_type: docType,
+          document_id: selectedDoc.id,
+          event: 'completed',
+          user_name: 'System',
+          notes: `Document workflow completed. Verification ID: ${verificationId}`
+        }
+      ])
+
+      toast({ title: 'Document Signed & Approved!', description: `Verification ID: ${verificationId}` })
       setShowSignModal(false)
       setSignerName('')
       setSigningAgreed(false)
-      toast({ title: 'Document Signed', description: 'Thank you for signing.' })
+      setDrawHistory([])
+      setDrawSaved(false)
+      setSavedDrawData(null)
+      setTypeSaved(false)
+      setSelectedDoc(null)
+      await fetchClientData(true)
+    } catch (err: any) {
+      console.error(err)
+      toast({ title: 'Signing Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setSubmittingAction(false)
     }
   }
 
@@ -395,14 +677,16 @@ export default function ClientDashboardPage() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-[#152e23] bg-[#091510] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-[#152e23] bg-[#091510] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-64 md:w-16' : 'w-64'}`}>
         <div className="p-5 flex items-center justify-between border-b border-[#152e23]">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center font-black text-black shadow-lg">N</div>
-            <div>
-              <p className="text-sm font-bold text-white tracking-wide">NETGAIN PORTAL</p>
-              <p className="text-[9px] text-[#D4AF37] tracking-widest -mt-0.5">SECURE CLIENT SUITE</p>
-            </div>
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center font-black text-black shadow-lg shrink-0">N</div>
+            {!sidebarCollapsed && (
+              <div className="overflow-hidden">
+                <p className="text-sm font-bold text-white tracking-wide whitespace-nowrap">NETGAIN PORTAL</p>
+                <p className="text-[9px] text-[#D4AF37] tracking-widest -mt-0.5 whitespace-nowrap">SECURE CLIENT SUITE</p>
+              </div>
+            )}
           </div>
           <button 
             onClick={() => setMobileMenuOpen(false)}
@@ -413,14 +697,16 @@ export default function ClientDashboardPage() {
         </div>
 
         {/* Company/Rep Overview card */}
-        <div className="mx-4 my-4 p-3 bg-emerald-950/20 border border-[#152e23]/60 rounded-xl">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Account Company</p>
-          <p className="text-xs font-semibold text-[#D4AF37] mt-0.5 truncate">{session?.company}</p>
-          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-slate-400">
-            <User className="h-3 w-3 text-gold" />
-            <span className="truncate">{session?.name}</span>
+        {!sidebarCollapsed && (
+          <div className="mx-4 my-4 p-3 bg-emerald-950/20 border border-[#152e23]/60 rounded-xl">
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Account Company</p>
+            <p className="text-xs font-semibold text-[#D4AF37] mt-0.5 truncate">{session?.company}</p>
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-slate-400">
+              <User className="h-3 w-3 text-gold" />
+              <span className="truncate">{session?.name}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {navigationItems.map(item => {
@@ -430,13 +716,14 @@ export default function ClientDashboardPage() {
               <button
                 key={item.id}
                 onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setMobileMenuOpen(false) }}
-                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-gold text-black shadow-lg font-bold' : 'text-slate-400 hover:bg-[#11241c] hover:text-white'}`}
+                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-gold text-black shadow-lg font-bold' : 'text-slate-400 hover:bg-[#11241c] hover:text-white'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                title={sidebarCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center gap-3">
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
+                  {!sidebarCollapsed && <span>{item.label}</span>}
                 </div>
-                {item.badge !== undefined && item.badge > 0 && (
+                {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${active ? 'bg-black text-gold' : 'bg-gold/15 text-gold border border-gold/25'}`}>
                     {item.badge}
                   </span>
@@ -446,9 +733,25 @@ export default function ClientDashboardPage() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-[#152e23]">
-          <Button onClick={handleLogout} variant="outline" className="w-full h-9 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 bg-transparent gap-2">
-            <LogOut className="h-3.5 w-3.5" />Log Out Portal
+        <div className="p-3 border-t border-[#152e23] space-y-1.5 shrink-0">
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`hidden md:flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-[#11241c] hover:text-white transition-all ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-gold" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-gold" />}
+            {!sidebarCollapsed && <span>Collapse Sidebar</span>}
+          </button>
+
+          <Button 
+            onClick={handleLogout} 
+            variant="outline" 
+            className={`w-full h-9 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 bg-transparent gap-2 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            title={sidebarCollapsed ? "Log Out Portal" : undefined}
+          >
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
+            {!sidebarCollapsed && <span>Log Out Portal</span>}
           </Button>
         </div>
       </aside>
@@ -859,7 +1162,15 @@ export default function ClientDashboardPage() {
                 </div>
                 <div>
                   <p className="text-slate-400 font-medium">Authorized Domain / Website</p>
-                  <p className="text-slate-300 mt-0.5">{session?.website || 'https://netgainstudio.com'}</p>
+                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.website || session?.website || ''}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-medium">GST registration</p>
+                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.gst || session?.gst || 'GST not provided'}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-slate-400 font-medium">Billing Address</p>
+                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.address || session?.address || '—'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -888,16 +1199,36 @@ export default function ClientDashboardPage() {
                 <Button onClick={() => handleDownloadPdf(selectedDoc)} variant="outline" size="sm" className="h-8 text-xs border-[#152e23] bg-transparent text-slate-300 gap-1.5">
                   <Download className="h-3.5 w-3.5" /> Download
                 </Button>
-                <Button onClick={() => window.print()} variant="outline" size="sm" className="h-8 text-xs border-[#152e23] bg-transparent text-slate-300 gap-1.5">
+                <Button onClick={printDocument} variant="outline" size="sm" className="h-8 text-xs border-[#152e23] bg-transparent text-slate-300 gap-1.5">
                   <Printer className="h-3.5 w-3.5" /> Print
                 </Button>
               </div>
+            </div>
+
+            {/* Mobile helper banner */}
+            <div className="lg:hidden bg-gold/10 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
+              <span className="flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                Mobile View: If you can only see the first page, open the full document in a new tab.
+              </span>
+              <Button 
+                onClick={() => {
+                  const url = selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}`
+                  window.open(url, '_blank')
+                }} 
+                variant="gold" 
+                size="sm" 
+                className="h-8 text-xs text-black font-semibold shrink-0"
+              >
+                Open Full Document
+              </Button>
             </div>
 
             {/* Document body preview with iframe */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3 bg-black border border-[#152e23] rounded-2xl overflow-hidden shadow-2xl relative h-[80vh] min-h-[600px]">
                  <iframe 
+                   id="doc-viewer-iframe"
                    src={selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}#toolbar=0` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}#toolbar=0`} 
                    className="w-full h-full border-0 bg-white"
                    title={selectedDoc.title}
@@ -988,6 +1319,9 @@ export default function ClientDashboardPage() {
       {/* SIGNATURE MODAL */}
       <Dialog open={showSignModal} onOpenChange={setShowSignModal}>
         <DialogContent className="max-w-md bg-[#091510] border-[#152e23]">
+          {/* Cursive Google Fonts */}
+          <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Dancing+Script&family=Sacramento&display=swap" rel="stylesheet" />
+
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#D4AF37]">
               <FileSignature className="h-5 w-5 text-gold" />
@@ -1010,12 +1344,129 @@ export default function ClientDashboardPage() {
               />
             </div>
 
-            {signerName.trim() && (
-              <div className="p-4 rounded-xl border border-[#152e23] bg-black/45 flex flex-col items-center justify-center min-h-[80px] select-none">
-                <span className="text-[8px] uppercase tracking-wider text-slate-500 mb-1">Signature Handwriting Style Preview</span>
-                <span className="font-serif italic text-2xl text-gold font-medium tracking-wide">/s/ {signerName}</span>
+            {/* Signature Pad Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-slate-400">Signature Input</Label>
+                <div className="flex bg-black border border-[#152e23] rounded-lg p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSigType('draw')}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <PenTool className="h-3 w-3" /> Draw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSigType('type')}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Type className="h-3 w-3" /> Type
+                  </button>
+                </div>
               </div>
-            )}
+
+              {sigType === 'draw' ? (
+                /* Canvas draw pad */
+                <div className="space-y-2">
+                  <div className="border border-[#152e23] rounded-lg bg-black overflow-hidden relative group">
+                    <canvas
+                      ref={canvasRef}
+                      width={360}
+                      height={140}
+                      className="w-full h-[140px] cursor-crosshair block bg-black"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                    />
+                    {!drawSaved && drawHistory.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-600 text-xs font-mono">
+                        Draw signature using Mouse / Touch here
+                      </div>
+                    )}
+                    {drawSaved && (
+                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-400 text-xs font-bold pointer-events-none">
+                        <CheckCircle2 className="h-5 w-5 mb-1" /> Signature Locked & Saved
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        onClick={clearCanvas}
+                        variant="outline"
+                        className="h-7 px-2 text-[10px] border-[#152e23] text-slate-400 hover:text-white bg-transparent"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={undoCanvas}
+                        variant="outline"
+                        className="h-7 px-2 text-[10px] border-[#152e23] text-slate-400 hover:text-white bg-transparent"
+                        disabled={drawHistory.length === 0}
+                      >
+                        Undo
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={saveDrawnSignature}
+                      variant="outline"
+                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${drawSaved ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
+                    >
+                      {drawSaved ? 'Saved ✔' : 'Save Signature'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Cursive text input preview */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-1">
+                    {fonts.map(font => (
+                      <button
+                        key={font.value}
+                        type="button"
+                        onClick={() => { setSelectedFont(font.value); setTypeSaved(false); }}
+                        className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-white' : 'border-[#152e23] text-slate-400 hover:text-slate-200'}`}
+                      >
+                        {font.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border border-[#152e23] rounded-lg p-4 bg-black h-20 flex items-center justify-center relative overflow-hidden">
+                    <p
+                      className="text-2xl text-center text-[#D4AF37] px-4 truncate"
+                      style={{
+                        fontFamily: fonts.find(f => f.value === selectedFont)?.family || 'serif'
+                      }}
+                    >
+                      {signerName || 'Signature Preview'}
+                    </p>
+                    {typeSaved && (
+                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-400 text-xs font-bold pointer-events-none">
+                        <CheckCircle2 className="h-5 w-5 mb-0.5" /> Signature Saved
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={saveTypedSignature}
+                      variant="outline"
+                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${typeSaved ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
+                    >
+                      {typeSaved ? 'Saved ✔' : 'Save Signature'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer leading-normal text-slate-400">
               <input
@@ -1029,12 +1480,12 @@ export default function ClientDashboardPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowSignModal(false); setSignerName(''); setSigningAgreed(false) }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowSignModal(false); setSignerName(''); setSigningAgreed(false); setDrawHistory([]); setDrawSaved(false); setSavedDrawData(null); setTypeSaved(false); }}>Cancel</Button>
             <Button
               variant="gold"
-              disabled={submittingAction || !signerName.trim() || !signingAgreed}
+              disabled={submittingAction || !signerName.trim() || !signingAgreed || (sigType === 'draw' ? !drawSaved : !typeSaved)}
               onClick={submitSignature}
-              className="gap-2"
+              className="gap-2 text-black font-semibold"
             >
               {submittingAction && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirm Signature
