@@ -244,12 +244,6 @@ export async function buildPdfPayload(
         '',
         '## Jurisdiction',
         `This agreement shall be governed by the laws of **${doc.jurisdiction || 'Hyderabad, Telangana, India'}**.`,
-        '',
-        '---',
-        `| __COMPANY_NAME__ | ${doc.client} |`,
-        `|---|---|`,
-        '| Signature: _________________ | Signature: _________________ |',
-        '| Date: _________________ | Date: _________________ |',
       ].filter(l => l !== null).join('\n')
 
       return {
@@ -288,16 +282,6 @@ export async function buildPdfPayload(
         '',
         '## Governing Law',
         `This agreement is governed by the laws of **${doc.jurisdiction || 'Hyderabad, Telangana, India'}**. Any disputes shall be resolved through arbitration in ${doc.jurisdiction || 'Hyderabad'}.`,
-        '',
-        '---',
-        '',
-        '**SIGNATURES**',
-        '',
-        `| __COMPANY_NAME__ | ${doc.client} |`,
-        `|---|---|`,
-        '| Signature: _________________ | Signature: _________________ |',
-        '| Name: __FOUNDER_NAME__ | Name: _________________ |',
-        '| Date: _________________ | Date: _________________ |',
       ].join('\n')
 
       return {
