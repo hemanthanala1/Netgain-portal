@@ -31,7 +31,7 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
-  prompt?: string; approvalStatus?: string; businessDetails?: CampaignStrategyForm
+  prompt?: string; approvalStatus?: string; businessDetails?: CampaignStrategyForm; currentStage?: string
 }
 
 const statusColors: Record<string, string> = {
@@ -68,6 +68,7 @@ export default function CampaignStrategyPage() {
   const [quickBudget, setQuickBudget] = useState('')
   const [quickTimeline, setQuickTimeline] = useState('')
   const [quickPm, setQuickPm] = useState('')
+  const [quickCurrentStage, setQuickCurrentStage] = useState('')
   const [quickTasks, setQuickTasks] = useState('')
   const [savingQuick, setSavingQuick] = useState(false)
 
@@ -489,9 +490,9 @@ export default function CampaignStrategyPage() {
           const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
           if (!error && data) {
             const mapped = data.map((p: any) => {
-              let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+              let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
               if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
-              return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
+              return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
             })
             setProjects(mapped); setCachedData('projects', mapped)
           }
@@ -516,9 +517,9 @@ export default function CampaignStrategyPage() {
       const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
       if (!error && data) {
         const mapped = data.map((p: any) => {
-          let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+          let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Devon S.', currentStage: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
           if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
-          return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
+          return { id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined }
         })
         setProjects(mapped)
         setCachedData('projects', mapped)
@@ -657,6 +658,7 @@ export default function CampaignStrategyPage() {
         progress: 0,
         milestones: taskList,
         pm: quickPm || 'Netgain Team',
+        currentStage: quickCurrentStage,
         startDate: now,
         approvalStatus: 'draft'
       })
@@ -678,7 +680,7 @@ export default function CampaignStrategyPage() {
 
       toast({ title: '✅ Project Created!', description: `${quickTitle} — ${docId}` })
       setShowQuickCreate(false)
-      setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickTasks('')
+      setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickCurrentStage(''); setQuickTasks('')
       setQuickType('Web Development'); setQuickStatus('planned')
       invalidateCache('dashboard')
     } catch (e: any) {
@@ -707,6 +709,7 @@ export default function CampaignStrategyPage() {
     setEditedBudget(p.budget || 0)
     setEditedSpent(p.spent || 0)
     setEditedTimeline(p.timeline || '')
+    setQuickCurrentStage(p.currentStage || '')
     setEditedProgress(p.progress || 0)
     setEditedStatus(p.status || 'planned')
 
@@ -729,7 +732,7 @@ export default function CampaignStrategyPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Manage project execution, tasks, requirements, files, and links in real-time</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="gold" size="sm" onClick={() => setShowQuickCreate(true)} className="gap-1.5 w-full sm:w-auto">
+          <Button variant="gold" size="sm" onClick={() => { setQuickCurrentStage(''); setShowQuickCreate(true) }} className="gap-1.5 w-full sm:w-auto">
             <Plus className="h-4 w-4" /> New Project
           </Button>
         </div>
@@ -784,6 +787,7 @@ export default function CampaignStrategyPage() {
                   setQuickBudget(String(p.budget))
                   setQuickTimeline(p.timeline)
                   setQuickPm(p.pm)
+                  setQuickCurrentStage(p.currentStage || '')
                   setEditId(p.id)
                 }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -1624,7 +1628,12 @@ export default function CampaignStrategyPage() {
             </div>
             <div className="col-span-1 sm:col-span-2 space-y-1">
               <Label>Client Name *</Label>
-              <Input value={quickClient} onChange={e => setQuickClient(e.target.value)} />
+              <ClientAutocomplete
+                value={quickClient}
+                onChange={setQuickClient}
+                onSelect={(client) => setQuickClient(client.name)}
+                placeholder="Select or type client name"
+              />
             </div>
             <div className="space-y-1">
               <Label>Project Type</Label>
@@ -1656,6 +1665,10 @@ export default function CampaignStrategyPage() {
               <Input value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
             </div>
             <div className="col-span-1 sm:col-span-2 space-y-1">
+              <Label>Current Stage</Label>
+              <Input placeholder="e.g. Development & Integration" value={quickCurrentStage} onChange={e => setQuickCurrentStage(e.target.value)} />
+            </div>
+            <div className="col-span-1 sm:col-span-2 space-y-1">
               <Label>Project Manager</Label>
               <ProjectManagerAutocomplete
                 value={quickPm}
@@ -1681,6 +1694,7 @@ export default function CampaignStrategyPage() {
                 progress: target.progress,
                 milestones: target.milestones,
                 pm: quickPm || 'Netgain Team',
+                currentStage: quickCurrentStage,
                 startDate: target.startDate,
                 approvalStatus: target.approvalStatus || 'draft'
               })
@@ -1693,6 +1707,7 @@ export default function CampaignStrategyPage() {
                 budget: Number(quickBudget) || 0,
                 timeline: quickTimeline,
                 pm: quickPm || 'Netgain Team',
+                currentStage: quickCurrentStage,
                 status: quickStatus,
                 history: newHistory
               }

@@ -90,6 +90,7 @@ function SettingsPageContent() {
     email: 'mail.netgain@gmail.com',
     website: 'netgain.studio',
     phone: '9347102347 | 9392469669',
+    calBookingUrl: '',
     logo: '',
     stamp: '',
     signature: '',
@@ -404,6 +405,9 @@ function SettingsPageContent() {
               </FieldRow>
               <FieldRow label="Website">
                 <Input value={company.website} onChange={e => setCompany({ ...company, website: e.target.value })} placeholder="netgain.studio" />
+              </FieldRow>
+              <FieldRow label="Cal.com Booking URL" hint="Shown in the client portal so clients can book meetings directly">
+                <Input value={company.calBookingUrl || ''} onChange={e => setCompany({ ...company, calBookingUrl: e.target.value })} placeholder="https://cal.com/your-handle/consultation" />
               </FieldRow>
               <Separator />
               <FieldRow label="GST Number" hint="Printed on invoices & quotations">

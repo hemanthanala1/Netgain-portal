@@ -64,6 +64,7 @@ interface Project {
   spent?: number
   timeline?: string
   pm?: string
+  currentStage?: string
 }
 
 interface ClientNotification {
@@ -188,7 +189,7 @@ export default function ClientDashboardPage() {
       }
 
       // Fetch from Supabase tables
-      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, compRes, clientRes] = await Promise.all([
+      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, settingsRes, clientRes] = await Promise.all([
         supabase.from('quotations').select('*'),
         supabase.from('sows').select('*'),
         supabase.from('agreements').select('*'),
@@ -197,12 +198,15 @@ export default function ClientDashboardPage() {
         supabase.from('projects').select('*'),
         supabase.from('client_notifications').select('*').or(`client_id.eq."${session.company}",client_id.eq."${session.email}"`).order('created_at', { ascending: false }),
         supabase.from('document_tokens').select('*').eq('status', 'active'),
-        supabase.from('company_settings').select('*').limit(1).single(),
+        fetch('/api/settings').then(async res => {
+          if (!res.ok) return { data: null }
+          return { data: await res.json() }
+        }),
         session.clientId ? supabase.from('crm_clients').select('website, address, gst').eq('id', session.clientId).maybeSingle() : Promise.resolve({ data: null })
       ])
       
-      if (compRes.data) {
-        setCompanySettings(compRes.data)
+      if (settingsRes && settingsRes.data) {
+        setCompanySettings(settingsRes.data)
       }
 
       if (clientRes && clientRes.data) {
@@ -244,7 +248,7 @@ export default function ClientDashboardPage() {
         const docClient = (p.client || '').toLowerCase().trim()
         return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
       }).map((p: any) => {
-        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.' }
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.', currentStage: '' }
         if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
         return {
           id: p.id,
@@ -260,7 +264,8 @@ export default function ClientDashboardPage() {
           budget: Number(extra.budget) || 0,
           spent: Number(extra.spent) || 0,
           timeline: extra.timeline,
-          pm: extra.pm
+          pm: extra.pm,
+          currentStage: extra.currentStage || ''
         }
       })
 
@@ -1271,7 +1276,7 @@ export default function ClientDashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {projects.filter(p => selectedProjectId ? p.id === selectedProjectId : true).map(proj => {
-                const stage = proj.status === 'active' ? 'Development & Integration' : 'Deployment'
+                const stage = proj.currentStage || (proj.status === 'active' ? 'Development & Integration' : 'Deployment')
                 const progressVal = proj.progress || 0
                 return (
                   <Card key={proj.id} className="bg-[#091510] border-[#152e23]/80 text-white relative overflow-hidden">
@@ -1495,7 +1500,7 @@ export default function ClientDashboardPage() {
               if (!currentProj) {
                 return <div className="text-center py-8 text-slate-500 text-xs">No active project workspace selected.</div>
               }
-              const stage = currentProj.status === 'active' ? 'Development & Sprints' : currentProj.status === 'completed' ? 'Completed & Deployed' : 'Planned / Backlog'
+              const stage = currentProj.currentStage || (currentProj.status === 'active' ? 'Development & Sprints' : currentProj.status === 'completed' ? 'Completed & Deployed' : 'Planned / Backlog')
               return (
                 <div className="space-y-6 max-w-4xl">
                   <Card className="bg-[#091510] border-[#152e23]/80 p-5 space-y-4">
@@ -1747,6 +1752,33 @@ export default function ClientDashboardPage() {
               <h1 className="text-xl font-bold text-white">Consultations & Meetings</h1>
               <p className="text-xs text-slate-400 mt-1">Review upcoming bookings, review recordings, or check details of completed milestones meetings.</p>
             </div>
+
+            <Card className="bg-[#091510] border-[#152e23]/80">
+              <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-gold uppercase tracking-wider">Book a Meeting</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                    Schedule a call with the Netgain team through Cal.com. Any booking will sync back into both the client portal and the admin meetings board.
+                  </p>
+                </div>
+                {((companySettings?.company?.calBookingUrl || process.env.NEXT_PUBLIC_CAL_BOOKING_URL || '').trim()) ? (
+                  <a
+                    href={companySettings?.company?.calBookingUrl || process.env.NEXT_PUBLIC_CAL_BOOKING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0"
+                  >
+                    <Button variant="gold" size="sm" className="h-9 font-semibold px-4 gap-1.5">
+                      Book via Cal.com <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  </a>
+                ) : (
+                  <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 px-3 py-1.5">
+                    Cal.com booking link not configured
+                  </Badge>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 gap-4">
               {workspaceMeetings.map((meet: any) => {

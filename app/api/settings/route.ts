@@ -83,6 +83,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('company, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Supabase public settings fetch error:', error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      if (data?.company) {
+        return NextResponse.json({
+          company: data.company,
+          updatedAt: data.updated_at
+        })
+      }
+    }
+
     // Fallback: load from local JSON file
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8')
