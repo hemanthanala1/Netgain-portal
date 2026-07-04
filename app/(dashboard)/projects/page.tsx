@@ -767,6 +767,7 @@ export default function CampaignStrategyPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
               <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
+              <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Tasks</TabsTrigger>
               <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
               <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
               <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
@@ -787,66 +788,14 @@ export default function CampaignStrategyPage() {
                     <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-slate-300">{detailProject.pm || 'N/A'}</p></CardContent></Card>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Left Column: Milestones Checklist */}
-                    <div className="md:col-span-2 space-y-3">
-                      <div className="flex justify-between items-center border-b border-border pb-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Milestones Checklist</h4>
-                        <span className="text-[10px] text-slate-500">{detailProject.milestones.length} milestones</span>
-                      </div>
-                      
-                      <div className="space-y-2 max-h-[220px] overflow-y-auto">
-                        {detailProject.milestones.map((m, idx) => {
-                          const isDone = m.endsWith(' ✅')
-                          const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
-                          return (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded bg-[#0b1b15] border border-[#152e23]/60 hover:border-gold/30">
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="checkbox" 
-                                  checked={isDone}
-                                  onChange={() => handleToggleMilestone(detailProject, idx)}
-                                  className="h-3.5 w-3.5 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
-                                />
-                                <span className={`text-xs ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>{cleanLabel}</span>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 text-red-400 hover:text-red-400 hover:bg-red-500/10"
-                                onClick={() => handleDeleteMilestone(detailProject, idx)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )
-                        })}
-                        {detailProject.milestones.length === 0 && (
-                          <p className="text-xs text-slate-500 text-center py-4">No milestones created yet.</p>
-                        )}
-                      </div>
-
-                      {/* Add Milestone Inline Form */}
-                      <div className="flex gap-2 pt-1">
-                        <Input 
-                          placeholder="Add new milestone (e.g. Figma Review)" 
-                          value={newMilestoneText}
-                          onChange={e => setNewMilestoneText(e.target.value)}
-                          className="h-8 text-xs bg-[#091510] border-[#152e23]"
-                        />
-                        <Button 
-                          variant="gold" 
-                          size="sm" 
-                          className="h-8 text-xs px-3"
-                          onClick={() => handleAddMilestone(detailProject)}
-                        >
-                          Add
-                        </Button>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Left Column: Placeholder for Overview or Additional Details */}
+                    <div className="space-y-4">
+                      {/* You can add any extra overview details here if needed */}
                     </div>
 
                     {/* Right Column: Quick Stats Editor */}
-                    <div className="space-y-4 bg-[#091510] border border-[#152e23] rounded-xl p-4">
+                    <div className="space-y-4 bg-[#091510] border border-[#152e23] rounded-xl p-4 md:col-span-2 max-w-2xl">
                       <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Edit Details</h4>
                         <Button variant="ghost" size="sm" onClick={() => setEditingOverview(!editingOverview)} className="text-gold h-6 text-[10px]">
@@ -929,6 +878,83 @@ export default function CampaignStrategyPage() {
 
                   <WorkflowSteps steps={WORKFLOW_STEPS} currentStep={detailProject?.prompt ? 3 : 1} />
                 </>
+              )}
+            </TabsContent>
+
+            {/* ── TASKS TAB ── */}
+            <TabsContent value="workspace-tasks" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Tasks & Milestones</h4>
+                    <span className="text-[10px] text-slate-500">{detailProject.milestones.length} tasks</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {detailProject.milestones.map((m, idx) => {
+                      const isDone = m.endsWith(' ✅')
+                      const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-3 rounded bg-[#0b1b15] border border-[#152e23]/60 hover:border-gold/30">
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={isDone}
+                              onChange={() => handleToggleMilestone(detailProject, idx)}
+                              className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
+                            />
+                            <span className={`text-sm ${isDone ? 'line-through text-slate-500' : 'text-slate-200 font-semibold'}`}>{cleanLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-slate-400 hover:text-gold hover:bg-gold/10"
+                              onClick={() => {
+                                const newLabel = window.prompt("Edit task description:", cleanLabel);
+                                if (newLabel && newLabel.trim() !== "") {
+                                  const updatedMilestones = [...detailProject.milestones];
+                                  updatedMilestones[idx] = `${newLabel.trim()} ${isDone ? '✅' : '⏳'}`;
+                                  saveProjectDetails({ ...detailProject, milestones: updatedMilestones });
+                                }
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-500/10"
+                              onClick={() => handleDeleteMilestone(detailProject, idx)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {detailProject.milestones.length === 0 && (
+                      <p className="text-sm text-slate-500 text-center py-6">No tasks created yet.</p>
+                    )}
+                  </div>
+
+                  {/* Add Milestone Inline Form */}
+                  <div className="flex gap-2 pt-2">
+                    <Input 
+                      placeholder="Add new task (e.g. Figma Review)" 
+                      value={newMilestoneText}
+                      onChange={e => setNewMilestoneText(e.target.value)}
+                      className="h-10 text-sm bg-[#091510] border-[#152e23]"
+                    />
+                    <Button 
+                      variant="gold" 
+                      className="h-10 px-5 font-bold"
+                      onClick={() => handleAddMilestone(detailProject)}
+                    >
+                      Add Task
+                    </Button>
+                  </div>
+                </div>
               )}
             </TabsContent>
 
