@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast'
 
 interface SupportTicket {
   id: string
+  client_id: string
   title: string
   message: string
   created_at: string
@@ -31,8 +32,8 @@ export default function SupportPage() {
       const { data, error } = await supabase
         .from('client_notifications')
         .select('*')
-        .eq('client_id', 'Founder')
         .eq('type', 'support')
+        .neq('client_id', 'admin')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -44,6 +45,34 @@ export default function SupportPage() {
     }
 
     loadTickets()
+
+    if (!isSupabaseConfigured()) return
+
+    const channel = supabase
+      .channel('admin-support-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'client_notifications', filter: 'type=eq.support' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newTicket = payload.new as SupportTicket
+            if (newTicket.client_id !== 'admin') {
+              setTickets(prev => [newTicket, ...prev])
+              toast({ title: 'New Support Ticket', description: newTicket.title })
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedTicket = payload.new as SupportTicket
+            setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t))
+          } else if (payload.eventType === 'DELETE') {
+            setTickets(prev => prev.filter(t => t.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   async function markAsRead(id: string) {
@@ -88,7 +117,10 @@ export default function SupportPage() {
                     <CardTitle className="text-base text-gold">{ticket.title}</CardTitle>
                     {!ticket.is_read && <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">New</Badge>}
                   </div>
-                  <CardDescription className="text-xs mt-1">
+                  <p className="text-xs text-slate-400 font-medium mt-1">
+                    From: <span className="text-[#D4AF37] font-semibold">{ticket.client_id}</span>
+                  </p>
+                  <CardDescription className="text-[10px] mt-0.5">
                     {new Date(ticket.created_at).toLocaleString()}
                   </CardDescription>
                 </div>

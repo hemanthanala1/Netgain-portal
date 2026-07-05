@@ -156,7 +156,7 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-6 sticky top-0 z-30">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6 sticky top-0 z-30 shadow-sm">
       <div className="flex items-center gap-3">
         {onMenuClick && (
           <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 shrink-0 -ml-2" onClick={onMenuClick}>

@@ -74,6 +74,7 @@ interface ClientNotification {
   message: string
   is_read: boolean
   created_at: string
+  type?: string
 }
 
 export default function ClientDashboardPage() {
@@ -319,6 +320,16 @@ export default function ClientDashboardPage() {
     if (session) fetchClientData()
   }, [session])
 
+  // Keep selectedDoc in sync with the latest data from docs (fixes status updates not showing immediately)
+  useEffect(() => {
+    if (selectedDoc) {
+      const updated = docs.find(d => d.id === selectedDoc.id && d.type === selectedDoc.type)
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedDoc)) {
+        setSelectedDoc(updated)
+      }
+    }
+  }, [docs, selectedDoc])
+
   // ─── REAL-TIME SUBSCRIPTIONS ───
   useEffect(() => {
     if (!session || !isSupabaseConfigured()) return
@@ -337,10 +348,22 @@ export default function ClientDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirements' }, () => {
         refreshClientData()
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirement_submissions' }, () => {
+        refreshClientData()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_files' }, () => {
         refreshClientData()
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_links' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_reports' }, () => {
+        refreshClientData()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => {
         refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, () => {
@@ -440,6 +463,7 @@ export default function ClientDashboardPage() {
       toast({ title: 'Support Ticket Raised', description: 'We will get back to you shortly.' })
       setSupportSubject('')
       setSupportMessage('')
+      await fetchClientData(true)
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' })
     } finally {
@@ -474,10 +498,19 @@ export default function ClientDashboardPage() {
     }
   }
 
-  const handleApproveDoc = () => {
+  const handleApproveDoc = async () => {
     if (selectedDoc) {
-      trackActivity(selectedDoc, 'approve')
-      toast({ title: 'Document Approved', description: 'Thank you for your approval.' })
+      setSubmittingAction(true)
+      try {
+        await trackActivity(selectedDoc, 'approve')
+        setSelectedDoc(prev => prev ? { ...prev, status: 'approved', signed_at: new Date().toISOString() } : null)
+        toast({ title: 'Document Approved', description: 'Thank you for your approval.' })
+      } catch (err: any) {
+        console.error(err)
+        toast({ title: 'Approval Failed', description: err.message || 'An error occurred during approval.', variant: 'destructive' })
+      } finally {
+        setSubmittingAction(false)
+      }
     }
   }
 
@@ -969,6 +1002,8 @@ export default function ClientDashboardPage() {
     d.title.toLowerCase().includes(search.toLowerCase()) ||
     d.docId.toLowerCase().includes(search.toLowerCase())
   )
+
+  const clientSupportTickets = notifications.filter(n => n.type === 'support')
 
   // Calculating portal summaries for the cards
   const statsSummary = {
@@ -1944,6 +1979,29 @@ export default function ClientDashboardPage() {
                       <p className="text-slate-400 font-medium">Head Office Consultation</p>
                       <p className="text-slate-300 font-semibold mt-0.5">{companySettings?.company?.phone || '+91 (800) 555-NETGAIN'}</p>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-[#091510] border-[#152e23]/80 text-white">
+                  <CardHeader className="pb-2 border-b border-[#152e23]/50">
+                    <CardTitle className="text-xs font-bold text-gold uppercase tracking-wider">Sent Support Tickets</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-4 max-h-[300px] overflow-y-auto pt-4">
+                    {clientSupportTickets.map(ticket => (
+                      <div key={ticket.id} className="p-2.5 rounded-lg bg-black/20 border border-[#152e23]/50 space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-slate-200 truncate max-w-[120px]">{ticket.title}</span>
+                          <Badge className={`text-[8px] font-mono capitalize ${ticket.is_read ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' : 'bg-amber-500/15 text-amber-500 border border-amber-500/25'}`}>
+                            {ticket.is_read ? 'Read' : 'Open'}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-normal line-clamp-2">{ticket.message}</p>
+                        <p className="text-[9px] text-slate-500 font-mono">{formatDate(ticket.created_at)}</p>
+                      </div>
+                    ))}
+                    {clientSupportTickets.length === 0 && (
+                      <div className="text-center text-slate-500 text-xs py-4">No support tickets raised yet.</div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
