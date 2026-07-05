@@ -73,9 +73,7 @@ export default function LoginPage() {
         <Card className="border shadow-2xl">
           <CardHeader className="text-center pb-2 pt-8">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="h-10 w-10 rounded-xl gold-gradient flex items-center justify-center shadow-lg shadow-gold/20">
-                <span className="text-lg font-black text-white">N</span>
-              </div>
+              <img src="/logo.png" className="h-10 w-10 rounded-xl shrink-0 object-contain shadow-md" alt="Netgain Logo" />
             </div>
             <h1 className="text-xl font-bold tracking-tight">Welcome back</h1>
             <p className="text-sm text-muted-foreground mt-1">Sign in to Netgain Business OS</p>

@@ -87,18 +87,14 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
           animate={{ opacity: collapsed && !onMobileClose ? 0 : 1, width: collapsed && !onMobileClose ? 0 : 'auto' }}
           className="flex items-center gap-2 overflow-hidden"
         >
-          <div className="h-7 w-7 rounded bg-primary flex items-center justify-center shrink-0">
-            <span className="text-xs font-black text-white">N</span>
-          </div>
+          <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
           <div className="overflow-hidden">
             <p className="text-sm font-bold text-foreground whitespace-nowrap">NETGAIN</p>
             <p className="text-[10px] text-primary whitespace-nowrap -mt-0.5 font-semibold">BUSINESS OS</p>
           </div>
         </motion.div>
         {collapsed && !onMobileClose && (
-          <div className="h-7 w-7 rounded bg-primary flex items-center justify-center shrink-0">
-            <span className="text-xs font-black text-white">N</span>
-          </div>
+          <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
         )}
         {onMobileClose && (
           <button onClick={onMobileClose} className="md:hidden text-muted-foreground hover:text-foreground p-1">

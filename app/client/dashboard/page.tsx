@@ -1018,60 +1018,60 @@ export default function ClientDashboardPage() {
 
   const getStatusBadgeStyled = (status: string) => {
     const s = status.toLowerCase()
-    if (s === 'completed' || s === 'signed' || s === 'paid') return <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] capitalize"><Check className="h-2.5 w-2.5 mr-1" />{status}</Badge>
-    if (s === 'needs revision') return <Badge className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] capitalize"><AlertTriangle className="h-2.5 w-2.5 mr-1" />Changes Requested</Badge>
-    if (s === 'rejected' || s === 'declined') return <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] capitalize"><X className="h-2.5 w-2.5 mr-1" />Declined</Badge>
-    if (s === 'viewed') return <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] capitalize"><Eye className="h-2.5 w-2.5 mr-1" />Viewed</Badge>
-    if (s === 'published') return <Badge className="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] capitalize"><Globe className="h-2.5 w-2.5 mr-1" />New</Badge>
-    return <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[10px] capitalize">{status}</Badge>
+    if (s === 'completed' || s === 'signed' || s === 'paid') return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] capitalize"><Check className="h-2.5 w-2.5 mr-1" />{status}</Badge>
+    if (s === 'needs revision') return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[10px] capitalize"><AlertTriangle className="h-2.5 w-2.5 mr-1" />Changes Requested</Badge>
+    if (s === 'rejected' || s === 'declined') return <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] capitalize"><X className="h-2.5 w-2.5 mr-1" />Declined</Badge>
+    if (s === 'viewed') return <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10px] capitalize"><Eye className="h-2.5 w-2.5 mr-1" />Viewed</Badge>
+    if (s === 'published') return <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[10px] capitalize"><Globe className="h-2.5 w-2.5 mr-1" />New</Badge>
+    return <Badge className="bg-slate-500/10 text-muted-foreground border border-slate-500/20 text-[10px] capitalize">{status}</Badge>
   }
 
   if (!sessionReady || loading) {
     return (
-      <div className="min-h-screen bg-[#070e0b] text-white flex flex-col justify-center items-center gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
-        <p className="text-sm text-slate-400">{!sessionReady ? 'Verifying secure portal access...' : 'Retrieving client records...'}</p>
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">{!sessionReady ? 'Verifying secure portal access...' : 'Retrieving client records...'}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#070e0b] text-slate-100 flex flex-col md:flex-row font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row font-sans relative overflow-hidden">
       {/* Mobile Sidebar overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-[#152e23] bg-[#091510] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-64 md:w-16' : 'w-64'}`}>
-        <div className="p-5 flex items-center justify-between border-b border-[#152e23]">
+      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-card flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-64 md:w-16' : 'w-64'}`}>
+        <div className="p-5 flex items-center justify-between border-b border-border">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center font-black text-black shadow-lg shrink-0">N</div>
+            <img src="/logo.png" className="h-9 w-9 rounded-xl shrink-0 object-contain shadow-sm" alt="Netgain Logo" />
             {!sidebarCollapsed && (
               <div className="overflow-hidden">
-                <p className="text-sm font-bold text-white tracking-wide whitespace-nowrap">NETGAIN PORTAL</p>
-                <p className="text-[9px] text-[#D4AF37] tracking-widest -mt-0.5 whitespace-nowrap">SECURE CLIENT SUITE</p>
+                <p className="text-sm font-bold text-foreground tracking-wide whitespace-nowrap">NETGAIN PORTAL</p>
+                <p className="text-[9px] text-primary tracking-widest -mt-0.5 whitespace-nowrap">SECURE CLIENT SUITE</p>
               </div>
             )}
           </div>
           <button 
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden p-1 text-slate-400 hover:text-white focus:outline-none"
+            className="md:hidden p-1 text-muted-foreground hover:text-foreground focus:outline-none"
           >
-            <X className="h-5 w-5 text-gold" />
+            <X className="h-5 w-5 text-primary" />
           </button>
         </div>
 
         {/* Company/Rep Overview card */}
         {!sidebarCollapsed && (
-          <div className="mx-4 my-4 p-3 bg-emerald-950/20 border border-[#152e23]/60 rounded-xl">
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Account Company</p>
-            <p className="text-xs font-semibold text-[#D4AF37] mt-0.5 truncate">{session?.company}</p>
-            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-slate-400">
-              <User className="h-3 w-3 text-gold" />
+          <div className="mx-4 my-4 p-3 bg-accent/20 border border-border/60 rounded-xl">
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Account Company</p>
+            <p className="text-xs font-semibold text-primary mt-0.5 truncate">{session?.company}</p>
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
+              <User className="h-3 w-3 text-primary" />
               <span className="truncate">{session?.name}</span>
             </div>
           </div>
@@ -1085,7 +1085,7 @@ export default function ClientDashboardPage() {
               <button
                 key={item.id}
                 onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setMobileMenuOpen(false) }}
-                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-gold text-black shadow-lg font-bold' : 'text-slate-400 hover:bg-[#11241c] hover:text-white'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-primary text-black shadow-lg font-bold' : 'text-muted-foreground hover:bg-accent hover:text-foreground'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center gap-3">
@@ -1093,7 +1093,7 @@ export default function ClientDashboardPage() {
                   {!sidebarCollapsed && <span>{item.label}</span>}
                 </div>
                 {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${active ? 'bg-black text-gold' : 'bg-gold/15 text-gold border border-gold/25'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${active ? 'bg-black text-primary' : 'bg-primary/10 text-primary border border-primary/20'}`}>
                     {item.badge}
                   </span>
                 )}
@@ -1102,21 +1102,21 @@ export default function ClientDashboardPage() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-[#152e23] space-y-1.5 shrink-0">
+        <div className="p-3 border-t border-border space-y-1.5 shrink-0">
           {/* Collapse Toggle */}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`hidden md:flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-[#11241c] hover:text-white transition-all ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`hidden md:flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-all ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
-            {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-gold" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-gold" />}
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-primary" />}
             {!sidebarCollapsed && <span>Collapse Sidebar</span>}
           </button>
 
           <Button 
             onClick={handleLogout} 
             variant="outline" 
-            className={`w-full h-9 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 bg-transparent gap-2 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`w-full h-9 text-xs border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10 bg-transparent gap-2 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
             title={sidebarCollapsed ? "Log Out Portal" : undefined}
           >
             <LogOut className="h-3.5 w-3.5 shrink-0" />
@@ -1126,21 +1126,21 @@ export default function ClientDashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-[#070e0b] relative">
-        <header className="h-16 border-b border-[#152e23] bg-[#091510]/50 backdrop-blur flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
+      <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-background relative">
+        <header className="h-16 border-b border-border bg-card/50 backdrop-blur flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="p-1.5 -ml-1 text-slate-400 hover:text-white md:hidden focus:outline-none"
+              className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden focus:outline-none"
             >
-              <Menu className="h-5 w-5 text-gold" />
+              <Menu className="h-5 w-5 text-primary" />
             </button>
-            <Building2 className="h-4 w-4 text-[#D4AF37] shrink-0" />
-            <span className="text-xs text-slate-400 font-semibold truncate max-w-[150px] sm:max-w-xs">{session?.company} Dashboard Suite</span>
+            <Building2 className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-xs text-muted-foreground font-semibold truncate max-w-[150px] sm:max-w-xs">{session?.company} Dashboard Suite</span>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className={`hidden sm:inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+            <span className={`hidden sm:inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-muted-foreground border-slate-500/20'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
               {realtimeConnected ? 'Live' : 'Offline'}
             </span>
@@ -1148,7 +1148,7 @@ export default function ClientDashboardPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               variant="outline"
-              className="border-[#152e23] text-slate-300 bg-[#091510] hover:bg-white/5 h-8 text-xs gap-2"
+              className="border-border text-foreground/90 bg-card hover:bg-white/5 h-8 text-xs gap-2"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
               Sync
@@ -1161,25 +1161,25 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Welcome, {session?.name}</h1>
-                <p className="text-xs text-slate-400 mt-1">Here is a summary of your shared assets, approvals, and invoices with Netgain.</p>
+                <h1 className="text-2xl font-black text-foreground tracking-tight">Welcome, {session?.name}</h1>
+                <p className="text-xs text-muted-foreground mt-1">Here is a summary of your shared assets, approvals, and invoices with Netgain.</p>
               </div>
             </div>
 
             {/* Premium Stat cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Pending Quotations', val: statsSummary.pendingQuotations, col: 'text-amber-400', desc: 'Awaiting signature/approval' },
-                { label: 'Pending Agreements', val: statsSummary.pendingAgreements, col: 'text-purple-400', desc: 'Awaiting digital signing' },
-                { label: 'Unpaid Invoices', val: statsSummary.unpaidInvoices, col: 'text-rose-400', desc: 'Awaiting payment process' },
-                { label: 'Active Projects', val: statsSummary.activeProjects, col: 'text-emerald-400', desc: 'Currently in execution' }
+                { label: 'Pending Quotations', val: statsSummary.pendingQuotations, col: 'text-amber-600 dark:text-amber-400', desc: 'Awaiting signature/approval' },
+                { label: 'Pending Agreements', val: statsSummary.pendingAgreements, col: 'text-purple-600 dark:text-purple-400', desc: 'Awaiting digital signing' },
+                { label: 'Unpaid Invoices', val: statsSummary.unpaidInvoices, col: 'text-rose-600 dark:text-rose-400', desc: 'Awaiting payment process' },
+                { label: 'Active Projects', val: statsSummary.activeProjects, col: 'text-emerald-600 dark:text-emerald-400', desc: 'Currently in execution' }
               ].map(card => (
-                <Card key={card.label} className="bg-[#091510] border-[#152e23]/80 text-white shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-gold/40" />
+                <Card key={card.label} className="bg-card border-border/80 text-foreground shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary/40" />
                   <CardContent className="p-4">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{card.label}</p>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{card.label}</p>
                     <p className={`text-2xl font-bold mt-1 ${card.col}`}>{card.val}</p>
-                    <p className="text-[10px] text-slate-400 mt-1.5 leading-snug">{card.desc}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">{card.desc}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -1191,37 +1191,37 @@ export default function ClientDashboardPage() {
               {/* Recent Published Documents */}
               <div className="lg:col-span-2 space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Recent Shared Documents</h3>
-                  <button onClick={() => setActiveTab('documents')} className="text-xs text-gold/80 hover:text-gold flex items-center gap-1">
+                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Recent Shared Documents</h3>
+                  <button onClick={() => setActiveTab('documents')} className="text-xs text-primary/80 hover:text-primary flex items-center gap-1">
                     View Vault <ChevronRight className="h-3 w-3" />
                   </button>
                 </div>
-                <Card className="bg-[#091510] border-[#152e23]/80">
+                <Card className="bg-card border-border/80">
                   <CardContent className="p-0">
-                    <div className="divide-y divide-[#152e23]">
+                    <div className="divide-y divide-border">
                       {docs.slice(0, 5).map(doc => (
-                        <div key={doc.id} onClick={() => openDoc(doc)} className="p-4 flex items-center justify-between hover:bg-[#11241c]/45 cursor-pointer transition-colors group">
+                        <div key={doc.id} onClick={() => openDoc(doc)} className="p-4 flex items-center justify-between hover:bg-accent/45 cursor-pointer transition-colors group">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-gold/5 border border-gold/15 text-gold">
+                            <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 text-primary">
                               <FileText className="h-4 w-4" />
                             </div>
                             <div>
-                              <p className="text-xs font-semibold text-white group-hover:text-gold transition-colors">{doc.title}</p>
+                              <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">{doc.title}</p>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[9px] font-mono text-slate-500">{doc.docId}</span>
+                                <span className="text-[9px] font-mono text-muted-foreground">{doc.docId}</span>
                                 <span className="w-1 h-1 rounded-full bg-slate-700" />
-                                <span className="text-[9px] text-slate-400 capitalize">{doc.type} · V{doc.published_version}</span>
+                                <span className="text-[9px] text-muted-foreground capitalize">{doc.type} · V{doc.published_version}</span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             {getStatusBadgeStyled(doc.status)}
-                            <ChevronRight className="h-3.5 w-3.5 text-slate-600 group-hover:text-gold transition-all" />
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-all" />
                           </div>
                         </div>
                       ))}
                       {docs.length === 0 && (
-                        <div className="p-8 text-center text-slate-500 text-xs">No documents published yet.</div>
+                        <div className="p-8 text-center text-muted-foreground text-xs">No documents published yet.</div>
                       )}
                     </div>
                   </CardContent>
@@ -1230,20 +1230,20 @@ export default function ClientDashboardPage() {
 
               {/* Side activity / updates feed */}
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Recent Activity</h3>
-                <Card className="bg-[#091510] border-[#152e23]/80">
+                <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Recent Activity</h3>
+                <Card className="bg-card border-border/80">
                   <CardContent className="p-4 space-y-4 max-h-[360px] overflow-y-auto">
                     {docs.flatMap(d => (d.raw.history || []).map((h: any) => ({ ...h, doc: d }))).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6).map((act, i) => (
                       <div key={i} className="flex gap-3 text-xs">
-                        <div className="w-1.5 h-1.5 rounded-full bg-gold shrink-0 mt-1.5" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
                         <div>
-                          <p className="text-slate-200 leading-snug">{act.action}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">{act.doc?.docId} · {formatDate(act.date)}</p>
+                          <p className="text-foreground/90 leading-snug">{act.action}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{act.doc?.docId} · {formatDate(act.date)}</p>
                         </div>
                       </div>
                     ))}
                     {docs.length === 0 && (
-                      <div className="text-center text-slate-500 text-xs py-4">No recent activity logs.</div>
+                      <div className="text-center text-muted-foreground text-xs py-4">No recent activity logs.</div>
                     )}
                   </CardContent>
                 </Card>
@@ -1257,25 +1257,25 @@ export default function ClientDashboardPage() {
         {['quotations', 'sow', 'agreements', 'invoices', 'marketing', 'documents'].includes(activeTab) && !selectedDoc && (
           <div className="p-6 space-y-4">
             <div>
-              <h1 className="text-xl font-bold capitalize text-white">{activeTab === 'documents' ? 'Document Vault' : activeTab}</h1>
-              <p className="text-xs text-slate-400 mt-1">Search and manage all shared {activeTab} files.</p>
+              <h1 className="text-xl font-bold capitalize text-foreground">{activeTab === 'documents' ? 'Document Vault' : activeTab}</h1>
+              <p className="text-xs text-muted-foreground mt-1">Search and manage all shared {activeTab} files.</p>
             </div>
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search by keyword, project, ID..."
-                className="pl-9 bg-[#091510] border-[#152e23] text-white focus-visible:ring-[#D4AF37] h-9 text-xs"
+                className="pl-9 bg-card border-border text-foreground focus-visible:ring-[#D4AF37] h-9 text-xs"
               />
             </div>
 
-            <Card className="bg-[#091510] border-[#152e23]/80">
+            <Card className="bg-card border-border/80">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px]">
+                    <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px]">
                       <th className="text-left py-3 px-4 font-semibold">Document Number</th>
                       <th className="text-left py-3 px-4 font-semibold">Title</th>
                       <th className="text-left py-3 px-4 font-semibold">Version</th>
@@ -1287,23 +1287,23 @@ export default function ClientDashboardPage() {
                   </thead>
                   <tbody>
                     {tabDocs.map(doc => (
-                      <tr key={doc.id} className="border-b border-[#152e23]/40 hover:bg-[#11241c]/20 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-[#D4AF37]">{doc.docId}</td>
-                        <td className="py-3.5 px-4 font-semibold text-white">{doc.title}</td>
-                        <td className="py-3.5 px-4 text-slate-400">V{doc.published_version}</td>
-                        <td className="py-3.5 px-4 text-slate-400">{formatDate(doc.date)}</td>
+                      <tr key={doc.id} className="border-b border-border/40 hover:bg-accent/20 transition-colors">
+                        <td className="py-3.5 px-4 font-mono text-primary">{doc.docId}</td>
+                        <td className="py-3.5 px-4 font-semibold text-foreground">{doc.title}</td>
+                        <td className="py-3.5 px-4 text-muted-foreground">V{doc.published_version}</td>
+                        <td className="py-3.5 px-4 text-muted-foreground">{formatDate(doc.date)}</td>
                         <td className="py-3.5 px-4">{getStatusBadgeStyled(doc.status)}</td>
                         {activeTab !== 'marketing' && (
-                          <td className="py-3.5 px-4 font-bold text-gold">
+                          <td className="py-3.5 px-4 font-bold text-primary">
                             {doc.amount > 0 ? formatCurrency(doc.amount) : '—'}
                           </td>
                         )}
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex justify-end gap-1.5">
-                            <Button onClick={() => openDoc(doc)} variant="outline" size="sm" className="h-7 text-[10px] border-[#152e23] bg-transparent text-slate-300">
+                            <Button onClick={() => openDoc(doc)} variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">
                               View
                             </Button>
-                            <Button onClick={() => handleDownloadPdf(doc)} variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/10">
+                            <Button onClick={() => handleDownloadPdf(doc)} variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10">
                               <Download className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -1312,7 +1312,7 @@ export default function ClientDashboardPage() {
                     ))}
                     {tabDocs.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-500">
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
                           <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
                           <p>No documents found matching your filter.</p>
                         </td>
@@ -1330,12 +1330,12 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-bold text-white">Project Workspaces</h1>
-                <p className="text-xs text-slate-400 mt-1">Track sprint milestones, progress, and managers assigned to your executions.</p>
+                <h1 className="text-xl font-bold text-foreground">Project Workspaces</h1>
+                <p className="text-xs text-muted-foreground mt-1">Track sprint milestones, progress, and managers assigned to your executions.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
@@ -1348,54 +1348,54 @@ export default function ClientDashboardPage() {
                 const stage = proj.currentStage || (proj.status === 'active' ? 'Development & Integration' : 'Deployment')
                 const progressVal = proj.progress || 0
                 return (
-                  <Card key={proj.id} className="bg-[#091510] border-[#152e23]/80 text-white relative overflow-hidden">
-                    <CardHeader className="border-b border-[#152e23]/50 pb-3 flex flex-row items-center justify-between">
+                  <Card key={proj.id} className="bg-card border-border/80 text-foreground relative overflow-hidden">
+                    <CardHeader className="border-b border-border/50 pb-3 flex flex-row items-center justify-between">
                       <div>
-                        <Badge className="bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/25 text-[9px] uppercase tracking-wider mb-1.5">{proj.stack?.includes('{') ? 'Strategy Engine' : proj.stack}</Badge>
-                        <CardTitle className="text-base font-bold text-white">{proj.title}</CardTitle>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">Project ID: {proj.docId}</p>
+                        <Badge className="bg-[#D4AF37]/15 text-primary border border-[#D4AF37]/25 text-[9px] uppercase tracking-wider mb-1.5">{proj.stack?.includes('{') ? 'Strategy Engine' : proj.stack}</Badge>
+                        <CardTitle className="text-base font-bold text-foreground">{proj.title}</CardTitle>
+                        <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Project ID: {proj.docId}</p>
                       </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 capitalize">{proj.status}</Badge>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 capitalize">{proj.status}</Badge>
                     </CardHeader>
                     <CardContent className="p-5 space-y-5">
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-slate-400">Current Stage</span>
-                          <span className="text-[#D4AF37]">{stage}</span>
+                          <span className="text-muted-foreground">Current Stage</span>
+                          <span className="text-primary">{stage}</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-snug">Sprint goal: {proj.sprintGoal || 'Final API integrations and validation checks.'}</p>
+                        <p className="text-[10px] text-muted-foreground leading-snug">Sprint goal: {proj.sprintGoal || 'Final API integrations and validation checks.'}</p>
                       </div>
 
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
                           <span>Delivery Checklist Progress</span>
                           <span>{progressVal}%</span>
                         </div>
-                        <Progress value={progressVal} className="h-1.5 bg-black/40" />
+                        <Progress value={progressVal} className="h-1.5 bg-muted/30" />
                       </div>
 
-                      <div className="border-t border-[#152e23]/50 pt-4 flex items-center justify-between text-xs">
+                      <div className="border-t border-border/50 pt-4 flex items-center justify-between text-xs">
                         <div>
-                          <p className="text-[9px] uppercase tracking-wider text-slate-500">Date Initiated</p>
-                          <p className="font-semibold text-slate-300 mt-0.5">{formatDate(proj.created)}</p>
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Date Initiated</p>
+                          <p className="font-semibold text-foreground/90 mt-0.5">{formatDate(proj.created)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[9px] uppercase tracking-wider text-slate-500">Account Executive</p>
-                          <p className="font-semibold text-[#D4AF37] mt-0.5">Netgain Team Manager</p>
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Account Executive</p>
+                          <p className="font-semibold text-primary mt-0.5">Netgain Team Manager</p>
                         </div>
                       </div>
 
                       {/* Project updates timeline */}
                       {workspaceTimeline.filter(t => t.project_id === proj.id).length > 0 && (
-                        <div className="border-t border-[#152e23]/40 pt-4 space-y-3.5">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Latest Project Check-ins</p>
+                        <div className="border-t border-border/40 pt-4 space-y-3.5">
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Latest Project Check-ins</p>
                           <div className="space-y-2.5">
                             {workspaceTimeline.filter(t => t.project_id === proj.id).slice(0, 3).map((hist, i) => (
                               <div key={i} className="flex gap-2.5 items-start text-[11px]">
-                                <span className="text-gold font-bold shrink-0 mt-0.5">▪</span>
+                                <span className="text-primary font-bold shrink-0 mt-0.5">▪</span>
                                 <div>
-                                  <p className="text-slate-300 leading-snug">{hist.action}</p>
-                                  {hist.notes && <p className="text-[9px] text-slate-500 mt-0.5">"{hist.notes}"</p>}
+                                  <p className="text-foreground/90 leading-snug">{hist.action}</p>
+                                  {hist.notes && <p className="text-[9px] text-muted-foreground mt-0.5">"{hist.notes}"</p>}
                                 </div>
                               </div>
                             ))}
@@ -1407,10 +1407,10 @@ export default function ClientDashboardPage() {
                 )
               })}
               {projects.length === 0 && (
-                <div className="col-span-2 text-center py-16 border border-dashed border-[#152e23] bg-[#091510]/10 rounded-2xl">
-                  <Briefcase className="h-8 w-8 mx-auto text-slate-600 mb-2" />
-                  <p className="text-sm font-semibold text-slate-400">No active projects linked</p>
-                  <p className="text-xs text-slate-500 mt-1">Once project kick-off commences, checklists and sprints will display here.</p>
+                <div className="col-span-2 text-center py-16 border border-dashed border-border bg-card/10 rounded-2xl">
+                  <Briefcase className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-semibold text-muted-foreground">No active projects linked</p>
+                  <p className="text-xs text-muted-foreground mt-1">Once project kick-off commences, checklists and sprints will display here.</p>
                 </div>
               )}
             </div>
@@ -1422,12 +1422,12 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-bold text-white">Project Requirements</h1>
-                <p className="text-xs text-slate-400 mt-1">Provide information, logo assets, brand guidelines, and access credentials requested by Netgain Studio.</p>
+                <h1 className="text-xl font-bold text-foreground">Project Requirements</h1>
+                <p className="text-xs text-muted-foreground mt-1">Provide information, logo assets, brand guidelines, and access credentials requested by Netgain Studio.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
@@ -1437,39 +1437,39 @@ export default function ClientDashboardPage() {
 
             {/* Submission Form Overlay */}
             {activeSubmittingReq && (
-              <Card className="bg-[#0b1b15] border-[#152e23] p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
-                  <h3 className="text-xs font-bold text-gold uppercase">Submit Requirement: {activeSubmittingReq.title}</h3>
-                  <button onClick={() => setActiveSubmittingReq(null)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+              <Card className="bg-card border-border p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-border pb-2">
+                  <h3 className="text-xs font-bold text-primary uppercase">Submit Requirement: {activeSubmittingReq.title}</h3>
+                  <button onClick={() => setActiveSubmittingReq(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
                 </div>
-                {activeSubmittingReq.description && <p className="text-xs text-slate-300 italic">Instructions: {activeSubmittingReq.description}</p>}
+                {activeSubmittingReq.description && <p className="text-xs text-foreground/90 italic">Instructions: {activeSubmittingReq.description}</p>}
 
                 <div className="space-y-4 text-xs">
                   {activeSubmittingReq.allow_text && (
                     <div className="space-y-1">
                       <Label>Text Response / Details</Label>
-                      <Textarea placeholder="Type requested information here..." value={clientTextResponse} onChange={e => setClientTextResponse(e.target.value)} className="bg-black/20 border-[#152e23] text-white" />
+                      <Textarea placeholder="Type requested information here..." value={clientTextResponse} onChange={e => setClientTextResponse(e.target.value)} className="bg-muted/10 border-border text-foreground" />
                     </div>
                   )}
 
                   {activeSubmittingReq.allow_link && (
                     <div className="space-y-1">
                       <Label>Submit Resource Links (one URL per line)</Label>
-                      <Textarea placeholder="https://figma.com/...&#10;https://drive.google.com/..." value={clientLinksInput} onChange={e => setClientLinksInput(e.target.value)} className="h-16 bg-black/20 border-[#152e23] text-white" />
+                      <Textarea placeholder="https://figma.com/...&#10;https://drive.google.com/..." value={clientLinksInput} onChange={e => setClientLinksInput(e.target.value)} className="h-16 bg-muted/10 border-border text-foreground" />
                     </div>
                   )}
 
                   {activeSubmittingReq.allow_file && (
-                    <div className="space-y-1 border border-dashed border-[#152e23] rounded-xl p-4 bg-black/10">
-                      <Label className="text-gold font-bold mb-1.5 block">Drag & Drop or Select Files</Label>
+                    <div className="space-y-1 border border-dashed border-border rounded-xl p-4 bg-muted/10">
+                      <Label className="text-primary font-bold mb-1.5 block">Drag & Drop or Select Files</Label>
                       <Input 
                         type="file" 
                         onChange={e => setClientUploadFiles(e.target.files ? Array.from(e.target.files) : [])} 
-                        className="bg-transparent border-none file:bg-gold file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                        className="bg-transparent border-none file:bg-primary file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
                       />
                       {clientUploadFiles.length > 0 && (
-                        <div className="mt-2 space-y-1 text-[11px] text-slate-400">
-                          <p className="font-semibold text-slate-300">Selected files:</p>
+                        <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                          <p className="font-semibold text-foreground/90">Selected files:</p>
                           {clientUploadFiles.map((f, i) => <p key={i}>• {f.name} ({(f.size/1024/1024).toFixed(2)} MB)</p>)}
                         </div>
                       )}
@@ -1478,12 +1478,12 @@ export default function ClientDashboardPage() {
 
                   <div className="space-y-1">
                     <Label>Additional Notes for Netgain Team</Label>
-                    <Input placeholder="Any extra comments..." value={clientSubmissionNotes} onChange={e => setClientSubmissionNotes(e.target.value)} className="bg-black/20 border-[#152e23] text-white" />
+                    <Input placeholder="Any extra comments..." value={clientSubmissionNotes} onChange={e => setClientSubmissionNotes(e.target.value)} className="bg-muted/10 border-border text-foreground" />
                   </div>
 
-                  <div className="flex gap-2 justify-end border-t border-[#152e23] pt-3">
+                  <div className="flex gap-2 justify-end border-t border-border pt-3">
                     <Button variant="outline" size="sm" onClick={() => setActiveSubmittingReq(null)}>Cancel</Button>
-                    <Button variant="gold" size="sm" onClick={handleSubmitRequirement} disabled={submittingRequirementState}>
+                    <Button variant="default" size="sm" onClick={handleSubmitRequirement} disabled={submittingRequirementState}>
                       {submittingRequirementState ? 'Submitting...' : 'Submit Information'}
                     </Button>
                   </div>
@@ -1498,33 +1498,33 @@ export default function ClientDashboardPage() {
                 .map((req: any) => {
                   const sub = workspaceSubmissions.find(s => s.requirement_id === req.id)
                   return (
-                    <Card key={req.id} className="bg-[#091510] border-[#152e23]/80 p-5 text-xs text-slate-300 relative overflow-hidden">
+                    <Card key={req.id} className="bg-card border-border/80 p-5 text-xs text-foreground/90 relative overflow-hidden">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-white">{req.title}</span>
-                            {req.is_required && <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px]">Required</Badge>}
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-mono ${req.priority === 'high' ? 'text-red-400 bg-red-500/10' : 'text-slate-400 bg-slate-500/10'}`}>{req.priority} Priority</span>
+                            <span className="text-sm font-bold text-foreground">{req.title}</span>
+                            {req.is_required && <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[9px]">Required</Badge>}
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-mono ${req.priority === 'high' ? 'text-red-600 dark:text-red-400 bg-red-500/10' : 'text-muted-foreground bg-slate-500/10'}`}>{req.priority} Priority</span>
                           </div>
-                          {req.description && <p className="text-slate-400 text-xs mt-1">{req.description}</p>}
-                          {req.due_date && <p className="text-[10px] text-slate-500 font-mono mt-1"><Clock className="h-3 w-3 inline mr-1" />Due Date: {formatDate(req.due_date)}</p>}
+                          {req.description && <p className="text-muted-foreground text-xs mt-1">{req.description}</p>}
+                          {req.due_date && <p className="text-[10px] text-muted-foreground font-mono mt-1"><Clock className="h-3 w-3 inline mr-1" />Due Date: {formatDate(req.due_date)}</p>}
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0">
-                          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10 border border-red-500/20' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10 border border-purple-500/20' : 'text-slate-400 bg-slate-500/10 border border-slate-500/20'}`}>{req.status === 'needs revision' ? 'revision needed' : req.status}</span>
+                          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : req.status === 'needs revision' ? 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20' : req.status === 'submitted' ? 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20' : 'text-muted-foreground bg-slate-500/10 border border-slate-500/20'}`}>{req.status === 'needs revision' ? 'revision needed' : req.status}</span>
                           
                           {['pending', 'needs revision'].includes(req.status) && (
-                            <Button variant="gold" size="sm" onClick={() => setActiveSubmittingReq(req)} className="h-8 text-xs font-semibold px-4">Provide Details</Button>
+                            <Button variant="default" size="sm" onClick={() => setActiveSubmittingReq(req)} className="h-8 text-xs font-semibold px-4">Provide Details</Button>
                           )}
                         </div>
                       </div>
 
                       {sub && (sub.feedback || sub.notes) && (
-                        <div className="mt-3.5 pt-3 border-t border-[#152e23]/50 space-y-2 text-[11px] leading-relaxed">
-                          {sub.notes && <p className="text-slate-400">Your Submission Notes: "{sub.notes}"</p>}
+                        <div className="mt-3.5 pt-3 border-t border-border/50 space-y-2 text-[11px] leading-relaxed">
+                          {sub.notes && <p className="text-muted-foreground">Your Submission Notes: "{sub.notes}"</p>}
                           {sub.feedback && (
-                            <div className="p-2.5 bg-red-950/15 border border-red-900/20 rounded-lg text-slate-300">
-                              <span className="font-bold text-red-400 uppercase text-[9px] block mb-0.5">Admin Review Comment:</span>
+                            <div className="p-2.5 bg-red-950/15 border border-red-900/20 rounded-lg text-foreground/90">
+                              <span className="font-bold text-red-600 dark:text-red-400 uppercase text-[9px] block mb-0.5">Admin Review Comment:</span>
                               "{sub.feedback}"
                             </div>
                           )}
@@ -1535,10 +1535,10 @@ export default function ClientDashboardPage() {
                 })}
               
               {workspaceRequirements.filter(r => selectedProjectId ? r.project_id === selectedProjectId : true).length === 0 && (
-                <div className="text-center py-12 border border-dashed border-[#152e23] bg-[#091510]/10 rounded-2xl">
-                  <FileCheck2 className="h-8 w-8 mx-auto text-slate-600 mb-2" />
-                  <p className="text-sm font-semibold text-slate-400">No requirements requested</p>
-                  <p className="text-xs text-slate-500 mt-1">Excellent! Netgain Studio has not requested any outstanding assets or files at this stage.</p>
+                <div className="text-center py-12 border border-dashed border-border bg-card/10 rounded-2xl">
+                  <FileCheck2 className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-semibold text-muted-foreground">No requirements requested</p>
+                  <p className="text-xs text-muted-foreground mt-1">Excellent! Netgain Studio has not requested any outstanding assets or files at this stage.</p>
                 </div>
               )}
             </div>
@@ -1550,13 +1550,13 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-bold text-white">Tasks & Sprints</h1>
-                <p className="text-xs text-slate-400 mt-1">Monitor the active milestones, checklists, and execution stages of your projects.</p>
-                <p className="text-[10px] text-slate-500 mt-1">Read-only in the client portal. Admin updates sync here in real time.</p>
+                <h1 className="text-xl font-bold text-foreground">Tasks & Sprints</h1>
+                <p className="text-xs text-muted-foreground mt-1">Monitor the active milestones, checklists, and execution stages of your projects.</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Read-only in the client portal. Admin updates sync here in real time.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
@@ -1567,53 +1567,53 @@ export default function ClientDashboardPage() {
             {(() => {
               const currentProj = projects.find(p => p.id === selectedProjectId)
               if (!currentProj) {
-                return <div className="text-center py-8 text-slate-500 text-xs">No active project workspace selected.</div>
+                return <div className="text-center py-8 text-muted-foreground text-xs">No active project workspace selected.</div>
               }
               const stage = currentProj.currentStage || (currentProj.status === 'active' ? 'Development & Sprints' : currentProj.status === 'completed' ? 'Completed & Deployed' : 'Planned / Backlog')
               return (
                 <div className="space-y-6 max-w-4xl">
-                  <Card className="bg-[#091510] border-[#152e23]/80 p-5 space-y-4">
+                  <Card className="bg-card border-border/80 p-5 space-y-4">
                     <div className="flex justify-between items-center text-xs">
                       <div>
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Current Project Phase</span>
-                        <h3 className="text-sm font-bold text-white mt-0.5">{stage}</h3>
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Current Project Phase</span>
+                        <h3 className="text-sm font-bold text-foreground mt-0.5">{stage}</h3>
                       </div>
-                      <Badge className="bg-gold/15 text-gold border border-gold/25 text-[10px] capitalize px-2 py-0.5">{currentProj.status}</Badge>
+                      <Badge className="bg-primary/10 text-primary border border-primary/20 text-[10px] capitalize px-2 py-0.5">{currentProj.status}</Badge>
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex justify-between text-xs text-slate-400">
+                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Workspace Checklist Progress</span>
-                        <span className="font-semibold text-gold">{currentProj.progress || 0}%</span>
+                        <span className="font-semibold text-primary">{currentProj.progress || 0}%</span>
                       </div>
-                      <Progress value={currentProj.progress || 0} className="h-2 bg-black/40" />
+                      <Progress value={currentProj.progress || 0} className="h-2 bg-muted/30" />
                     </div>
                   </Card>
 
                   {/* Tasks / Milestones List */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Project Milestones</h3>
+                    <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Project Milestones</h3>
                     <div className="grid grid-cols-1 gap-3">
                       {(currentProj as any).milestones && (currentProj as any).milestones.length > 0 ? (
                         (currentProj as any).milestones.map((m: string, i: number) => {
                           const isDone = m.endsWith(' ✅')
                           const cleanText = m.replace(' ✅', '').replace(' ⏳', '')
                           return (
-                            <Card key={i} className="bg-[#091510] border-[#152e23]/60 p-4 flex items-center justify-between text-xs hover:border-gold/30 transition-colors">
+                            <Card key={i} className="bg-card border-border/60 p-4 flex items-center justify-between text-xs hover:border-gold/30 transition-colors">
                               <div className="flex items-center gap-3">
-                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${isDone ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-slate-500/50 bg-slate-500/10 text-slate-500'}`} aria-hidden="true">
+                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${isDone ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-500/50 bg-slate-500/10 text-muted-foreground'}`} aria-hidden="true">
                                   <Check className="h-3 w-3" />
                                 </span>
-                                <span className={`font-semibold ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>{cleanText}</span>
+                                <span className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : 'text-foreground/90'}`}>{cleanText}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Badge className={`text-[9px] ${isDone ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'}`}>{isDone ? 'Completed' : 'Awaiting'}</Badge>
+                                <Badge className={`text-[9px] ${isDone ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-muted-foreground border border-slate-500/20'}`}>{isDone ? 'Completed' : 'Awaiting'}</Badge>
                               </div>
                             </Card>
                           )
                         })
                       ) : (
-                        <div className="text-center py-8 text-slate-500 italic">No milestones defined for this project yet.</div>
+                        <div className="text-center py-8 text-muted-foreground italic">No milestones defined for this project yet.</div>
                       )}
                     </div>
                   </div>
@@ -1628,12 +1628,12 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-bold text-white">Files & Document Workspace</h1>
-                <p className="text-xs text-slate-400 mt-1">Review shared project documents, or upload brand guidelines, logos, and assets directly.</p>
+                <h1 className="text-xl font-bold text-foreground">Files & Document Workspace</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review shared project documents, or upload brand guidelines, logos, and assets directly.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
@@ -1643,16 +1643,16 @@ export default function ClientDashboardPage() {
 
             {selectedProjectId ? (
               <div className="space-y-6">
-                <Card className="bg-[#091510] border-[#152e23]/80 p-5 space-y-3">
-                  <h3 className="text-xs font-bold text-gold uppercase tracking-wider">Upload Brand Asset / Reference File</h3>
+                <Card className="bg-card border-border/80 p-5 space-y-3">
+                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider">Upload Brand Asset / Reference File</h3>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                    <div className="space-y-1 sm:col-span-2 border border-dashed border-[#152e23] rounded-xl p-4 bg-black/10">
-                      <Label className="text-slate-400 block mb-1.5">Select Files (Brand guidelines, design references, ZIPs, etc.)</Label>
+                    <div className="space-y-1 sm:col-span-2 border border-dashed border-border rounded-xl p-4 bg-muted/10">
+                      <Label className="text-muted-foreground block mb-1.5">Select Files (Brand guidelines, design references, ZIPs, etc.)</Label>
                       <Input 
                         type="file" 
                         onChange={e => setClientGeneralFile(e.target.files ? e.target.files[0] : null)}
-                        className="bg-transparent border-none file:bg-gold file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                        className="bg-transparent border-none file:bg-primary file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
                       />
                     </div>
                     <div className="space-y-2 flex flex-col justify-between">
@@ -1671,7 +1671,7 @@ export default function ClientDashboardPage() {
                         </Select>
                       </div>
                       <Button 
-                        variant="gold" 
+                        variant="default" 
                         className="h-8 text-xs font-bold w-full"
                         onClick={handleClientUploadFile}
                         disabled={uploadingClientFile || !clientGeneralFile}
@@ -1683,12 +1683,12 @@ export default function ClientDashboardPage() {
                 </Card>
 
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-white tracking-wide uppercase text-gold">Shared Assets & Files</h3>
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Shared Assets & Files</h3>
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/10">
                             <th className="text-left py-2.5 px-4 font-semibold">Name</th>
                             <th className="text-left py-2.5 px-4 font-semibold">Category</th>
                             <th className="text-left py-2.5 px-4 font-semibold">Uploaded By</th>
@@ -1700,14 +1700,14 @@ export default function ClientDashboardPage() {
                           {workspaceFiles
                             .filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client')
                             .map((file: any) => (
-                              <tr key={file.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
-                                <td className="py-3 px-4 font-semibold text-white truncate max-w-[180px]">{file.name}</td>
+                              <tr key={file.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
+                                <td className="py-3 px-4 font-semibold text-foreground truncate max-w-[180px]">{file.name}</td>
                                 <td className="py-3 px-4">{file.category}</td>
-                                <td className="py-3 px-4 text-slate-400">{file.uploaded_by}</td>
-                                <td className="py-3 px-4 text-slate-400">{formatDate(file.uploaded_at)}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{file.uploaded_by}</td>
+                                <td className="py-3 px-4 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
                                 <td className="py-3 px-4 text-right">
                                   <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10"><Download className="h-3.5 w-3.5" /></Button>
                                   </a>
                                 </td>
                               </tr>
@@ -1716,17 +1716,17 @@ export default function ClientDashboardPage() {
                           {workspaceLinks
                             .filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client')
                             .map((link: any) => (
-                              <tr key={link.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
-                                <td className="py-3 px-4 font-semibold text-white truncate max-w-[180px]">
+                              <tr key={link.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
+                                <td className="py-3 px-4 font-semibold text-foreground truncate max-w-[180px]">
                                   <p>{link.title}</p>
-                                  {link.description && <p className="text-[10px] text-slate-500 font-normal">{link.description}</p>}
+                                  {link.description && <p className="text-[10px] text-muted-foreground font-normal">{link.description}</p>}
                                 </td>
-                                <td className="py-3 px-4"><span className="text-gold font-bold">{link.category} Link</span></td>
-                                <td className="py-3 px-4 text-slate-400">Admin Team</td>
-                                <td className="py-3 px-4 text-slate-400">{formatDate(link.published_at)}</td>
+                                <td className="py-3 px-4"><span className="text-primary font-bold">{link.category} Link</span></td>
+                                <td className="py-3 px-4 text-muted-foreground">Admin Team</td>
+                                <td className="py-3 px-4 text-muted-foreground">{formatDate(link.published_at)}</td>
                                 <td className="py-3 px-4 text-right">
                                   <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10"><ExternalLink className="h-3.5 w-3.5" /></Button>
                                   </a>
                                 </td>
                               </tr>
@@ -1734,7 +1734,7 @@ export default function ClientDashboardPage() {
 
                           {workspaceFiles.filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client').length === 0 &&
                            workspaceLinks.filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client').length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-10 text-slate-500">No shared files or resource links in this project.</td></tr>
+                            <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No shared files or resource links in this project.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1743,7 +1743,7 @@ export default function ClientDashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-500">No active project workspace selected.</div>
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
             )}
           </div>
         )}
@@ -1753,12 +1753,12 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-bold text-white">Performance Reports</h1>
-                <p className="text-xs text-slate-400 mt-1">Download and review performance audits, SEO checkups, and marketing reports generated for your campaigns.</p>
+                <h1 className="text-xl font-bold text-foreground">Performance Reports</h1>
+                <p className="text-xs text-muted-foreground mt-1">Download and review performance audits, SEO checkups, and marketing reports generated for your campaigns.</p>
               </div>
               {projects.length > 1 && (
                 <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-[#091510] border-[#152e23] text-xs text-white"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
@@ -1767,11 +1767,11 @@ export default function ClientDashboardPage() {
             </div>
 
             {selectedProjectId ? (
-              <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+              <div className="border border-border rounded-xl overflow-hidden bg-card">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                      <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/10">
                         <th className="text-left py-2.5 px-4 font-semibold">Report Title</th>
                         <th className="text-left py-2.5 px-4 font-semibold">Report Type</th>
                         <th className="text-left py-2.5 px-4 font-semibold">Version</th>
@@ -1783,24 +1783,24 @@ export default function ClientDashboardPage() {
                       {workspaceReports
                         .filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client')
                         .map((rep: any) => (
-                          <tr key={rep.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10 text-slate-300">
-                            <td className="py-3.5 px-4 font-semibold text-white">{rep.title}</td>
-                            <td className="py-3.5 px-4"><Badge className="bg-gold/10 text-gold border border-gold/20 text-[9px] capitalize">{rep.report_type}</Badge></td>
-                            <td className="py-3.5 px-4 text-slate-400">V{rep.version}</td>
-                            <td className="py-3.5 px-4 text-slate-400">{formatDate(rep.uploaded_at)}</td>
+                          <tr key={rep.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
+                            <td className="py-3.5 px-4 font-semibold text-foreground">{rep.title}</td>
+                            <td className="py-3.5 px-4"><Badge className="bg-primary/10 text-primary border border-gold/20 text-[9px] capitalize">{rep.report_type}</Badge></td>
+                            <td className="py-3.5 px-4 text-muted-foreground">V{rep.version}</td>
+                            <td className="py-3.5 px-4 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
                             <td className="py-3.5 px-4 text-right">
                               <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
-                                <Button variant="outline" size="sm" className="h-7 text-[10px] border-[#152e23] bg-transparent text-slate-300">Download PDF</Button>
+                                <Button variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">Download PDF</Button>
                               </a>
                             </td>
                           </tr>
                         ))}
                       {workspaceReports.filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client').length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-12 text-center text-slate-500">
-                            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30 text-[#D4AF37]" />
+                          <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30 text-primary" />
                             <p className="font-semibold">No performance reports published yet</p>
-                            <p className="text-[10px] text-slate-500 mt-1">Once SEO audits or performance sprints compile, they will appear here.</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Once SEO audits or performance sprints compile, they will appear here.</p>
                           </td>
                         </tr>
                       )}
@@ -1809,7 +1809,7 @@ export default function ClientDashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-500">No active project workspace selected.</div>
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
             )}
           </div>
         )}
@@ -1818,15 +1818,15 @@ export default function ClientDashboardPage() {
         {activeTab === 'meetings' && !selectedDoc && (
           <div className="p-6 space-y-6">
             <div>
-              <h1 className="text-xl font-bold text-white">Consultations & Meetings</h1>
-              <p className="text-xs text-slate-400 mt-1">Review upcoming bookings, review recordings, or check details of completed milestones meetings.</p>
+              <h1 className="text-xl font-bold text-foreground">Consultations & Meetings</h1>
+              <p className="text-xs text-muted-foreground mt-1">Review upcoming bookings, review recordings, or check details of completed milestones meetings.</p>
             </div>
 
-            <Card className="bg-[#091510] border-[#152e23]/80">
+            <Card className="bg-card border-border/80">
               <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold text-gold uppercase tracking-wider">Book a Meeting</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">Book a Meeting</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xl">
                     Schedule a call with the Netgain team through Cal.com. Any booking will sync back into both the client portal and the admin meetings board.
                   </p>
                 </div>
@@ -1837,12 +1837,12 @@ export default function ClientDashboardPage() {
                     rel="noopener noreferrer"
                     className="shrink-0"
                   >
-                    <Button variant="gold" size="sm" className="h-9 font-semibold px-4 gap-1.5">
+                    <Button variant="default" size="sm" className="h-9 font-semibold px-4 gap-1.5">
                       Book via Cal.com <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
                   </a>
                 ) : (
-                  <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 px-3 py-1.5">
+                  <Badge className="bg-slate-500/10 text-muted-foreground border border-slate-500/20 px-3 py-1.5">
                     Cal.com booking link not configured
                   </Badge>
                 )}
@@ -1856,20 +1856,20 @@ export default function ClientDashboardPage() {
                 })
                 const isUpcoming = meet.status === 'upcoming'
                 return (
-                  <Card key={meet.id} className="bg-[#091510] border-[#152e23]/80 p-5 text-xs text-slate-300 relative overflow-hidden">
+                  <Card key={meet.id} className="bg-card border-border/80 p-5 text-xs text-foreground/90 relative overflow-hidden">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">{meet.event_type || 'Consultation Meeting'}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${isUpcoming ? 'text-[#D4AF37] bg-gold/10' : 'text-slate-500 bg-slate-500/10'}`}>{meet.status}</span>
+                          <span className="text-sm font-bold text-foreground">{meet.event_type || 'Consultation Meeting'}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${isUpcoming ? 'text-primary bg-primary/10' : 'text-muted-foreground bg-slate-500/10'}`}>{meet.status}</span>
                         </div>
-                        <p className="text-slate-400 font-medium">{dateStr} at {meet.meeting_time.slice(0,5)} ({meet.meeting_duration} Mins)</p>
-                        {meet.notes && <p className="text-slate-500 mt-1.5 italic font-mono">Agenda Notes: "{meet.notes}"</p>}
+                        <p className="text-muted-foreground font-medium">{dateStr} at {meet.meeting_time.slice(0,5)} ({meet.meeting_duration} Mins)</p>
+                        {meet.notes && <p className="text-muted-foreground mt-1.5 italic font-mono">Agenda Notes: "{meet.notes}"</p>}
                       </div>
 
                       {isUpcoming && meet.meet_link && (
                         <a href={meet.meet_link} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                          <Button variant="gold" size="sm" className="h-8 font-semibold px-4 gap-1.5">Join Call <ExternalLink className="h-3.5 w-3.5" /></Button>
+                          <Button variant="default" size="sm" className="h-8 font-semibold px-4 gap-1.5">Join Call <ExternalLink className="h-3.5 w-3.5" /></Button>
                         </a>
                       )}
                     </div>
@@ -1877,10 +1877,10 @@ export default function ClientDashboardPage() {
                 )
               })}
               {workspaceMeetings.length === 0 && (
-                <div className="text-center py-12 border border-dashed border-[#152e23] bg-[#091510]/10 rounded-2xl">
-                  <Calendar className="h-8 w-8 mx-auto text-slate-600 mb-2" />
-                  <p className="text-sm font-semibold text-slate-400">No scheduled meetings</p>
-                  <p className="text-xs text-slate-500 mt-1">Need to schedule a sync? Contact your Netgain account executive to schedule a call.</p>
+                <div className="text-center py-12 border border-dashed border-border bg-card/10 rounded-2xl">
+                  <Calendar className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-semibold text-muted-foreground">No scheduled meetings</p>
+                  <p className="text-xs text-muted-foreground mt-1">Need to schedule a sync? Contact your Netgain account executive to schedule a call.</p>
                 </div>
               )}
             </div>
@@ -1891,26 +1891,26 @@ export default function ClientDashboardPage() {
         {activeTab === 'notifications' && !selectedDoc && (
           <div className="p-6 space-y-6 max-w-3xl">
             <div>
-              <h1 className="text-xl font-bold text-white">Client Notifications</h1>
-              <p className="text-xs text-slate-400 mt-1">Receive live system logs, publication schedules, and signature confirmations.</p>
+              <h1 className="text-xl font-bold text-foreground">Client Notifications</h1>
+              <p className="text-xs text-muted-foreground mt-1">Receive live system logs, publication schedules, and signature confirmations.</p>
             </div>
 
-            <Card className="bg-[#091510] border-[#152e23]/80">
-              <CardContent className="p-0 divide-y divide-[#152e23]">
+            <Card className="bg-card border-border/80">
+              <CardContent className="p-0 divide-y divide-border">
                 {notifications.map(notif => (
-                  <div key={notif.id} className="p-4 flex gap-4 items-start hover:bg-[#11241c]/20 transition-colors">
-                    <div className={`p-2 rounded-lg mt-0.5 shrink-0 border ${notif.is_read ? 'bg-[#070e0b]/50 border-slate-700/30 text-slate-500' : 'bg-gold/10 border-gold/20 text-gold'}`}>
+                  <div key={notif.id} className="p-4 flex gap-4 items-start hover:bg-accent/20 transition-colors">
+                    <div className={`p-2 rounded-lg mt-0.5 shrink-0 border ${notif.is_read ? 'bg-background/50 border-slate-700/30 text-muted-foreground' : 'bg-primary/10 border-gold/20 text-primary'}`}>
                       <Bell className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
-                      <p className={`text-xs font-semibold ${notif.is_read ? 'text-slate-300' : 'text-white'}`}>{notif.title}</p>
-                      <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-line">{notif.message}</p>
-                      <p className="text-[10px] text-slate-500 mt-2 font-mono">{formatDate(notif.created_at)}</p>
+                      <p className={`text-xs font-semibold ${notif.is_read ? 'text-foreground/90' : 'text-foreground'}`}>{notif.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed whitespace-pre-line">{notif.message}</p>
+                      <p className="text-[10px] text-muted-foreground mt-2 font-mono">{formatDate(notif.created_at)}</p>
                     </div>
                   </div>
                 ))}
                 {notifications.length === 0 && (
-                  <div className="p-12 text-center text-slate-500 text-xs">
+                  <div className="p-12 text-center text-muted-foreground text-xs">
                     No notifications received.
                   </div>
                 )}
@@ -1923,39 +1923,39 @@ export default function ClientDashboardPage() {
         {activeTab === 'support' && !selectedDoc && (
           <div className="p-6 space-y-6 max-w-4xl">
             <div>
-              <h1 className="text-xl font-bold text-white">Customer Support Center</h1>
-              <p className="text-xs text-slate-400 mt-1">Submit support tickets, report account discrepancies, or schedule a founder consultation.</p>
+              <h1 className="text-xl font-bold text-foreground">Customer Support Center</h1>
+              <p className="text-xs text-muted-foreground mt-1">Submit support tickets, report account discrepancies, or schedule a founder consultation.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="bg-[#091510] border-[#152e23]/80 lg:col-span-2">
+              <Card className="bg-card border-border/80 lg:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-sm font-bold text-gold uppercase tracking-wider">Raise Support Ticket</CardTitle>
-                  <CardDescription className="text-xs text-slate-400">Describe your inquiry and our team will get back to you within 2-4 hours.</CardDescription>
+                  <CardTitle className="text-sm font-bold text-primary uppercase tracking-wider">Raise Support Ticket</CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">Describe your inquiry and our team will get back to you within 2-4 hours.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSendSupport} className="space-y-4 text-xs">
                     <div className="space-y-1">
-                      <Label htmlFor="subj" className="text-slate-400">Subject / Category</Label>
+                      <Label htmlFor="subj" className="text-muted-foreground">Subject / Category</Label>
                       <Input
                         id="subj"
                         placeholder="e.g. Account Billing Query, Project Milestone Revision"
                         value={supportSubject}
                         onChange={e => setSupportSubject(e.target.value)}
-                        className="bg-black/20 border-[#152e23] text-white focus-visible:ring-gold"
+                        className="bg-muted/10 border-border text-foreground focus-visible:ring-gold"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="msg" className="text-slate-400">Description of Issue</Label>
+                      <Label htmlFor="msg" className="text-muted-foreground">Description of Issue</Label>
                       <Textarea
                         id="msg"
                         placeholder="Please details what you need..."
                         value={supportMessage}
                         onChange={e => setSupportMessage(e.target.value)}
-                        className="bg-black/20 border-[#152e23] text-white min-h-[150px] resize-y focus-visible:ring-gold"
+                        className="bg-muted/10 border-border text-foreground min-h-[150px] resize-y focus-visible:ring-gold"
                       />
                     </div>
-                    <Button type="submit" variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                    <Button type="submit" variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
                       {submittingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Send Ticket
                     </Button>
@@ -1964,43 +1964,43 @@ export default function ClientDashboardPage() {
               </Card>
 
               <div className="space-y-4 text-xs">
-                <Card className="bg-[#091510] border-[#152e23]/80">
-                  <CardHeader><CardTitle className="text-xs font-bold text-gold uppercase tracking-wider">Direct Account Support</CardTitle></CardHeader>
+                <Card className="bg-card border-border/80">
+                  <CardHeader><CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Direct Account Support</CardTitle></CardHeader>
                   <CardContent className="space-y-3 leading-relaxed">
                     <div>
-                      <p className="text-slate-400 font-medium">Primary Email</p>
-                      <p className="text-[#D4AF37] font-semibold mt-0.5">{companySettings?.company?.email || 'support@netgainstudio.com'}</p>
+                      <p className="text-muted-foreground font-medium">Primary Email</p>
+                      <p className="text-primary font-semibold mt-0.5">{companySettings?.company?.email || 'support@netgainstudio.com'}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-medium">Finance & Invoices</p>
-                      <p className="text-[#D4AF37] font-semibold mt-0.5">{companySettings?.company?.email || 'accounts@netgainstudio.com'}</p>
+                      <p className="text-muted-foreground font-medium">Finance & Invoices</p>
+                      <p className="text-primary font-semibold mt-0.5">{companySettings?.company?.email || 'accounts@netgainstudio.com'}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-medium">Head Office Consultation</p>
-                      <p className="text-slate-300 font-semibold mt-0.5">{companySettings?.company?.phone || '+91 (800) 555-NETGAIN'}</p>
+                      <p className="text-muted-foreground font-medium">Head Office Consultation</p>
+                      <p className="text-foreground/90 font-semibold mt-0.5">{companySettings?.company?.phone || '+91 (800) 555-NETGAIN'}</p>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-[#091510] border-[#152e23]/80 text-white">
-                  <CardHeader className="pb-2 border-b border-[#152e23]/50">
-                    <CardTitle className="text-xs font-bold text-gold uppercase tracking-wider">Sent Support Tickets</CardTitle>
+                <Card className="bg-card border-border/80 text-foreground">
+                  <CardHeader className="pb-2 border-b border-border/50">
+                    <CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Sent Support Tickets</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 space-y-4 max-h-[300px] overflow-y-auto pt-4">
                     {clientSupportTickets.map(ticket => (
-                      <div key={ticket.id} className="p-2.5 rounded-lg bg-black/20 border border-[#152e23]/50 space-y-1.5">
+                      <div key={ticket.id} className="p-2.5 rounded-lg bg-muted/10 border border-border/50 space-y-1.5">
                         <div className="flex justify-between items-center">
-                          <span className="font-semibold text-slate-200 truncate max-w-[120px]">{ticket.title}</span>
-                          <Badge className={`text-[8px] font-mono capitalize ${ticket.is_read ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' : 'bg-amber-500/15 text-amber-500 border border-amber-500/25'}`}>
+                          <span className="font-semibold text-foreground/90 truncate max-w-[120px]">{ticket.title}</span>
+                          <Badge className={`text-[8px] font-mono capitalize ${ticket.is_read ? 'bg-slate-500/10 text-muted-foreground border border-slate-500/20' : 'bg-amber-500/15 text-amber-500 border border-amber-500/25'}`}>
                             {ticket.is_read ? 'Read' : 'Open'}
                           </Badge>
                         </div>
-                        <p className="text-[11px] text-slate-400 leading-normal line-clamp-2">{ticket.message}</p>
-                        <p className="text-[9px] text-slate-500 font-mono">{formatDate(ticket.created_at)}</p>
+                        <p className="text-[11px] text-muted-foreground leading-normal line-clamp-2">{ticket.message}</p>
+                        <p className="text-[9px] text-muted-foreground font-mono">{formatDate(ticket.created_at)}</p>
                       </div>
                     ))}
                     {clientSupportTickets.length === 0 && (
-                      <div className="text-center text-slate-500 text-xs py-4">No support tickets raised yet.</div>
+                      <div className="text-center text-muted-foreground text-xs py-4">No support tickets raised yet.</div>
                     )}
                   </CardContent>
                 </Card>
@@ -2013,40 +2013,40 @@ export default function ClientDashboardPage() {
         {activeTab === 'profile' && !selectedDoc && (
           <div className="p-6 space-y-6 max-w-3xl">
             <div>
-              <h1 className="text-xl font-bold text-white">Company Profile</h1>
-              <p className="text-xs text-slate-400 mt-1">Review your business profiles, and authorized client contact configurations.</p>
+              <h1 className="text-xl font-bold text-foreground">Company Profile</h1>
+              <p className="text-xs text-muted-foreground mt-1">Review your business profiles, and authorized client contact configurations.</p>
             </div>
 
-            <Card className="bg-[#091510] border-[#152e23]/80 text-xs">
-              <CardHeader className="border-b border-[#152e23]/40"><CardTitle className="text-sm font-bold text-gold uppercase tracking-wider">Netgain Business Profile</CardTitle></CardHeader>
+            <Card className="bg-card border-border/80 text-xs">
+              <CardHeader className="border-b border-border/40"><CardTitle className="text-sm font-bold text-primary uppercase tracking-wider">Netgain Business Profile</CardTitle></CardHeader>
               <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-5 leading-relaxed">
                 <div>
-                  <p className="text-slate-400 font-medium">Business / Company Name</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{session?.company}</p>
+                  <p className="text-muted-foreground font-medium">Business / Company Name</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{session?.company}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-medium">Primary Contact Representative</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{session?.name}</p>
+                  <p className="text-muted-foreground font-medium">Primary Contact Representative</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{session?.name}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-medium">Authorized Account Email</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{session?.email}</p>
+                  <p className="text-muted-foreground font-medium">Authorized Account Email</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{session?.email}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-medium">Authorized Phone</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{session?.phone || 'Not Configured'}</p>
+                  <p className="text-muted-foreground font-medium">Authorized Phone</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{session?.phone || 'Not Configured'}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-medium">Authorized Domain / Website</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.website || session?.website || ''}</p>
+                  <p className="text-muted-foreground font-medium">Authorized Domain / Website</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{clientDetails?.website || session?.website || ''}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-medium">GST registration</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.gst || session?.gst || 'GST not provided'}</p>
+                  <p className="text-muted-foreground font-medium">GST registration</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{clientDetails?.gst || session?.gst || 'GST not provided'}</p>
                 </div>
                 <div className="sm:col-span-2">
-                  <p className="text-slate-400 font-medium">Billing Address</p>
-                  <p className="text-white font-bold text-sm mt-0.5">{clientDetails?.address || session?.address || '—'}</p>
+                  <p className="text-muted-foreground font-medium">Billing Address</p>
+                  <p className="text-foreground font-bold text-sm mt-0.5">{clientDetails?.address || session?.address || '—'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -2057,34 +2057,34 @@ export default function ClientDashboardPage() {
         {selectedDoc && (
           <div className="p-6 space-y-6 max-w-5xl">
             {/* Viewer Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#152e23]">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border">
               <div className="flex items-center gap-3">
-                <Button onClick={() => setSelectedDoc(null)} variant="outline" size="sm" className="h-8 border-[#152e23] bg-transparent text-slate-300 gap-1.5">
+                <Button onClick={() => setSelectedDoc(null)} variant="outline" size="sm" className="h-8 border-border bg-transparent text-foreground/90 gap-1.5">
                   <ArrowLeft className="h-3.5 w-3.5" /> Back
                 </Button>
                 <div>
-                  <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
                     {selectedDoc.title}
-                    <Badge className="bg-gold/10 text-[#D4AF37] border border-gold/25 font-mono text-[10px]">V{selectedDoc.published_version}</Badge>
+                    <Badge className="bg-primary/10 text-primary border border-primary/20 font-mono text-[10px]">V{selectedDoc.published_version}</Badge>
                   </h1>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">Issued: {formatDate(selectedDoc.date)} · Ref: {selectedDoc.docId}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Issued: {formatDate(selectedDoc.date)} · Ref: {selectedDoc.docId}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Button onClick={() => handleDownloadPdf(selectedDoc)} variant="outline" size="sm" className="h-8 text-xs border-[#152e23] bg-transparent text-slate-300 gap-1.5">
+                <Button onClick={() => handleDownloadPdf(selectedDoc)} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
                   <Download className="h-3.5 w-3.5" /> Download
                 </Button>
-                <Button onClick={printDocument} variant="outline" size="sm" className="h-8 text-xs border-[#152e23] bg-transparent text-slate-300 gap-1.5">
+                <Button onClick={printDocument} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
                   <Printer className="h-3.5 w-3.5" /> Print
                 </Button>
               </div>
             </div>
 
             {/* Mobile helper banner */}
-            <div className="lg:hidden bg-gold/10 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
+            <div className="lg:hidden bg-primary/10 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-foreground/90">
               <span className="flex items-center gap-1.5 font-medium">
-                <AlertTriangle className="h-4 w-4 text-[#D4AF37] shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-primary shrink-0" />
                 Mobile View: If you can only see the first page, open the full document in a new tab.
               </span>
               <Button 
@@ -2092,7 +2092,7 @@ export default function ClientDashboardPage() {
                   const url = selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}`
                   window.open(url, '_blank')
                 }} 
-                variant="gold" 
+                variant="default" 
                 size="sm" 
                 className="h-8 text-xs text-black font-semibold shrink-0"
               >
@@ -2102,7 +2102,7 @@ export default function ClientDashboardPage() {
 
             {/* Document body preview with iframe */}
             <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3 bg-black border border-[#152e23] rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
+              <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
                  <iframe 
                    id="doc-viewer-iframe"
                    src={selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}#toolbar=0` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}#toolbar=0`} 
@@ -2115,22 +2115,22 @@ export default function ClientDashboardPage() {
 
               {/* Sidebar Action Panel */}
               <div className="lg:col-span-1 space-y-6">
-                <Card className="bg-[#121212] border-white/5 shadow-xl">
+                <Card className="bg-card border-border shadow-xl">
                   <CardContent className="p-5 space-y-5">
                     
                     {/* Status & Version */}
-                    <div className="flex flex-col gap-2 pb-4 border-b border-white/5">
+                    <div className="flex flex-col gap-2 pb-4 border-b border-border">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-400 font-medium">Status</span>
+                        <span className="text-xs text-muted-foreground font-medium">Status</span>
                         {getStatusBadgeStyled(selectedDoc.status)}
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-400 font-medium">Version</span>
-                        <span className="font-mono font-bold text-slate-300">V{selectedDoc.published_version}</span>
+                        <span className="text-xs text-muted-foreground font-medium">Version</span>
+                        <span className="font-mono font-bold text-foreground/90">V{selectedDoc.published_version}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-400 font-medium">Published</span>
-                        <span className="font-semibold text-slate-300 text-xs">{formatDate(selectedDoc.published_at)}</span>
+                        <span className="text-xs text-muted-foreground font-medium">Published</span>
+                        <span className="font-semibold text-foreground/90 text-xs">{formatDate(selectedDoc.published_at)}</span>
                       </div>
                     </div>
 
@@ -2140,21 +2140,21 @@ export default function ClientDashboardPage() {
                      ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && (
                       <div className="space-y-2 pt-2">
                         {selectedDoc.type === 'Quotation' ? (
-                          <Button onClick={handleApproveDoc} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                          <Button onClick={handleApproveDoc} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
                             {submittingAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                             Approve Quotation
                           </Button>
                         ) : (
-                          <Button onClick={() => setShowSignModal(true)} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                          <Button onClick={() => setShowSignModal(true)} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
                             <FileSignature className="h-3.5 w-3.5" />
                             Accept & Sign
                           </Button>
                         )}
                         
-                        <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-[#152e23] bg-transparent text-slate-300 hover:bg-white/5 h-9">
+                        <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-border bg-transparent text-foreground/90 hover:bg-white/5 h-9">
                           Request Changes
                         </Button>
-                        <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
+                        <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
                           Decline / Reject
                         </Button>
                       </div>
@@ -2163,9 +2163,9 @@ export default function ClientDashboardPage() {
                     {/* Needs revision state */}
                     {selectedDoc.status?.toLowerCase() === 'needs revision' && (
                       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
-                        <AlertTriangle className="h-7 w-7 text-amber-400 mx-auto" />
-                        <p className="text-xs font-bold text-amber-400">Revision Requested</p>
-                        <p className="text-[10px] text-slate-400 leading-normal">
+                        <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400 mx-auto" />
+                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Revision Requested</p>
+                        <p className="text-[10px] text-muted-foreground leading-normal">
                           Your change request has been sent to the Netgain team. We will update this document shortly.
                         </p>
                       </div>
@@ -2175,13 +2175,13 @@ export default function ClientDashboardPage() {
                     {(selectedDoc.signed_at || 
                       ['completed', 'signed', 'approved'].includes(selectedDoc.status?.toLowerCase() || '')) && (
                       <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
-                        <CheckCircle2 className="h-7 w-7 text-emerald-400 mx-auto" />
-                        <p className="text-xs font-bold text-emerald-400">✅ Approved & Signed</p>
-                        <p className="text-[10px] text-slate-400 leading-normal">
+                        <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400 mx-auto" />
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✅ Approved & Signed</p>
+                        <p className="text-[10px] text-muted-foreground leading-normal">
                           This document has been digitally signed and is legally binding.
                         </p>
                         {selectedDoc.signed_at && (
-                          <p className="text-[9px] text-slate-500">Signed on {formatDate(selectedDoc.signed_at)}</p>
+                          <p className="text-[9px] text-muted-foreground">Signed on {formatDate(selectedDoc.signed_at)}</p>
                         )}
                       </div>
                     )}
@@ -2189,7 +2189,7 @@ export default function ClientDashboardPage() {
                     {/* Invoices specific pay action if unpaid */}
                     {selectedDoc.type === 'Invoice' && selectedDoc.status !== 'paid' && (
                       <div className="pt-2">
-                        <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="gold" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                        <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
                           Pay Now (Future)
                         </Button>
                       </div>
@@ -2198,17 +2198,17 @@ export default function ClientDashboardPage() {
                 </Card>
 
                 {/* History Log */}
-                <Card className="bg-[#091510] border-[#152e23] text-white">
-                  <CardHeader className="pb-3 border-b border-[#152e23]/50">
-                    <CardTitle className="text-xs font-bold text-gold uppercase tracking-wider">Document Timeline</CardTitle>
+                <Card className="bg-card border-border text-foreground">
+                  <CardHeader className="pb-3 border-b border-border/50">
+                    <CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Document Timeline</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 space-y-4 max-h-[220px] overflow-y-auto">
                     {(selectedDoc.raw.history || []).slice().reverse().map((h: any, i: number) => (
                       <div key={i} className="flex gap-2.5 text-[11px]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-gold/50 mt-1.5 shrink-0" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 shrink-0" />
                         <div>
-                          <p className="text-slate-300 leading-snug">{h.action}</p>
-                          <p className="text-[9px] text-slate-500 mt-0.5">{formatDate(h.date)}</p>
+                          <p className="text-foreground/90 leading-snug">{h.action}</p>
+                          <p className="text-[9px] text-muted-foreground mt-0.5">{formatDate(h.date)}</p>
                         </div>
                       </div>
                     ))}
@@ -2224,48 +2224,48 @@ export default function ClientDashboardPage() {
 
       {/* SIGNATURE MODAL */}
       <Dialog open={showSignModal} onOpenChange={setShowSignModal}>
-        <DialogContent className="max-w-md bg-[#091510] border-[#152e23]">
+        <DialogContent className="max-w-md bg-card border-border">
           {/* Cursive Google Fonts */}
           <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Dancing+Script&family=Sacramento&display=swap" rel="stylesheet" />
 
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#D4AF37]">
-              <FileSignature className="h-5 w-5 text-gold" />
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <FileSignature className="h-5 w-5 text-primary" />
               Digitally Sign Document
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-400">
+            <DialogDescription className="text-xs text-muted-foreground">
               Sign document {selectedDoc?.docId} for proposed services value.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4 text-xs">
             <div className="space-y-1.5">
-              <Label htmlFor="sign-name" className="text-slate-400">Full Signature Name</Label>
+              <Label htmlFor="sign-name" className="text-muted-foreground">Full Signature Name</Label>
               <Input
                 id="sign-name"
                 placeholder="Type your name to sign"
                 value={signerName}
                 onChange={e => setSignerName(e.target.value)}
-                className="bg-black/20 border-[#152e23] text-white focus-visible:ring-gold"
+                className="bg-muted/10 border-border text-foreground focus-visible:ring-gold"
               />
             </div>
 
             {/* Signature Pad Section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-slate-400">Signature Input</Label>
-                <div className="flex bg-black border border-[#152e23] rounded-lg p-0.5">
+                <Label className="text-muted-foreground">Signature Input</Label>
+                <div className="flex bg-black border border-border rounded-lg p-0.5">
                   <button
                     type="button"
                     onClick={() => setSigType('draw')}
-                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                   >
                     <PenTool className="h-3 w-3" /> Draw
                   </button>
                   <button
                     type="button"
                     onClick={() => setSigType('type')}
-                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                   >
                     <Type className="h-3 w-3" /> Type
                   </button>
@@ -2275,7 +2275,7 @@ export default function ClientDashboardPage() {
               {sigType === 'draw' ? (
                 /* Canvas draw pad */
                 <div className="space-y-2">
-                  <div className="border border-[#152e23] rounded-lg bg-black overflow-hidden relative group">
+                  <div className="border border-border rounded-lg bg-black overflow-hidden relative group">
                     <canvas
                       ref={canvasRef}
                       width={360}
@@ -2290,12 +2290,12 @@ export default function ClientDashboardPage() {
                       onTouchEnd={stopDrawing}
                     />
                     {!drawSaved && drawHistory.length === 0 && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-600 text-xs font-mono">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-muted-foreground text-xs font-mono">
                         Draw signature using Mouse / Touch here
                       </div>
                     )}
                     {drawSaved && (
-                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-400 text-xs font-bold pointer-events-none">
+                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 text-xs font-bold pointer-events-none">
                         <CheckCircle2 className="h-5 w-5 mb-1" /> Signature Locked & Saved
                       </div>
                     )}
@@ -2306,7 +2306,7 @@ export default function ClientDashboardPage() {
                         type="button"
                         onClick={clearCanvas}
                         variant="outline"
-                        className="h-7 px-2 text-[10px] border-[#152e23] text-slate-400 hover:text-white bg-transparent"
+                        className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                       >
                         Clear
                       </Button>
@@ -2314,7 +2314,7 @@ export default function ClientDashboardPage() {
                         type="button"
                         onClick={undoCanvas}
                         variant="outline"
-                        className="h-7 px-2 text-[10px] border-[#152e23] text-slate-400 hover:text-white bg-transparent"
+                        className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                         disabled={drawHistory.length === 0}
                       >
                         Undo
@@ -2324,7 +2324,7 @@ export default function ClientDashboardPage() {
                       type="button"
                       onClick={saveDrawnSignature}
                       variant="outline"
-                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${drawSaved ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
+                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${drawSaved ? 'border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-primary hover:bg-[#D4AF37]/10'}`}
                     >
                       {drawSaved ? 'Saved ✔' : 'Save Signature'}
                     </Button>
@@ -2339,15 +2339,15 @@ export default function ClientDashboardPage() {
                         key={font.value}
                         type="button"
                         onClick={() => { setSelectedFont(font.value); setTypeSaved(false); }}
-                        className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-white' : 'border-[#152e23] text-slate-400 hover:text-slate-200'}`}
+                        className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground/90'}`}
                       >
                         {font.name}
                       </button>
                     ))}
                   </div>
-                  <div className="border border-[#152e23] rounded-lg p-4 bg-black h-20 flex items-center justify-center relative overflow-hidden">
+                  <div className="border border-border rounded-lg p-4 bg-black h-20 flex items-center justify-center relative overflow-hidden">
                     <p
-                      className="text-2xl text-center text-[#D4AF37] px-4 truncate"
+                      className="text-2xl text-center text-primary px-4 truncate"
                       style={{
                         fontFamily: fonts.find(f => f.value === selectedFont)?.family || 'serif'
                       }}
@@ -2355,7 +2355,7 @@ export default function ClientDashboardPage() {
                       {signerName || 'Signature Preview'}
                     </p>
                     {typeSaved && (
-                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-400 text-xs font-bold pointer-events-none">
+                      <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 text-xs font-bold pointer-events-none">
                         <CheckCircle2 className="h-5 w-5 mb-0.5" /> Signature Saved
                       </div>
                     )}
@@ -2365,7 +2365,7 @@ export default function ClientDashboardPage() {
                       type="button"
                       onClick={saveTypedSignature}
                       variant="outline"
-                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${typeSaved ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}
+                      className={`h-7 px-2.5 text-[10px] gap-1 font-bold ${typeSaved ? 'border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' : 'border-[#D4AF37]/30 text-primary hover:bg-[#D4AF37]/10'}`}
                     >
                       {typeSaved ? 'Saved ✔' : 'Save Signature'}
                     </Button>
@@ -2374,12 +2374,12 @@ export default function ClientDashboardPage() {
               )}
             </div>
 
-            <label className="flex items-start gap-2.5 cursor-pointer leading-normal text-slate-400">
+            <label className="flex items-start gap-2.5 cursor-pointer leading-normal text-muted-foreground">
               <input
                 type="checkbox"
                 checked={signingAgreed}
                 onChange={e => setSigningAgreed(e.target.checked)}
-                className="rounded mt-0.5 border-[#152e23] text-gold focus:ring-gold"
+                className="rounded mt-0.5 border-border text-primary focus:ring-gold"
               />
               <span>I confirm that I am authorized to sign on behalf of {session?.company} and accept the terms of this document.</span>
             </label>
@@ -2388,7 +2388,7 @@ export default function ClientDashboardPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowSignModal(false); setSignerName(''); setSigningAgreed(false); setDrawHistory([]); setDrawSaved(false); setSavedDrawData(null); setTypeSaved(false); }}>Cancel</Button>
             <Button
-              variant="gold"
+              variant="default"
               disabled={submittingAction || !signerName.trim() || !signingAgreed || (sigType === 'draw' ? !drawSaved : !typeSaved)}
               onClick={submitSignature}
               className="gap-2 text-black font-semibold"
@@ -2402,32 +2402,32 @@ export default function ClientDashboardPage() {
 
       {/* REVISION NOTES MODAL */}
       <Dialog open={showRevisionModal} onOpenChange={setShowRevisionModal}>
-        <DialogContent className="max-w-md bg-[#091510] border-[#152e23]">
+        <DialogContent className="max-w-md bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-gold">
-              <AlertTriangle className="h-5 w-5 text-gold" />
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <AlertTriangle className="h-5 w-5 text-primary" />
               Request Document Revision
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-400">
+            <DialogDescription className="text-xs text-muted-foreground">
               Detail the updates or changes required before you sign.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-3 text-xs">
-            <Label htmlFor="rev-notes" className="text-slate-400">Change Request Details</Label>
+            <Label htmlFor="rev-notes" className="text-muted-foreground">Change Request Details</Label>
             <Textarea
               id="rev-notes"
               placeholder="e.g. Please update scope milestones to week 4, modify setup fee from ₹15k to ₹12k..."
               value={revisionNotes}
               onChange={e => setRevisionNotes(e.target.value)}
-              className="bg-black/20 border-[#152e23] text-white min-h-[120px] resize-y focus-visible:ring-gold"
+              className="bg-muted/10 border-border text-foreground min-h-[120px] resize-y focus-visible:ring-gold"
             />
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowRevisionModal(false); setRevisionNotes('') }}>Cancel</Button>
             <Button
-              variant="gold"
+              variant="default"
               disabled={submittingAction || !revisionNotes.trim()}
               onClick={submitRevisionRequest}
               className="gap-2"
