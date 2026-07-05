@@ -26,11 +26,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         {/* Mobile Sidebar drawer */}
         <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <Sidebar onMobileClose={() => setMobileMenuOpen(false)} />
+          <Sidebar onMobileCloseAction={() => setMobileMenuOpen(false)} />
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-          <TopBar onMenuClick={() => setMobileMenuOpen(true)} />
+          <TopBar onMenuClickAction={() => setMobileMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto bg-background">
             <div className="p-4 md:p-6 max-w-[1600px] mx-auto animate-fade-in">
               {children}

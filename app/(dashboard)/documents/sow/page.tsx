@@ -72,6 +72,8 @@ export default function SOWPage() {
   const { user } = useUser()
   const [sows, setSows] = useState<SOW[]>([])
   const [sourceDocs, setSourceDocs] = useState<any[]>([])
+  const [quotations, setQuotations] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
   const [servicesMap, setServicesMap] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -186,12 +188,60 @@ export default function SOWPage() {
           }
 
           const docs: any[] = []
+          const mappedQuos: any[] = []
           if (qRes.data) {
-            qRes.data.forEach((q: any) => docs.push({ type: 'Quotation', id: q.id, docId: q.doc_id, client: q.client, contact: q.contact, phone: q.phone, email: q.email, project: q.project_title, value: q.amount, serviceIds: q.service_ids || [] }))
+            qRes.data.forEach((q: any) => {
+              const quoItem = {
+                id: q.id,
+                docId: q.doc_id,
+                client: q.client,
+                contact: q.contact || '',
+                phone: q.phone || '',
+                email: q.email || '',
+                projectTitle: q.project_title || '',
+                amount: Number(q.amount) || 0,
+                serviceIds: q.service_ids || [],
+                customTerms: q.custom_terms || '',
+                paymentTermsOneTime: q.payment_terms_one_time,
+                paymentTermsMonthly: q.payment_terms_monthly,
+                extraTerms: q.extra_terms,
+                adBudget: q.ad_budget,
+                adBudgetPct: q.ad_budget_pct,
+                adBudgetFixed: q.ad_budget_fixed,
+                adBudgetOverride: q.ad_budget_override,
+                adBudgetBillThrough: q.ad_budget_bill_through,
+              }
+              mappedQuos.push(quoItem)
+              docs.push({ type: 'Quotation', id: q.id, docId: q.doc_id, client: q.client, contact: q.contact, phone: q.phone, email: q.email, project: q.project_title, value: q.amount, serviceIds: q.service_ids || [] })
+            })
           }
+          setQuotations(mappedQuos)
+
+          const mappedInvs: any[] = []
           if (iRes.data) {
-            iRes.data.forEach((i: any) => docs.push({ type: 'Invoice', id: i.id, docId: i.doc_id, client: i.client, contact: i.contact, phone: i.phone, email: i.email, project: `Project for ${i.client}`, value: i.amount, serviceIds: i.service_ids || [] }))
+            iRes.data.forEach((i: any) => {
+              const invItem = {
+                id: i.id,
+                docId: i.doc_id,
+                client: i.client,
+                contact: i.contact || '',
+                phone: i.phone || '',
+                email: i.email || '',
+                amount: Number(i.amount) || 0,
+                serviceIds: i.service_ids || [],
+                customTerms: i.custom_terms || '',
+                adBudget: i.ad_budget,
+                adBudgetPct: i.ad_budget_pct,
+                adBudgetFixed: i.ad_budget_fixed,
+                adBudgetOverride: i.ad_budget_override,
+                adBudgetBillThrough: i.ad_budget_bill_through,
+                customSubtotal: i.custom_subtotal ? Number(i.custom_subtotal) : null,
+              }
+              mappedInvs.push(invItem)
+              docs.push({ type: 'Invoice', id: i.id, docId: i.doc_id, client: i.client, contact: i.contact, phone: i.phone, email: i.email, project: `Project for ${i.client}`, value: i.amount, serviceIds: i.service_ids || [] })
+            })
           }
+          setInvoices(mappedInvs)
           setSourceDocs(docs)
 
           let mappedSows: SOW[] = []
@@ -262,14 +312,17 @@ export default function SOWPage() {
     }
   }, [showCreate, editItem, form.contact])
 
-  function handleSourceDocSelect(docId: string) {
-    const doc = sourceDocs.find(d => d.docId === docId)
-    if (!doc) return
-    
-    // Build deliverables list from services
+  function handleQuotationSelect(docId: string) {
+    const q = quotations.find(quo => quo.docId === docId)
+    if (!q) return
+
+    // 1. Objectives
+    const objectivesText = `To successfully implement and deliver the project for ${q.client || 'Client'} in accordance with the services requested.`
+
+    // 2. Deliverables
     let deliverablesStr = ''
-    if (doc.serviceIds && doc.serviceIds.length > 0) {
-      doc.serviceIds.forEach((id: string) => {
+    if (q.serviceIds && q.serviceIds.length > 0) {
+      q.serviceIds.forEach((id: string) => {
         const svc = servicesMap[id]
         if (svc) {
           deliverablesStr += `**${svc.name}**\n`
@@ -280,24 +333,57 @@ export default function SOWPage() {
       })
     }
 
+    // 3. Milestones & Payment terms
+    let milestonesStr = ''
+    let paymentStr = '50% advance to start, balance on delivery'
+    if (q.paymentScheduleId && companyDocs?.paymentSchedules) {
+      const sched = companyDocs.paymentSchedules.find((p: any) => p.id === q.paymentScheduleId)
+      if (sched && sched.points) {
+        milestonesStr = sched.points.map((pt: any, i: number) => `Milestone ${i+1}: ${pt.label} (${pt.pct}%)`).join('\n')
+        paymentStr = sched.points.map((pt: any) => `${pt.pct}% on ${pt.label}`).join(', ')
+      }
+    } else {
+      milestonesStr = `Kickoff (Week 1)\nDesign & Approval (Week 2-3)\nDevelopment & Integration (Week 4-7)\nLaunch & Delivery (Week 8)`
+    }
+
+    // 4. Terms and conditions
+    const termsStr = q.customTerms || compileDefaultSowTerms(companyDocs)
+
     setForm(prev => ({
       ...prev,
-      client: doc.client || '',
-      contact: doc.contact || '',
-      phone: doc.phone || '',
-      email: doc.email || '',
-      project: doc.project || '',
-      value: doc.value ? String(doc.value) : '',
-      deliverables: deliverablesStr.trim() || prev.deliverables
+      client: q.client || '',
+      contact: q.contact || '',
+      phone: q.phone || '',
+      email: q.email || '',
+      project: q.projectTitle || prev.project,
+      objectives: objectivesText,
+      deliverables: deliverablesStr.trim(),
+      milestones: milestonesStr,
+      payment: paymentStr,
+      customTerms: termsStr,
     }))
+    toast({ title: 'Extracted Scope from Quotation' })
+  }
+
+  function handleInvoiceSelect(docId: string) {
+    const inv = invoices.find(i => i.docId === docId)
+    if (!inv) return
+
+    setForm(prev => ({
+      ...prev,
+      value: inv.amount ? String(inv.amount) : '',
+    }))
+    toast({ title: 'Extracted Pricing from Invoice' })
   }
 
   function buildPayload(f: typeof form, clientName: string, project: string, docId: string) {
     const contentParts = [
       '## Project Overview',
       `**Project:** ${project}`,
-      `**Client:** ${clientName}${f.contact ? ` (Attn: ${f.contact})` : ''}`,
-      f.timeline ? `**Timeline:** ${f.timeline}` : '',
+      f.contact ? `**Client Name:** ${f.contact}` : '',
+      `**Business Name:** ${clientName}`,
+      f.phone ? `**Phone:** ${f.phone}` : '',
+      f.email ? `**Email:** ${f.email}` : '',
       f.value ? `**Contract Value:** ${formatCurrency(Number(f.value))}` : '',
     ].filter(Boolean)
 
@@ -323,14 +409,6 @@ export default function SOWPage() {
     if (f.jurisdiction && f.jurisdiction.trim()) {
       contentParts.push('## Jurisdiction', `This agreement shall be governed by the laws of **${f.jurisdiction}**.`)
     }
-
-    contentParts.push(
-      '---',
-      `| __COMPANY_NAME__ | ${clientName} |`,
-      `|---|---|`,
-      '| Signature: _________________ | Signature: _________________ |',
-      '| Date: _________________ | Date: _________________ |'
-    )
 
     const content = contentParts.join('\n\n')
     return {
@@ -665,22 +743,42 @@ export default function SOWPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Generate Scope of Work</DialogTitle></DialogHeader>
           <div className="space-y-5 py-2">
-            {!editItem && sourceDocs.length > 0 && (
-              <div className="bg-muted/30 p-4 rounded-lg border border-border">
-                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Convert from Document</p>
-                <div className="space-y-1">
-                  <Label>Source Quotation or Invoice</Label>
-                  <Select onValueChange={handleSourceDocSelect}>
-                    <SelectTrigger><SelectValue placeholder="Select a document to auto-fill details..." /></SelectTrigger>
-                    <SelectContent>
-                      {sourceDocs.map(d => (
-                        <SelectItem key={d.docId} value={d.docId}>
-                          {d.docId} - {d.client} ({d.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">Automatically fills client details, project, contract value, and service deliverables.</p>
+            {!editItem && (quotations.length > 0 || invoices.length > 0) && (
+              <div className="bg-muted/30 p-4 rounded-lg border border-border space-y-4">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wide">Extract Details from Existing Documents</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {quotations.length > 0 && (
+                    <div className="space-y-1">
+                      <Label>Extract Scope from Quotation</Label>
+                      <Select onValueChange={handleQuotationSelect}>
+                        <SelectTrigger><SelectValue placeholder="Select quotation..." /></SelectTrigger>
+                        <SelectContent>
+                          {quotations.map(q => (
+                            <SelectItem key={q.docId} value={q.docId}>
+                              {q.docId} - {q.client}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">Fills Client Info, Project Name, Deliverables, Payment Terms, and SOW Terms.</p>
+                    </div>
+                  )}
+                  {invoices.length > 0 && (
+                    <div className="space-y-1">
+                      <Label>Extract Pricing from Invoice</Label>
+                      <Select onValueChange={handleInvoiceSelect}>
+                        <SelectTrigger><SelectValue placeholder="Select invoice..." /></SelectTrigger>
+                        <SelectContent>
+                          {invoices.map(i => (
+                            <SelectItem key={i.docId} value={i.docId}>
+                              {i.docId} - {i.client} ({formatCurrency(i.amount)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">Fills Contract Value from the selected invoice's total payable amount.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

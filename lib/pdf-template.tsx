@@ -206,6 +206,7 @@ export interface PdfPayload {
   grandTotal?: number
   fullProjectTotal?: number
   fullSubtotal?: number
+  paymentScheduleId?: string
   paymentScheduleObj?: { name: string, points: { label: string, pct: number }[] } | null
   content?: string           // Markdown-lite body text
   signatureDetails?: {
@@ -564,6 +565,9 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
               const monthlyTotal = monthly.reduce((a, i) => a + i.finalPrice, 0)
               if (oneTime.length === 0 && monthly.length === 0) return null
 
+              const hasPaymentSchedule = !!data.paymentScheduleObj || (data.docType === 'Quotation' && !data.paymentScheduleId)
+              if (!hasPaymentSchedule) return null
+
               return (
                 <View style={{ marginTop: 10, marginBottom: 4 }}>
                   <Text style={[s.h2, { marginTop: 6 }]}>PAYMENT SCHEDULE</Text>
@@ -607,32 +611,20 @@ export function NbosDocument({ data }: { data: PdfPayload }) {
                 </View>
               )
             })()}
-
             {/* Terms & Conditions — driven by docsSettings */}
-            <Text style={s.h2}>TERMS & CONDITIONS</Text>
-            {docs.customTerms && docs.customTerms.trim() ? (
-              docs.customTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
-                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-              ))
-            ) : (data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim()) ? (
-              docs.invoiceTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
-                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-              ))
-            ) : (
-              [
-                ...(data.docType === 'Quotation' ? [`Quotation valid for ${validityDays} days from issue date.`] : []),
-                `One-time services: ${ptOneTime}.`,
-                `Monthly recurring services: ${ptMonthly}.`,
-                'Hosting, domain, ad spend & third-party API fees billed at actuals.',
-                `All prices are in Indian Rupees (INR). GST @ ${gstRate}% extra as applicable.`,
-                ...(data.docType === 'Quotation' ? [
-                  'This quotation contains estimated pricing based on the current project scope. Final pricing will be confirmed after requirement discussions.',
-                  'The final Scope of Work (SOW) and Service Agreement will be shared and approved before project commencement.'
-                ] : []),
-                ...extraTerms,
-              ].map((t, i) => (
-                <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-              ))
+            {((docs.customTerms && docs.customTerms.trim()) || (data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim())) && (
+              <>
+                <Text style={s.h2}>TERMS & CONDITIONS</Text>
+                {docs.customTerms && docs.customTerms.trim() ? (
+                  docs.customTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
+                    <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
+                  ))
+                ) : (
+                  docs.invoiceTerms!.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
+                    <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
+                  ))
+                )}
+              </>
             )}
 
             {/* ── Signature & Audit Block ── */}

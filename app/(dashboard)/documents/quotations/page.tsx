@@ -67,6 +67,7 @@ type Quote = {
   browser?: string;
   device?: string;
   client_id?: string;
+  customSubtotal?: number | null;
 }
 
 const INITIAL: Quote[] = []
@@ -131,6 +132,7 @@ function blankForm(initialDocs?: any) {
     adBudgetFixed: 0,
     adBudgetOverride: false,
     adBudgetBillThrough: false,
+    customSubtotal: null as number | null,
   }
 }
 
@@ -322,7 +324,20 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
           <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Subtotal</span>
+            <div className="flex items-center gap-2">
+              <Input 
+                type="number" 
+                className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                value={form.customSubtotal ?? subtotal} 
+                onChange={e => {
+                  const val = Number(e.target.value)
+                  setForm({ ...form, customSubtotal: val })
+                }}
+              />
+            </div>
+          </div>
           {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount ({form.discountPct}%)</span><span>−{formatCurrency(discAmt)}</span></div>}
           {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
           <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
@@ -492,6 +507,7 @@ export default function QuotationsPage() {
               browser: q.browser || '',
               device: q.device || '',
               client_id: q.client_id || '',
+              customSubtotal: q.custom_subtotal ? Number(q.custom_subtotal) : null,
             }))
             setQuotes(mappedQuotes)
           }
@@ -579,6 +595,7 @@ export default function QuotationsPage() {
       adBudgetFixed: q.adBudgetFixed || 0,
       adBudgetOverride: q.adBudgetOverride || false,
       adBudgetBillThrough: q.adBudgetBillThrough || false,
+      customSubtotal: q.customSubtotal || null,
     })
   }
 
@@ -745,6 +762,7 @@ export default function QuotationsPage() {
         adBudgetFixed: form.adBudgetFixed,
         adBudgetOverride: form.adBudgetOverride,
         adBudgetBillThrough: form.adBudgetBillThrough,
+        customSubtotal: form.customSubtotal,
       } as any
 
       if (isSupabaseConfigured()) {
@@ -780,6 +798,7 @@ export default function QuotationsPage() {
             ad_budget_fixed: form.adBudgetFixed,
             ad_budget_override: form.adBudgetOverride,
             ad_budget_bill_through: form.adBudgetBillThrough,
+            custom_subtotal: form.customSubtotal,
           }])
           if (error) {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
@@ -837,6 +856,7 @@ export default function QuotationsPage() {
       adBudgetFixed: form.adBudgetFixed,
       adBudgetOverride: form.adBudgetOverride,
       adBudgetBillThrough: form.adBudgetBillThrough,
+      customSubtotal: form.customSubtotal,
     } as any
 
     if (isSupabaseConfigured()) {
@@ -867,6 +887,7 @@ export default function QuotationsPage() {
           ad_budget_fixed: form.adBudgetFixed,
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
+          custom_subtotal: form.customSubtotal,
         }).eq('id', editQuote.id)
         if (error) {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })

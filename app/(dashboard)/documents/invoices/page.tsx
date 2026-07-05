@@ -52,6 +52,7 @@ type Invoice = {
   browser?: string;
   device?: string;
   client_id?: string;
+  customSubtotal?: number | null;
 }
 
 const INITIAL: Invoice[] = []
@@ -117,6 +118,7 @@ function blankForm(initialDocs?: any) {
     adBudgetFixed: 0,
     adBudgetOverride: false,
     adBudgetBillThrough: false,
+    customSubtotal: null as number | null,
   }
 }
 
@@ -138,6 +140,63 @@ export default function InvoicesPage() {
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
   const [publishDoc, setPublishDoc] = useState<Invoice | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+  const [businessTypes, setBusinessTypes] = useState<string[]>([
+    'E-Commerce', 'D2C Brand', 'B2B Company', 'SaaS / Software', 'Service Business', 'Other'
+  ])
+  const [showManageBusinessTypes, setShowManageBusinessTypes] = useState(false)
+  const [newBusinessTypeName, setNewBusinessTypeName] = useState('')
+  const [editingBusinessTypeIndex, setEditingBusinessTypeIndex] = useState<number | null>(null)
+  const [editingBusinessTypeName, setEditingBusinessTypeName] = useState('')
+
+  const saveBusinessTypes = async (updatedTypes: string[]) => {
+    setBusinessTypes(updatedTypes)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: exist } = await supabase.from('company_settings').select('id, docs').limit(1).maybeSingle()
+        if (exist) {
+          const updatedDocs = { ...exist.docs, businessTypes: updatedTypes }
+          await supabase.from('company_settings').update({ docs: updatedDocs }).eq('id', exist.id)
+        } else {
+          await supabase.from('company_settings').insert([{ docs: { businessTypes: updatedTypes } }])
+        }
+      } catch (err) {
+        console.error('Failed to save business types to db:', err)
+      }
+    }
+  }
+
+  const handleAddBusinessType = () => {
+    if (!newBusinessTypeName.trim()) return
+    if (businessTypes.includes(newBusinessTypeName.trim())) {
+      toast({ title: 'Business type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...businessTypes, newBusinessTypeName.trim()]
+    saveBusinessTypes(updated)
+    setNewBusinessTypeName('')
+    toast({ title: 'Business Type Added' })
+  }
+
+  const handleEditBusinessType = (index: number) => {
+    if (!editingBusinessTypeName.trim()) return
+    if (businessTypes.includes(editingBusinessTypeName.trim()) && businessTypes[index] !== editingBusinessTypeName.trim()) {
+      toast({ title: 'Business type already exists', variant: 'destructive' })
+      return
+    }
+    const updated = [...businessTypes]
+    updated[index] = editingBusinessTypeName.trim()
+    saveBusinessTypes(updated)
+    setEditingBusinessTypeIndex(null)
+    setEditingBusinessTypeName('')
+    toast({ title: 'Business Type Updated' })
+  }
+
+  const handleDeleteBusinessType = (typeToDelete: string) => {
+    const updated = businessTypes.filter(t => t !== typeToDelete)
+    saveBusinessTypes(updated)
+    toast({ title: 'Business Type Deleted' })
+  }
+
   const [serviceSearch, setServiceSearch] = useState('')
 
   const [form, setForm] = useState(() => blankForm())
@@ -151,6 +210,9 @@ export default function InvoicesPage() {
       if (cached.companyDocs) {
         setCompanyDocs(cached.companyDocs)
         setForm(blankForm(cached.companyDocs))
+        if (cached.companyDocs.businessTypes && Array.isArray(cached.companyDocs.businessTypes)) {
+          setBusinessTypes(cached.companyDocs.businessTypes)
+        }
       }
       setLoading(false)
     }
@@ -177,6 +239,9 @@ export default function InvoicesPage() {
             if (docsSettings.paymentSchedules) {
               schedules = docsSettings.paymentSchedules
               setPaymentSchedules(schedules)
+            }
+            if (docsSettings.businessTypes && Array.isArray(docsSettings.businessTypes)) {
+              setBusinessTypes(docsSettings.businessTypes)
             }
           }
 
@@ -242,6 +307,7 @@ export default function InvoicesPage() {
               browser: i.browser || '',
               device: i.device || '',
               client_id: i.client_id || '',
+              customSubtotal: i.custom_subtotal ? Number(i.custom_subtotal) : null,
             }))
             setInvoices(mappedInvoices)
           }
@@ -283,12 +349,28 @@ export default function InvoicesPage() {
     ? (form.adBudgetFixed || 0) 
     : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
 
-  const computedSub = selSvcs.reduce((sum, s) => {
+  const totalMinPrice = selSvcs.reduce((sum, s) => {
+    const base = s.priceMin !== undefined ? s.priceMin : s.price
+    if (s.catId === '3') return sum + base + adBudgetFee
+    return sum + base
+  }, 0)
+  const totalMaxPrice = selSvcs.reduce((sum, s) => {
+    const base = s.priceMax !== undefined ? s.priceMax : s.price
+    if (s.catId === '3') return sum + base + adBudgetFee
+    return sum + base
+  }, 0)
+  const hasRange = totalMaxPrice > totalMinPrice
+
+  const computedSubStandard = selSvcs.reduce((sum, s) => {
     if (s.catId === '3') {
       return sum + s.price + adBudgetFee
     }
     return sum + s.price
   }, 0)
+
+  const computedSub = form.customSubtotal !== undefined && form.customSubtotal !== null
+    ? form.customSubtotal
+    : computedSubStandard
 
   const subtotal = computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
   const discAmt = form.discountType === 'percentage' 
@@ -344,11 +426,16 @@ export default function InvoicesPage() {
       adBudgetFixed: inv.adBudgetFixed || 0,
       adBudgetOverride: inv.adBudgetOverride || false,
       adBudgetBillThrough: inv.adBudgetBillThrough || false,
+      customSubtotal: inv.customSubtotal || null,
     })
   }
 
   function toggleSvc(id: string) {
-    setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
+    setForm(f => ({ 
+      ...f, 
+      selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id],
+      customSubtotal: null
+    }))
   }
 
   async function buildAndDownloadPdf(
@@ -369,12 +456,40 @@ export default function InvoicesPage() {
       ? (inv.adBudgetFixed || 0) 
       : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
 
-    const computedSub = svcs.reduce((sum, s) => {
-      if (s.catId === '3') {
-        return sum + s.price + adBudgetFee
-      }
-      return sum + s.price
+    const totalMinPrice = svcs.reduce((sum, s) => {
+      const base = s.priceMin !== undefined ? s.priceMin : s.price
+      if (s.catId === '3') return sum + base + adBudgetFee
+      return sum + base
     }, 0)
+    const totalMaxPrice = svcs.reduce((sum, s) => {
+      const base = s.priceMax !== undefined ? s.priceMax : s.price
+      if (s.catId === '3') return sum + base + adBudgetFee
+      return sum + base
+    }, 0)
+    const hasRange = totalMaxPrice > totalMinPrice
+
+    const adjustedSvcs = svcs.map(s => {
+      let adjPrice = s.price
+      if (hasRange && inv.customSubtotal !== undefined && inv.customSubtotal !== null) {
+        const minP = s.priceMin !== undefined ? s.priceMin : s.price
+        const maxP = s.priceMax !== undefined ? s.priceMax : s.price
+        const range = maxP - minP
+        if (totalMaxPrice > totalMinPrice) {
+          const ratio = (inv.customSubtotal - totalMinPrice) / (totalMaxPrice - totalMinPrice)
+          adjPrice = Math.round(minP + ratio * range)
+        }
+      }
+      return { ...s, price: adjPrice }
+    })
+
+    const computedSub = inv.customSubtotal !== undefined && inv.customSubtotal !== null
+      ? inv.customSubtotal
+      : adjustedSvcs.reduce((sum, s) => {
+          if (s.catId === '3') {
+            return sum + s.price + adBudgetFee
+          }
+          return sum + s.price
+        }, 0)
 
     const baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
     const dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
@@ -397,7 +512,7 @@ export default function InvoicesPage() {
     const scaledTot = scaledAft + scaledGAmt
 
     const scaledItems: any[] = []
-    svcs.forEach(s => {
+    adjustedSvcs.forEach(s => {
       if (s.catId === '3') {
         // 1. One-time Setup Cost
         const scaledSetup = Math.round(s.price * scaleFactor)
@@ -489,6 +604,7 @@ export default function InvoicesPage() {
       grandTotal: scaledTot,
       fullProjectTotal: tot,
       fullSubtotal: baseSub,
+      paymentScheduleId,
       paymentScheduleObj: paymentScheduleId ? paymentSchedules.find(p => p.id === paymentScheduleId) : null,
       adBudget: inv.adBudget,
       adBudgetPct: inv.adBudgetPct,
@@ -568,6 +684,7 @@ export default function InvoicesPage() {
         adBudgetFixed: form.adBudgetFixed,
         adBudgetOverride: form.adBudgetOverride,
         adBudgetBillThrough: form.adBudgetBillThrough,
+        customSubtotal: form.customSubtotal,
       }
 
       await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
@@ -604,6 +721,7 @@ export default function InvoicesPage() {
           ad_budget_fixed: form.adBudgetFixed,
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
+          custom_subtotal: form.customSubtotal,
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -663,6 +781,7 @@ export default function InvoicesPage() {
       adBudgetFixed: form.adBudgetFixed,
       adBudgetOverride: form.adBudgetOverride,
       adBudgetBillThrough: form.adBudgetBillThrough,
+      customSubtotal: form.customSubtotal,
     }
 
     if (isSupabaseConfigured()) {
@@ -694,6 +813,7 @@ export default function InvoicesPage() {
           ad_budget_fixed: form.adBudgetFixed,
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
+          custom_subtotal: form.customSubtotal,
         }).eq('id', editInvoice.id)
 
         if (error) {
@@ -956,10 +1076,22 @@ export default function InvoicesPage() {
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Business Type</Label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label>Business Type</Label>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowManageBusinessTypes(true)} 
+                      className="text-[10px] text-gold hover:underline"
+                    >
+                      + Add/Manage
+                    </button>
+                  </div>
                   <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
@@ -1109,7 +1241,65 @@ export default function InvoicesPage() {
                   <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Base Subtotal</span>
+                      {hasRange ? (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            min={totalMinPrice} 
+                            max={totalMaxPrice} 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            (Range: {formatCurrency(totalMinPrice)} - {formatCurrency(totalMaxPrice)})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {hasRange && (
+                      <div className="pt-1">
+                        <input 
+                          type="range" 
+                          min={totalMinPrice} 
+                          max={totalMaxPrice} 
+                          value={form.customSubtotal ?? computedSubStandard} 
+                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
+                          className="w-full accent-gold bg-[#0b1b15]" 
+                        />
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Ad Spend (Bill-through)</span>
+                        <span>{formatCurrency(form.adBudget)}</span>
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between font-semibold border-t border-border/50 pt-1">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                    )}
+                  </div>
                   {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
                   {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
                   <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
@@ -1234,10 +1424,22 @@ export default function InvoicesPage() {
                 <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Business Type</Label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label>Business Type</Label>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowManageBusinessTypes(true)} 
+                      className="text-[10px] text-gold hover:underline"
+                    >
+                      + Add/Manage
+                    </button>
+                  </div>
                   <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Service Business'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
@@ -1387,7 +1589,65 @@ export default function InvoicesPage() {
                   <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Base Subtotal</span>
+                      {hasRange ? (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            min={totalMinPrice} 
+                            max={totalMaxPrice} 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            (Range: {formatCurrency(totalMinPrice)} - {formatCurrency(totalMaxPrice)})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {hasRange && (
+                      <div className="pt-1">
+                        <input 
+                          type="range" 
+                          min={totalMinPrice} 
+                          max={totalMaxPrice} 
+                          value={form.customSubtotal ?? computedSubStandard} 
+                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
+                          className="w-full accent-gold bg-[#0b1b15]" 
+                        />
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Ad Spend (Bill-through)</span>
+                        <span>{formatCurrency(form.adBudget)}</span>
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between font-semibold border-t border-border/50 pt-1">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                    )}
+                  </div>
                   {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
                   {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
                   <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
@@ -1497,6 +1757,74 @@ export default function InvoicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Manage Business Types Dialog */}
+      <Dialog open={showManageBusinessTypes} onOpenChange={setShowManageBusinessTypes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Business Types</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Input 
+                placeholder="New Business Type (e.g. Agency)" 
+                value={newBusinessTypeName} 
+                onChange={e => setNewBusinessTypeName(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && handleAddBusinessType()}
+              />
+              <Button variant="gold" onClick={handleAddBusinessType} className="gap-1">
+                <Plus className="h-4 w-4" /> Add
+              </Button>
+            </div>
+            <div className="border border-border rounded-lg max-h-[250px] overflow-y-auto divide-y divide-border">
+              {businessTypes.map((type, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-muted/10">
+                  {editingBusinessTypeIndex === idx ? (
+                    <div className="flex items-center gap-2 w-full pr-2">
+                      <Input 
+                        value={editingBusinessTypeName} 
+                        onChange={e => setEditingBusinessTypeName(e.target.value)}
+                        className="h-8 py-1"
+                        onKeyDown={e => e.key === 'Enter' && handleEditBusinessType(idx)}
+                      />
+                      <Button size="sm" className="h-8 px-2" onClick={() => handleEditBusinessType(idx)}>Save</Button>
+                      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingBusinessTypeIndex(null)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium">{type}</span>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setEditingBusinessTypeIndex(idx)
+                            setEditingBusinessTypeName(type)
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-red-400 hover:text-red-400"
+                          onClick={() => handleDeleteBusinessType(type)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowManageBusinessTypes(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">

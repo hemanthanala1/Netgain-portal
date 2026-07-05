@@ -274,9 +274,12 @@ export default function AgreementsPage() {
     const parts = [
       `## Agreement Details`,
       `**Agreement Type:** ${f.type}`,
-      `**Client:** ${client}${f.contact ? ` (Attn: ${f.contact})` : ''}`,
+      `**Client Name:** ${f.contact || '—'}`,
+      `**Business Name:** ${client}`,
+      f.phone ? `**Phone:** ${f.phone}` : '',
+      f.email ? `**Email:** ${f.email}` : '',
+      `**Contract Value:** ${f.value > 0 ? formatCurrency(f.value) : '—'}`,
       f.duration ? `**Duration:** ${f.duration}` : '',
-      f.value > 0 ? `**Contract Value:** ${formatCurrency(f.value)}` : '',
     ].filter(Boolean)
 
     if (f.services && f.services.trim()) {
@@ -305,16 +308,6 @@ export default function AgreementsPage() {
         `This agreement is governed by the laws of **${f.jurisdiction}**. Any disputes shall be resolved through arbitration in ${f.jurisdiction}.`
       )
     }
-
-    parts.push(
-      '---',
-      '**SIGNATURES**',
-      `| __COMPANY_NAME__ | ${client} |`,
-      `|---|---|`,
-      '| Signature: _________________ | Signature: _________________ |',
-      '| Name: __FOUNDER_NAME__ | Name: _________________ |',
-      '| Date: _________________ | Date: _________________ |'
-    )
 
     return parts.join('\n\n')
   }

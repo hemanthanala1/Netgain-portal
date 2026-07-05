@@ -69,7 +69,7 @@ const notifIcon: Record<string, React.ReactNode> = {
   success: <Check className="h-4 w-4 text-emerald-400" />,
 }
 
-export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme } = useTheme()

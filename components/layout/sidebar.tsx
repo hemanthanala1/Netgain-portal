@@ -70,7 +70,7 @@ const navItems = [
   },
 ]
 
-export function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
+export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseAction?: () => void }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useUser()

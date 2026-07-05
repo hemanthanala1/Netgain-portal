@@ -480,6 +480,7 @@ export default function CRMPage() {
               </Select>
             </div>
             <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={newClient.gst} onChange={e => setNewClient({...newClient, gst: e.target.value})} /></div>
+            <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={newClient.website} onChange={e => setNewClient({...newClient, website: e.target.value})} /></div>
              <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
             
             <div className="col-span-1 sm:col-span-2 border-t border-[#1E3A2F]/20 pt-4 mt-2 space-y-3">
@@ -560,6 +561,7 @@ export default function CRMPage() {
                 </Select>
               </div>
               <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({...editClient, gst: e.target.value})} /></div>
+              <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={editClient.website || ''} onChange={e => setEditClient({...editClient, website: e.target.value})} /></div>
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({...editClient, address: e.target.value})} /></div>
             </div>
           )}
