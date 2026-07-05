@@ -8,7 +8,7 @@ async function extractTextFromBuffer(buffer: Buffer): Promise<{ text: string; nu
   try {
     // Import the internal library file directly to avoid the known pdf-parse@1.1.1 bug
     // where it tries to open a non-existent test file on first load in Next.js
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const pdfParseLib = require('pdf-parse/lib/pdf-parse.js')
     const pdfParseFunc = typeof pdfParseLib === 'function' ? pdfParseLib : pdfParseLib.default
     if (typeof pdfParseFunc !== 'function') {
