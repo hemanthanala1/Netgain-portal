@@ -19,6 +19,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { LineItemsTable } from '@/components/ui/line-items-table'
 
 const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'paid', 'overdue', 'completed', 'rejected']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', published: 'Published', viewed: 'Viewed', paid: 'Paid', overdue: 'Overdue', completed: 'Completed', rejected: 'Rejected' }
@@ -50,9 +51,9 @@ type Invoice = {
   visibility_status?: string
   ip_address?: string;
   browser?: string;
-  device?: string;
   client_id?: string;
   customSubtotal?: number | null;
+  items?: any[];
 }
 
 const INITIAL: Invoice[] = []
@@ -119,6 +120,7 @@ function blankForm(initialDocs?: any) {
     adBudgetOverride: false,
     adBudgetBillThrough: false,
     customSubtotal: null as number | null,
+    items: [] as any[],
   }
 }
 
@@ -202,6 +204,40 @@ export default function InvoicesPage() {
   const [form, setForm] = useState(() => blankForm())
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('clientId') || params.get('prefill_client_id')
+    const autoOpen = params.get('autoOpen') || params.get('prefill')
+
+    if (clientId && autoOpen === 'true') {
+      const fetchClient = async () => {
+        if (isSupabaseConfigured()) {
+          const { data: client, error } = await supabase
+            .from('crm_clients')
+            .select('*')
+            .eq('id', clientId)
+            .maybeSingle()
+          if (client) {
+            setForm(prev => ({
+              ...prev,
+              client: client.business || client.name,
+              contact: client.name,
+              phone: client.phone || '',
+              email: client.email || '',
+              businessType: client.type || prev.businessType,
+              gst: client.gst || prev.gst
+            }))
+            setShowCreate(true)
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+          }
+        }
+      }
+      fetchClient()
+    }
+  }, [invoices])
+
+  useEffect(() => {
     const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[], companyDocs?: any }>('invoices')
     if (cached) {
       setInvoices(cached.invoices)
@@ -222,8 +258,8 @@ export default function InvoicesPage() {
       if (isSupabaseConfigured()) {
         try {
           const [invRes, sRes, cRes] = await Promise.all([
-            supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false }),
+            supabase.from('invoices').select('*, invoice_items(*)').order('created', { ascending: false }),
+            supabase.from('services').select('*').eq('status', 'active').order('created_at', { ascending: false }),
             supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
@@ -308,6 +344,7 @@ export default function InvoicesPage() {
               device: i.device || '',
               client_id: i.client_id || '',
               customSubtotal: i.custom_subtotal ? Number(i.custom_subtotal) : null,
+              items: i.invoice_items || []
             }))
             setInvoices(mappedInvoices)
           }
@@ -372,12 +409,24 @@ export default function InvoicesPage() {
     ? form.customSubtotal
     : computedSubStandard
 
-  const subtotal = computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
-  const discAmt = form.discountType === 'percentage' 
-    ? Math.round(subtotal * form.discountValue / 100) 
-    : form.discountValue
+  const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
+  const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
+
+  const subtotal = form.items && form.items.length > 0
+    ? lineItemsSubtotal
+    : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0))
+
+  const discAmt = form.items && form.items.length > 0
+    ? lineItemsDiscount + (form.discountType === 'percentage'
+        ? Math.round((lineItemsSubtotal - lineItemsDiscount) * form.discountValue / 100)
+        : form.discountValue)
+    : (form.discountType === 'percentage'
+        ? Math.round(subtotal * form.discountValue / 100)
+        : form.discountValue)
+
   const afterDisc = Math.max(0, subtotal - discAmt)
   const gstAmt = Math.round(afterDisc * form.gstPct / 100)
+
   const grandTotal = afterDisc + gstAmt
 
   const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
@@ -401,6 +450,23 @@ export default function InvoicesPage() {
         pointIdx = String(idx)
       }
     }
+
+    const legacyItems = inv.serviceIds ? inv.serviceIds.map((sid, idx) => {
+      const svc = servicesData.find(s => s.id === sid)
+      return {
+        id: Math.random().toString(36).substring(2, 9),
+        service_id: sid,
+        service_name: svc ? svc.name : 'Unknown Service',
+        description: '',
+        quantity: 1,
+        unit_price: svc ? svc.price : 0,
+        discount: 0,
+        tax: 0,
+        total: svc ? svc.price : 0,
+        sort_order: idx
+      }
+    }) : []
+
     setForm({ 
       client: inv.client, 
       contact: inv.contact, 
@@ -427,6 +493,7 @@ export default function InvoicesPage() {
       adBudgetOverride: inv.adBudgetOverride || false,
       adBudgetBillThrough: inv.adBudgetBillThrough || false,
       customSubtotal: inv.customSubtotal || null,
+      items: (inv.items && inv.items.length > 0) ? inv.items : legacyItems,
     })
   }
 
@@ -451,51 +518,10 @@ export default function InvoicesPage() {
   ) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     
-    // Calculate dynamic price for Paid Advertising services (catId === '3')
-    const adBudgetFee = inv.adBudgetOverride 
-      ? (inv.adBudgetFixed || 0) 
-      : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
-
-    const totalMinPrice = svcs.reduce((sum, s) => {
-      const base = s.priceMin !== undefined ? s.priceMin : s.price
-      if (s.catId === '3') return sum + base + adBudgetFee
-      return sum + base
-    }, 0)
-    const totalMaxPrice = svcs.reduce((sum, s) => {
-      const base = s.priceMax !== undefined ? s.priceMax : s.price
-      if (s.catId === '3') return sum + base + adBudgetFee
-      return sum + base
-    }, 0)
-    const hasRange = totalMaxPrice > totalMinPrice
-
-    const adjustedSvcs = svcs.map(s => {
-      let adjPrice = s.price
-      if (hasRange && inv.customSubtotal !== undefined && inv.customSubtotal !== null) {
-        const minP = s.priceMin !== undefined ? s.priceMin : s.price
-        const maxP = s.priceMax !== undefined ? s.priceMax : s.price
-        const range = maxP - minP
-        if (totalMaxPrice > totalMinPrice) {
-          const ratio = (inv.customSubtotal - totalMinPrice) / (totalMaxPrice - totalMinPrice)
-          adjPrice = Math.round(minP + ratio * range)
-        }
-      }
-      return { ...s, price: adjPrice }
-    })
-
-    const computedSub = inv.customSubtotal !== undefined && inv.customSubtotal !== null
-      ? inv.customSubtotal
-      : adjustedSvcs.reduce((sum, s) => {
-          if (s.catId === '3') {
-            return sum + s.price + adBudgetFee
-          }
-          return sum + s.price
-        }, 0)
-
-    const baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
-    const dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
-    const aft = Math.max(0, baseSub - dAmt)
-    const gAmt = Math.round(aft * gst / 100)
-    const tot = aft + gAmt
+    let baseSub = 0
+    let dAmt = 0
+    let tot = 0
+    const scaledItems: any[] = []
 
     let pct = 100
     if (paymentScheduleEntry) {
@@ -505,68 +531,139 @@ export default function InvoicesPage() {
       }
     }
     const scaleFactor = pct / 100
+
+    if (inv.items && inv.items.length > 0) {
+      const lineItemsSubtotal = inv.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity || 1)), 0)
+      const lineItemsDiscount = inv.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+
+      baseSub = lineItemsSubtotal
+      dAmt = lineItemsDiscount + (discType === 'percentage' ? Math.round((lineItemsSubtotal - lineItemsDiscount) * discVal / 100) : discVal)
+      const aft = Math.max(0, baseSub - dAmt)
+      const gAmt = Math.round(aft * gst / 100)
+      tot = aft + gAmt
+
+      inv.items.forEach((item: any) => {
+        const scaledPrice = Math.round(Number(item.unit_price) * scaleFactor)
+        const scaledFinalPrice = Math.round(Number(item.total) * scaleFactor)
+        scaledItems.push({
+          serviceName: paymentScheduleEntry ? `${item.service_name} - ${paymentScheduleEntry}` : item.service_name,
+          finalPrice: scaledFinalPrice,
+          price: scaledPrice,
+          quantity: item.quantity,
+          category: 'Service',
+          pricing_model: 'fixed',
+          deliverables: []
+        })
+      })
+    } else {
+      // Calculate dynamic price for Paid Advertising services (catId === '3')
+      const adBudgetFee = inv.adBudgetOverride 
+        ? (inv.adBudgetFixed || 0) 
+        : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
+
+      const totalMinPrice = svcs.reduce((sum, s) => {
+        const base = s.priceMin !== undefined ? s.priceMin : s.price
+        if (s.catId === '3') return sum + base + adBudgetFee
+        return sum + base
+      }, 0)
+      const totalMaxPrice = svcs.reduce((sum, s) => {
+        const base = s.priceMax !== undefined ? s.priceMax : s.price
+        if (s.catId === '3') return sum + base + adBudgetFee
+        return sum + base
+      }, 0)
+      const hasRange = totalMaxPrice > totalMinPrice
+
+      const adjustedSvcs = svcs.map(s => {
+        let adjPrice = s.price
+        if (hasRange && inv.customSubtotal !== undefined && inv.customSubtotal !== null) {
+          const minP = s.priceMin !== undefined ? s.priceMin : s.price
+          const maxP = s.priceMax !== undefined ? s.priceMax : s.price
+          const range = maxP - minP
+          if (totalMaxPrice > totalMinPrice) {
+            const ratio = (inv.customSubtotal - totalMinPrice) / (totalMaxPrice - totalMinPrice)
+            adjPrice = Math.round(minP + ratio * range)
+          }
+        }
+        return { ...s, price: adjPrice }
+      })
+
+      const computedSub = inv.customSubtotal !== undefined && inv.customSubtotal !== null
+        ? inv.customSubtotal
+        : adjustedSvcs.reduce((sum, s) => {
+            if (s.catId === '3') {
+              return sum + s.price + adBudgetFee
+            }
+            return sum + s.price
+          }, 0)
+
+      baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
+      dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
+      const aft = Math.max(0, baseSub - dAmt)
+      const gAmt = Math.round(aft * gst / 100)
+      tot = aft + gAmt
+
+      adjustedSvcs.forEach(s => {
+        if (s.catId === '3') {
+          // 1. One-time Setup Cost
+          const scaledSetup = Math.round(s.price * scaleFactor)
+          scaledItems.push({
+            serviceName: paymentScheduleEntry ? `${s.name} - Setup Cost - ${paymentScheduleEntry}` : `${s.name} - Setup Cost`,
+            finalPrice: scaledSetup,
+            price: scaledSetup,
+            quantity: 1,
+            category: s.category,
+            pricing_model: 'fixed',
+            deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+          })
+          // 2. Monthly Service Fee
+          const scaledFee = Math.round(adBudgetFee * scaleFactor)
+          scaledItems.push({
+            serviceName: paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
+            finalPrice: scaledFee,
+            price: scaledFee,
+            quantity: 1,
+            category: s.category,
+            pricing_model: 'monthly',
+            deliverables: s.deliverables
+          })
+        } else {
+          const scaledPrice = Math.round(s.price * scaleFactor)
+          let customName = s.name
+          if (paymentScheduleEntry) {
+            customName = `${s.name} - ${paymentScheduleEntry}`
+          }
+          scaledItems.push({
+            serviceName: customName,
+            finalPrice: scaledPrice,
+            price: scaledPrice,
+            quantity: 1,
+            category: s.category,
+            pricing_model: s.model,
+            deliverables: s.deliverables
+          })
+        }
+      })
+
+      // If ad budget is billed through Netgain, append it as a line item in PDF
+      if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
+        const scaledBudget = Math.round(inv.adBudget * scaleFactor)
+        scaledItems.push({
+          serviceName: paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
+          finalPrice: scaledBudget,
+          price: scaledBudget,
+          quantity: 1,
+          category: "Ad Spend",
+          pricing_model: "monthly",
+          deliverables: ["Advertising spend budget on Google/Meta networks"]
+        })
+      }
+    }
+
     const scaledSub = Math.round(baseSub * scaleFactor)
     const scaledDAmt = Math.round(dAmt * scaleFactor)
     const scaledAft = Math.max(0, scaledSub - scaledDAmt)
     const scaledGAmt = Math.round(scaledAft * gst / 100)
     const scaledTot = scaledAft + scaledGAmt
-
-    const scaledItems: any[] = []
-    adjustedSvcs.forEach(s => {
-      if (s.catId === '3') {
-        // 1. One-time Setup Cost
-        const scaledSetup = Math.round(s.price * scaleFactor)
-        scaledItems.push({
-          serviceName: paymentScheduleEntry ? `${s.name} - Setup Cost - ${paymentScheduleEntry}` : `${s.name} - Setup Cost`,
-          finalPrice: scaledSetup,
-          price: scaledSetup,
-          quantity: 1,
-          category: s.category,
-          pricing_model: 'fixed',
-          deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
-        })
-        // 2. Monthly Service Fee
-        const scaledFee = Math.round(adBudgetFee * scaleFactor)
-        scaledItems.push({
-          serviceName: paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
-          finalPrice: scaledFee,
-          price: scaledFee,
-          quantity: 1,
-          category: s.category,
-          pricing_model: 'monthly',
-          deliverables: s.deliverables
-        })
-      } else {
-        const scaledPrice = Math.round(s.price * scaleFactor)
-        let customName = s.name
-        if (paymentScheduleEntry) {
-          customName = `${s.name} - ${paymentScheduleEntry}`
-        }
-        scaledItems.push({
-          serviceName: customName,
-          finalPrice: scaledPrice,
-          price: scaledPrice,
-          quantity: 1,
-          category: s.category,
-          pricing_model: s.model,
-          deliverables: s.deliverables
-        })
-      }
-    })
-
-    // If ad budget is billed through Netgain, append it as a line item in PDF
-    if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
-      const scaledBudget = Math.round(inv.adBudget * scaleFactor)
-      scaledItems.push({
-        serviceName: paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
-        finalPrice: scaledBudget,
-        price: scaledBudget,
-        quantity: 1,
-        category: "Ad Spend",
-        pricing_model: "monthly",
-        deliverables: ["Advertising spend budget on Google/Meta networks"]
-      })
-    }
 
     const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     const dueFormatted = dueDate
@@ -685,6 +782,7 @@ export default function InvoicesPage() {
         adBudgetOverride: form.adBudgetOverride,
         adBudgetBillThrough: form.adBudgetBillThrough,
         customSubtotal: form.customSubtotal,
+        items: form.items || [],
       }
 
       await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
@@ -727,6 +825,26 @@ export default function InvoicesPage() {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
           setGenerating(false)
           return
+        }
+
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('invoice_items').insert(
+            form.items.map((item, idx) => ({
+              invoice_id: targetId,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving invoice items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       }
 
@@ -782,6 +900,7 @@ export default function InvoicesPage() {
       adBudgetOverride: form.adBudgetOverride,
       adBudgetBillThrough: form.adBudgetBillThrough,
       customSubtotal: form.customSubtotal,
+      items: form.items || [],
     }
 
     if (isSupabaseConfigured()) {
@@ -820,6 +939,28 @@ export default function InvoicesPage() {
           toast({ title: 'Error saving edit to database', description: error.message, variant: 'destructive' })
           setGenerating(false)
           return
+        }
+
+        // Delete old items and insert new ones
+        await supabase.from('invoice_items').delete().eq('invoice_id', editInvoice.id)
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('invoice_items').insert(
+            form.items.map((item, idx) => ({
+              invoice_id: editInvoice.id,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving invoice items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
@@ -1077,22 +1218,13 @@ export default function InvoicesPage() {
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label>Business Type</Label>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowManageBusinessTypes(true)} 
-                      className="text-[10px] text-gold hover:underline"
-                    >
-                      + Add/Manage
-                    </button>
-                  </div>
-                  <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Business Type</Label>
+                  <Input 
+                    value={form.businessType || ''} 
+                    readOnly 
+                    className="bg-muted/50 cursor-not-allowed opacity-80" 
+                    placeholder="Auto-populated from CRM"
+                  />
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
                 <div className="space-y-1">
@@ -1102,49 +1234,17 @@ export default function InvoicesPage() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-9 h-9"
-                  placeholder="Search services..."
-                  value={serviceSearch}
-                  onChange={e => setServiceSearch(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {servicesData.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
-                  const sel = form.selectedIds.includes(svc.id)
-                  let priceVal = svc.price
-                  let isCalculated = false
-                  if (svc.catId === '3') {
-                    priceVal = form.adBudgetOverride 
-                      ? (form.adBudgetFixed || 0) 
-                      : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
-                    isCalculated = true
-                  }
-                  const priceStr = isCalculated 
-                    ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
-                    : (svc.priceMin && svc.priceMax
-                        ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                        : formatCurrency(svc.price))
-                  return (
-                    <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                          {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
-                        </div>
-                        <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
-                      </div>
-                      <div className="text-right shrink-0 ml-4">
-                        <span className="text-sm font-bold text-gold">{priceStr}</span>
-                        {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
-                        {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+              <LineItemsTable
+                variant="simple"
+                items={form.items || []}
+                onChange={(items) => {
+                  setForm({
+                    ...form,
+                    items,
+                    selectedIds: items.map(i => i.service_id).filter(Boolean) as string[]
+                  })
+                }}
+              />
             </div>
 
             {selSvcs.some(s => s.catId === '3') && (
@@ -1224,7 +1324,7 @@ export default function InvoicesPage() {
                 </div>
               </div>
             )}
-            {selSvcs.length > 0 && (
+            {(form.items?.length ?? 0) > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -1390,7 +1490,7 @@ export default function InvoicesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
-            <Button variant="gold" onClick={handleGenerate} disabled={generating || selSvcs.length === 0}>
+            <Button variant="gold" onClick={handleGenerate} disabled={generating || (form.items?.length ?? 0) === 0}>
               {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : `Generate Invoice${invoiceAmount > 0 ? ` (${formatCurrency(invoiceAmount)})` : ''}`}
             </Button>
           </DialogFooter>
@@ -1425,22 +1525,13 @@ export default function InvoicesPage() {
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label>Business Type</Label>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowManageBusinessTypes(true)} 
-                      className="text-[10px] text-gold hover:underline"
-                    >
-                      + Add/Manage
-                    </button>
-                  </div>
-                  <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Business Type</Label>
+                  <Input 
+                    value={form.businessType || ''} 
+                    readOnly 
+                    className="bg-muted/50 cursor-not-allowed opacity-80" 
+                    placeholder="Auto-populated from CRM"
+                  />
                 </div>
                 <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
                 <div className="space-y-1">
@@ -1450,49 +1541,17 @@ export default function InvoicesPage() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Services ({selSvcs.length} selected)</p>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-9 h-9"
-                  placeholder="Search services..."
-                  value={serviceSearch}
-                  onChange={e => setServiceSearch(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {servicesData.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
-                  const sel = form.selectedIds.includes(svc.id)
-                  let priceVal = svc.price
-                  let isCalculated = false
-                  if (svc.catId === '3') {
-                    priceVal = form.adBudgetOverride 
-                      ? (form.adBudgetFixed || 0) 
-                      : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
-                    isCalculated = true
-                  }
-                  const priceStr = isCalculated 
-                    ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
-                    : (svc.priceMin && svc.priceMax
-                        ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                        : formatCurrency(svc.price))
-                  return (
-                    <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                          {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
-                        </div>
-                        <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category}</p></div>
-                      </div>
-                      <div className="text-right shrink-0 ml-4">
-                        <span className="text-sm font-bold text-gold">{priceStr}</span>
-                        {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
-                        {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+              <LineItemsTable
+                variant="simple"
+                items={form.items || []}
+                onChange={(items) => {
+                  setForm({
+                    ...form,
+                    items,
+                    selectedIds: items.map(i => i.service_id).filter(Boolean) as string[]
+                  })
+                }}
+              />
             </div>
 
             {selSvcs.some(s => s.catId === '3') && (
@@ -1572,7 +1631,7 @@ export default function InvoicesPage() {
                 </div>
               </div>
             )}
-            {selSvcs.length > 0 && (
+            {(form.items?.length ?? 0) > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">

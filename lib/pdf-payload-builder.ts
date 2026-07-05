@@ -11,21 +11,36 @@ export async function buildPdfPayload(
   doc: any,
   supabase: SupabaseClient
 ): Promise<PdfPayload> {
-  // 1. Fetch Company settings and services
-  const [cRes, svRes, sigRes] = await Promise.all([
+  // 1. Fetch Company settings, services, signatures, and document line items
+  let lineItems: any[] = []
+  const [cRes, svRes, sigRes, itemsRes] = await Promise.all([
     supabase.from('company_settings').select('*').limit(1).maybeSingle(),
     supabase.from('services').select('*').neq('status', 'archived'),
     supabase.from('document_signatures')
       .select('*')
       .eq('document_type', docType)
       .eq('document_id', doc.id)
-      .maybeSingle()
+      .maybeSingle(),
+    supabase.from(
+      docType === 'Quotation' ? 'quotation_items' :
+      docType === 'Invoice' ? 'invoice_items' :
+      docType === 'SOW' ? 'sow_items' :
+      docType === 'Agreement' ? 'agreement_items' : 'quotation_items'
+    ).select('*').eq(
+      docType === 'Quotation' ? 'quotation_id' :
+      docType === 'Invoice' ? 'invoice_id' :
+      docType === 'SOW' ? 'sow_id' :
+      docType === 'Agreement' ? 'agreement_id' : 'id'
+    , doc.id).order('sort_order', { ascending: true })
   ])
 
   const companyDocs = cRes.data?.docs || {}
   const paymentSchedules = companyDocs.paymentSchedules || []
   const services = svRes.data || []
   const signature = sigRes.data
+  if (itemsRes && itemsRes.data) {
+    lineItems = itemsRes.data
+  }
 
   // 2. Build common settings
   const companySettings = cRes.data?.company || {}
@@ -90,25 +105,67 @@ export async function buildPdfPayload(
   // 4. Construct payload based on document type
   switch (docType) {
     case 'Quotation': {
-      const qServices = services.filter(s => (doc.service_ids || []).includes(s.id))
-      const sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
-      const dAmt = Math.round(sub * (doc.discount_pct || 0) / 100)
-      const aft = sub - dAmt
-      const gAmt = Math.round(aft * (doc.gst_pct || 18) / 100)
-      const tot = aft + gAmt
+      let sub = 0
+      let dAmt = 0
+      let tot = 0
+      let itemsList: any[] = []
+      let breakdownLines: string[] = []
+
+      if (lineItems.length > 0) {
+        sub = lineItems.reduce((a, item) => a + (Number(item.unit_price) * Number(item.quantity || 1)), 0)
+        const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
+        const overallDiscAmt = Math.round((sub - lineDisc) * (doc.discount_pct || 0) / 100)
+        dAmt = lineDisc + overallDiscAmt
+        const aft = sub - dAmt
+        const gAmt = Math.round(aft * (doc.gst_pct || 18) / 100)
+        tot = aft + gAmt
+
+        itemsList = lineItems.map(item => ({
+          serviceName: item.service_name,
+          finalPrice: item.total,
+          category: 'Service',
+          timeline: 'As per SOW',
+          pricing_model: 'fixed',
+          deliverables: []
+        }))
+
+        breakdownLines = lineItems.flatMap((item: any, i: number) => [
+          `### ${i + 1}. ${item.service_name}`,
+          `**Price:** ${formatCurrency(Number(item.unit_price))}${Number(item.discount) > 0 ? `  |  **Discount:** ${formatCurrency(Number(item.discount))}` : ''}  |  **Total:** ${formatCurrency(Number(item.total))}`,
+          ''
+        ])
+      } else {
+        const qServices = services.filter(s => (doc.service_ids || []).includes(s.id))
+        sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
+        dAmt = Math.round(sub * (doc.discount_pct || 0) / 100)
+        const aft = sub - dAmt
+        const gAmt = Math.round(aft * (doc.gst_pct || 18) / 100)
+        tot = aft + gAmt
+
+        itemsList = qServices.map(s => ({
+          serviceName: s.name,
+          finalPrice: Number(s.quotation_price || s.price_max || s.base_price || 0),
+          category: s.category || 'Service',
+          timeline: s.timeline || 'TBD',
+          pricing_model: s.pricing || 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed',
+          deliverables: s.deliverables || []
+        }))
+
+        breakdownLines = qServices.flatMap((s: any, i: number) => [
+          `### ${i + 1}. ${s.name}`,
+          `**Category:** ${s.category || 'Service'}  |  **Timeline:** ${s.timeline || 'TBD'}  |  **Model:** ${s.pricing === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
+          '',
+          ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
+          '',
+        ])
+      }
 
       const lines = [
         '## Why Netgain?',
         'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
         '',
         '## Service Breakdown',
-        ...qServices.flatMap((s: any, i: number) => [
-          `### ${i + 1}. ${s.name}`,
-          `**Category:** ${s.category || 'Service'}  |  **Timeline:** ${s.timeline || 'TBD'}  |  **Model:** ${s.pricing === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
-          '',
-          ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
-          '',
-        ]),
+        ...breakdownLines,
         '## Payment Terms',
         `- One-time services: ${doc.payment_terms_one_time || docsSettings.paymentTermsOneTime}`,
         `- Monthly retainers: ${doc.payment_terms_monthly || docsSettings.paymentTermsMonthly}`,
@@ -124,14 +181,7 @@ export async function buildPdfPayload(
         ...basePayload,
         docType: 'Quotation',
         content: lines.join('\n'),
-        items: qServices.map(s => ({
-          serviceName: s.name,
-          finalPrice: Number(s.quotation_price || s.price_max || s.base_price || 0),
-          category: s.category || 'Service',
-          timeline: s.timeline || 'TBD',
-          pricing_model: s.pricing || 'fixed',
-          deliverables: s.deliverables || []
-        })),
+        items: itemsList,
         subtotal: sub,
         discountTotal: dAmt,
         grandTotal: tot,
@@ -142,15 +192,11 @@ export async function buildPdfPayload(
     }
 
     case 'Invoice': {
-      const qServices = services.filter(s => (doc.service_ids || []).includes(s.id))
-      const sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
-      const discVal = Number(doc.discount_value) || 0
-      const discType = doc.discount_type || 'percentage'
-      const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
-      const aft = Math.max(0, sub - dAmt)
-      const gstPct = Number(doc.gst_pct) || 0
-      const gAmt = Math.round(aft * gstPct / 100)
-      const tot = aft + gAmt
+      let sub = 0
+      let dAmt = 0
+      let tot = 0
+      let scaledItems: any[] = []
+      let gstPct = Number(doc.gst_pct) || 0
 
       let pct = 100
       const paymentScheduleEntry = doc.payment_schedule_entry || ''
@@ -161,22 +207,59 @@ export async function buildPdfPayload(
         }
       }
       const scaleFactor = pct / 100
+
+      if (lineItems.length > 0) {
+        sub = lineItems.reduce((a, item) => a + (Number(item.unit_price) * Number(item.quantity || 1)), 0)
+        const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
+        const discType = doc.discount_type || 'percentage'
+        const discVal = Number(doc.discount_value) || 0
+        const overallDiscAmt = discType === 'percentage'
+          ? Math.round((sub - lineDisc) * discVal / 100)
+          : discVal
+        dAmt = lineDisc + overallDiscAmt
+        const aft = Math.max(0, sub - dAmt)
+        const gAmt = Math.round(aft * gstPct / 100)
+        tot = aft + gAmt
+
+        scaledItems = lineItems.map(item => {
+          const scaledPrice = Math.round(Number(item.unit_price) * scaleFactor)
+          const scaledFinalPrice = Math.round(Number(item.total) * scaleFactor)
+          return {
+            serviceName: paymentScheduleEntry ? `${item.service_name} - ${paymentScheduleEntry}` : item.service_name,
+            finalPrice: scaledFinalPrice,
+            category: 'Service',
+            pricing_model: 'fixed',
+            deliverables: []
+          }
+        })
+      } else {
+        const qServices = services.filter(s => (doc.service_ids || []).includes(s.id))
+        sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
+        const discVal = Number(doc.discount_value) || 0
+        const discType = doc.discount_type || 'percentage'
+        const overallDiscAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
+        dAmt = overallDiscAmt
+        const aft = Math.max(0, sub - dAmt)
+        const gAmt = Math.round(aft * gstPct / 100)
+        tot = aft + gAmt
+
+        scaledItems = qServices.map(s => {
+          const scaledPrice = Math.round(Number(s.quotation_price || s.price_max || s.base_price || 0) * scaleFactor)
+          return {
+            serviceName: paymentScheduleEntry ? `${s.name} - ${paymentScheduleEntry}` : s.name,
+            finalPrice: scaledPrice,
+            category: s.category || 'Service',
+            pricing_model: s.pricing || 'fixed',
+            deliverables: s.deliverables || []
+          }
+        })
+      }
+
       const scaledSub = Math.round(sub * scaleFactor)
       const scaledDAmt = Math.round(dAmt * scaleFactor)
       const scaledAft = Math.max(0, scaledSub - scaledDAmt)
       const scaledGAmt = Math.round(scaledAft * gstPct / 100)
       const scaledTot = scaledAft + scaledGAmt
-
-      const scaledItems = qServices.map(s => {
-        const scaledPrice = Math.round(Number(s.quotation_price || s.price_max || s.base_price || 0) * scaleFactor)
-        return {
-          serviceName: paymentScheduleEntry ? `${s.name} - ${paymentScheduleEntry}` : s.name,
-          finalPrice: scaledPrice,
-          category: s.category || 'Service',
-          pricing_model: s.pricing || 'fixed',
-          deliverables: s.deliverables || []
-        }
-      })
 
       const today = new Date(doc.created || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
       const dueFormatted = doc.due
@@ -218,18 +301,45 @@ export async function buildPdfPayload(
     }
 
     case 'SOW': {
+      let sowDeliverables = ''
+      let sub = Number(doc.value) || 0
+      let dAmt = 0
+      let tot = Number(doc.value) || 0
+      let itemsList: any[] = []
+
+      if (lineItems.length > 0) {
+        sub = lineItems.reduce((a, item) => a + (Number(item.unit_price) * Number(item.quantity)), 0)
+        const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
+        const overallDiscAmt = Number(doc.discount_value) || 0
+        dAmt = lineDisc + overallDiscAmt
+        const lineTax = lineItems.reduce((a, item) => a + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        tot = (sub - dAmt) + lineTax
+
+        sowDeliverables = lineItems.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
+        itemsList = lineItems.map(item => ({
+          serviceName: item.service_name,
+          finalPrice: item.total,
+          category: 'Service',
+          pricing_model: 'fixed',
+          deliverables: item.description ? item.description.split('\n') : []
+        }))
+      } else {
+        sowDeliverables = (doc.deliverables || '').split('\n').filter(Boolean).map((d: string) => `- ${d}`).join('\n')
+        itemsList = []
+      }
+
       const content = [
         '## Project Overview',
         `**Project:** ${doc.project}`,
         `**Client:** ${doc.client}${doc.contact ? ` (Attn: ${doc.contact})` : ''}`,
         `**Timeline:** ${doc.timeline || 'To be defined in kickoff'}`,
-        `**Contract Value:** ${doc.value ? formatCurrency(Number(doc.value)) : 'As per quotation'}`,
+        `**Contract Value:** ${tot ? formatCurrency(tot) : 'As per quotation'}`,
         '',
         '## Objectives',
         doc.objectives || "To deliver a high-quality solution that meets the client's business goals.",
         '',
         '## Deliverables',
-        ...(doc.deliverables || '').split('\n').filter(Boolean).map((d: string) => `- ${d}`),
+        sowDeliverables,
         '',
         doc.milestones ? `## Project Milestones\n${doc.milestones.split('\n').filter(Boolean).map((m: string, i: number) => `**Milestone ${i + 1}:** ${m}`).join('\n')}` : '',
         '',
@@ -250,23 +360,50 @@ export async function buildPdfPayload(
         ...basePayload,
         docType: 'SOW',
         content,
-        items: [],
-        subtotal: Number(doc.value) || 0,
-        discountTotal: 0,
-        grandTotal: Number(doc.value) || 0,
+        items: itemsList,
+        subtotal: sub,
+        discountTotal: dAmt,
+        grandTotal: tot,
       } as PdfPayload
     }
 
     case 'Agreement': {
+      let sub = Number(doc.value) || 0
+      let dAmt = 0
+      let tot = Number(doc.value) || 0
+      let itemsList: any[] = []
+      let servicesCovered = ''
+
+      if (lineItems.length > 0) {
+        sub = lineItems.reduce((a, item) => a + (Number(item.unit_price) * Number(item.quantity)), 0)
+        const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
+        const overallDiscAmt = Number(doc.discount_value) || 0
+        dAmt = lineDisc + overallDiscAmt
+        const lineTax = lineItems.reduce((a, item) => a + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        tot = (sub - dAmt) + lineTax
+
+        servicesCovered = lineItems.map((item: any) => `- ${item.service_name}: ${item.description || ''}`).join('\n')
+        itemsList = lineItems.map(item => ({
+          serviceName: item.service_name,
+          finalPrice: item.total,
+          category: 'Service',
+          pricing_model: 'fixed',
+          deliverables: item.description ? item.description.split('\n') : []
+        }))
+      } else {
+        servicesCovered = (doc.services || '').split('\n').filter(Boolean).map((s: string) => `- ${s.trim()}`).join('\n')
+        itemsList = []
+      }
+
       const content = [
         `## Agreement Details`,
         `**Agreement Type:** ${doc.type}`,
         `**Client:** ${doc.client}${doc.contact ? ` (Attn: ${doc.contact})` : ''}`,
         `**Duration:** ${doc.duration || 'As agreed'}`,
-        `**Contract Value:** ${doc.value > 0 ? formatCurrency(Number(doc.value)) : 'As per schedule'}`,
+        `**Contract Value:** ${tot > 0 ? formatCurrency(tot) : 'As per schedule'}`,
         '',
         '## Scope of Services',
-        ...(doc.services || '').split('\n').filter(Boolean).map((s: string) => `- ${s.trim()}`),
+        servicesCovered,
         '',
         '## Intellectual Property',
         doc.ip,
@@ -288,10 +425,10 @@ export async function buildPdfPayload(
         ...basePayload,
         docType: 'Agreement',
         content,
-        items: [],
-        subtotal: Number(doc.value) || 0,
-        discountTotal: 0,
-        grandTotal: Number(doc.value) || 0,
+        items: itemsList,
+        subtotal: sub,
+        discountTotal: dAmt,
+        grandTotal: tot,
       } as PdfPayload
     }
 

@@ -21,6 +21,7 @@ import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
+import { LineItemsTable } from '@/components/ui/line-items-table'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
@@ -68,6 +69,7 @@ type Quote = {
   device?: string;
   client_id?: string;
   customSubtotal?: number | null;
+  items?: any[];
 }
 
 const INITIAL: Quote[] = []
@@ -133,6 +135,7 @@ function blankForm(initialDocs?: any) {
     adBudgetOverride: false,
     adBudgetBillThrough: false,
     customSubtotal: null as number | null,
+    items: [] as any[],
   }
 }
 
@@ -183,60 +186,31 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
           <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="e.g. Aaron Shah" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
           <div className="space-y-1"><Label>Email</Label><Input type="email" placeholder="client@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
           <div className="space-y-1"><Label>Phone</Label><Input placeholder="10-digit number" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Business Type</Label>
-            <Select value={form.businessType} onValueChange={v => setForm({ ...form, businessType: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{['E-Commerce','D2C Brand','B2B Company','SaaS / Software','Retail / Offline','Service Business','Healthcare','Education','Real Estate','Manufacturing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
+          <div className="space-y-1">
+            <Label>Business Type</Label>
+            <Input 
+              value={form.businessType || ''} 
+              readOnly 
+              className="bg-muted/50 cursor-not-allowed opacity-80" 
+              placeholder="Auto-populated from CRM"
+            />
           </div>
           <div className="space-y-1"><Label>Industry</Label><Input placeholder="e.g. Fashion, Tech, Food" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} /></div>
           <div className="col-span-1 sm:col-span-2 space-y-1"><Label>GST Number (optional)</Label><Input placeholder="29AABCN1234D1Z1" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Select Services ({selSvcs.length} selected)</p>
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9 h-9"
-            placeholder="Search services..."
-            value={serviceSearch}
-            onChange={e => setServiceSearch(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-          {allSvcs.filter(svc => svc.name.toLowerCase().includes(serviceSearch.toLowerCase()) || svc.category.toLowerCase().includes(serviceSearch.toLowerCase())).map(svc => {
-            const sel = form.selectedIds.includes(svc.id)
-            let priceVal = svc.price
-            let isCalculated = false
-            if (svc.catId === '3') {
-              priceVal = form.adBudgetOverride 
-                ? (form.adBudgetFixed || 0) 
-                : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
-              isCalculated = true
-            }
-            const priceStr = isCalculated 
-              ? `Setup: ${formatCurrency(svc.price)} (One-time) + Monthly: ${formatCurrency(priceVal)}/mo`
-              : (svc.priceMin && svc.priceMax
-                  ? `${formatCurrency(svc.priceMin)} - ${formatCurrency(svc.priceMax)}`
-                  : formatCurrency(svc.price))
-            return (
-              <button key={svc.id} type="button" onClick={() => toggleSvc(svc.id)} className={`flex items-center justify-between w-full rounded-lg border p-3 text-left transition-all ${sel ? 'border-gold/50 bg-gold/5' : 'border-border hover:border-gold/20'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${sel ? 'bg-gold border-gold' : 'border-muted-foreground'}`}>
-                    {sel && <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>}
-                  </div>
-                  <div><p className="text-sm font-medium">{svc.name}</p><p className="text-xs text-muted-foreground">{svc.category} · {svc.timeline}</p></div>
-                </div>
-                <div className="text-right shrink-0 ml-4">
-                  <span className="text-sm font-bold text-gold">{priceStr}</span>
-                  {(svc.priceMin && svc.priceMax && !isCalculated) && <p className="text-[10px] text-muted-foreground">Range estimate</p>}
-                  {isCalculated && <p className="text-[10px] text-gold/80">Dynamic service fee + setup</p>}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+        <LineItemsTable
+          variant="simple"
+          items={form.items || []}
+          onChange={(items) => {
+            setForm({
+              ...form,
+              items,
+              selectedIds: items.map(i => i.service_id).filter(Boolean) as string[]
+            })
+          }}
+        />
       </div>
 
     {selSvcs.some(s => s.catId === '3') && (
@@ -316,7 +290,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         </div>
       </div>
     )}
-    {selSvcs.length > 0 && (
+    {(form.items?.length ?? 0) > 0 && (
       <div>
         <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing & Totals</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -408,6 +382,40 @@ export default function QuotationsPage() {
   const [form, setForm] = useState(() => blankForm())
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('clientId') || params.get('prefill_client_id')
+    const autoOpen = params.get('autoOpen') || params.get('prefill')
+
+    if (clientId && autoOpen === 'true') {
+      const fetchClient = async () => {
+        if (isSupabaseConfigured()) {
+          const { data: client, error } = await supabase
+            .from('crm_clients')
+            .select('*')
+            .eq('id', clientId)
+            .maybeSingle()
+          if (client) {
+            setForm(prev => ({
+              ...prev,
+              client: client.business || client.name,
+              contact: client.name,
+              phone: client.phone || '',
+              email: client.email || '',
+              businessType: client.type || prev.businessType,
+              gst: client.gst || prev.gst
+            }))
+            setShowCreate(true)
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+          }
+        }
+      }
+      fetchClient()
+    }
+  }, [quotes])
+
+  useEffect(() => {
     const cached = getCachedData<{ quotes: Quote[], servicesData: any[], paymentSchedules: any[], companyDocs?: any }>('quotations')
     if (cached) {
       setQuotes(cached.quotes)
@@ -425,8 +433,8 @@ export default function QuotationsPage() {
       if (isSupabaseConfigured()) {
         try {
           const [qRes, sRes, cRes] = await Promise.all([
-            supabase.from('quotations').select('*').order('created_at', { ascending: false }),
-            supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false }),
+            supabase.from('quotations').select('*, quotation_items(*)').order('created_at', { ascending: false }),
+            supabase.from('services').select('*').eq('status', 'active').order('created_at', { ascending: false }),
             supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
           
@@ -508,6 +516,7 @@ export default function QuotationsPage() {
               device: q.device || '',
               client_id: q.client_id || '',
               customSubtotal: q.custom_subtotal ? Number(q.custom_subtotal) : null,
+              items: q.quotation_items || []
             }))
             setQuotes(mappedQuotes)
           }
@@ -557,10 +566,20 @@ export default function QuotationsPage() {
     return sum + s.price
   }, 0)
 
-  const subtotal = computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
-  const discAmt  = Math.round(subtotal * form.discountPct / 100)
+  const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
+  const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
+
+  const subtotal = form.items && form.items.length > 0
+    ? lineItemsSubtotal
+    : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0))
+
+  const discAmt = form.items && form.items.length > 0
+    ? lineItemsDiscount + Math.round((lineItemsSubtotal - lineItemsDiscount) * form.discountPct / 100)
+    : Math.round(subtotal * form.discountPct / 100)
+
   const afterDisc = subtotal - discAmt
-  const gstAmt   = Math.round(afterDisc * form.gstPct / 100)
+  const gstAmt = Math.round(afterDisc * form.gstPct / 100)
+
   const grandTotal = afterDisc + gstAmt
 
   const filtered = quotes.filter(q => {
@@ -571,6 +590,23 @@ export default function QuotationsPage() {
 
   function openEdit(q: Quote) {
     setEditQuote(q)
+
+    const legacyItems = q.serviceIds ? q.serviceIds.map((sid, idx) => {
+      const svc = servicesData.find(s => s.id === sid)
+      return {
+        id: Math.random().toString(36).substring(2, 9),
+        service_id: sid,
+        service_name: svc ? svc.name : 'Unknown Service',
+        description: '',
+        quantity: 1,
+        unit_price: svc ? svc.price : 0,
+        discount: 0,
+        tax: 0,
+        total: svc ? svc.price : 0,
+        sort_order: idx
+      }
+    }) : []
+
     setForm({
       projectTitle: q.projectTitle,
       client: q.client,
@@ -596,6 +632,7 @@ export default function QuotationsPage() {
       adBudgetOverride: q.adBudgetOverride || false,
       adBudgetBillThrough: q.adBudgetBillThrough || false,
       customSubtotal: q.customSubtotal || null,
+      items: (q.items && q.items.length > 0) ? q.items : legacyItems,
     })
   }
 
@@ -606,76 +643,100 @@ export default function QuotationsPage() {
   async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     
-    // Calculate dynamic price for Paid Advertising services (catId === '3')
-    const adBudgetFee = data.adBudgetOverride 
-      ? (data.adBudgetFixed || 0) 
-      : Math.round((data.adBudget || 0) * ((data.adBudgetPct || 15) / 100))
-
-    const computedSub = svcs.reduce((sum, s) => {
-      if (s.catId === '3') {
-        return sum + s.price + adBudgetFee
-      }
-      return sum + s.price
-    }, 0)
-
-    const sub = computedSub + (data.adBudgetBillThrough ? (data.adBudget || 0) : 0)
-    const dAmt  = Math.round(sub * disc / 100)
-    const aft   = sub - dAmt
-    const gAmt  = Math.round(aft * gst / 100)
-    const tot   = aft + gAmt
-
-    // Map items, splitting Paid Advertising into Setup Cost and Monthly Service Fee
+    let sub = 0
+    let dAmt = 0
+    let tot = 0
     const pdfItems: any[] = []
-    svcs.forEach(s => {
-      if (s.catId === '3') {
-        // 1. One-time Setup Cost
+
+    if (data.items && data.items.length > 0) {
+      const lineItemsSubtotal = data.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity || 1)), 0)
+      const lineItemsDiscount = data.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+
+      sub = lineItemsSubtotal
+      dAmt = lineItemsDiscount + Math.round((lineItemsSubtotal - lineItemsDiscount) * disc / 100)
+      const afterOverallDisc = sub - dAmt
+      const gAmt = Math.round(afterOverallDisc * gst / 100)
+      tot = afterOverallDisc + gAmt
+
+      data.items.forEach((item: any) => {
         pdfItems.push({
-          serviceName: `${s.name} - Setup Cost`,
-          finalPrice: s.price,
-          price: s.price,
-          quantity: 1,
-          category: s.category,
-          timeline: s.timeline,
+          serviceName: item.service_name,
+          finalPrice: item.total,
+          price: item.unit_price,
+          quantity: item.quantity,
+          category: 'Service',
+          timeline: 'As per SOW',
           pricing_model: 'fixed',
-          deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+          deliverables: []
         })
-        // 2. Monthly Service Fee
+      })
+    } else {
+      // Calculate dynamic price for Paid Advertising services (catId === '3')
+      const adBudgetFee = data.adBudgetOverride 
+        ? (data.adBudgetFixed || 0) 
+        : Math.round((data.adBudget || 0) * ((data.adBudgetPct || 15) / 100))
+
+      const computedSub = svcs.reduce((sum, s) => {
+        if (s.catId === '3') {
+          return sum + s.price + adBudgetFee
+        }
+        return sum + s.price
+      }, 0)
+
+      sub = computedSub + (data.adBudgetBillThrough ? (data.adBudget || 0) : 0)
+      dAmt  = Math.round(sub * disc / 100)
+      const aft   = sub - dAmt
+      const gAmt  = Math.round(aft * gst / 100)
+      tot   = aft + gAmt
+
+      svcs.forEach(s => {
+        if (s.catId === '3') {
+          pdfItems.push({
+            serviceName: `${s.name} - Setup Cost`,
+            finalPrice: s.price,
+            price: s.price,
+            quantity: 1,
+            category: s.category,
+            timeline: s.timeline,
+            pricing_model: 'fixed',
+            deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+          })
+          pdfItems.push({
+            serviceName: `${s.name} - Monthly Service Fee`,
+            finalPrice: adBudgetFee,
+            price: adBudgetFee,
+            quantity: 1,
+            category: s.category,
+            timeline: s.timeline,
+            pricing_model: 'monthly',
+            deliverables: s.deliverables
+          })
+        } else {
+          pdfItems.push({
+            serviceName: s.name,
+            finalPrice: s.price,
+            price: s.price,
+            quantity: 1,
+            category: s.category,
+            timeline: s.timeline,
+            pricing_model: s.model,
+            deliverables: s.deliverables
+          })
+        }
+      })
+
+      if (data.adBudgetBillThrough && data.adBudget && data.adBudget > 0) {
         pdfItems.push({
-          serviceName: `${s.name} - Monthly Service Fee`,
-          finalPrice: adBudgetFee,
-          price: adBudgetFee,
+          serviceName: "Ad Budget (Paid Ads Spend)",
+          finalPrice: data.adBudget,
+          price: data.adBudget,
           quantity: 1,
-          category: s.category,
-          timeline: s.timeline,
-          pricing_model: 'monthly',
-          deliverables: s.deliverables
-        })
-      } else {
-        pdfItems.push({
-          serviceName: s.name,
-          finalPrice: s.price,
-          price: s.price,
-          quantity: 1,
-          category: s.category,
-          timeline: s.timeline,
-          pricing_model: s.model,
-          deliverables: s.deliverables
+          category: "Ad Spend",
+          timeline: "Monthly",
+          pricing_model: "monthly",
+          deliverables: ["Advertising spend budget on Google/Meta networks"]
         })
       }
-    })
-
-    // If ad budget is billed through Netgain, append it as a line item
-    if (data.adBudgetBillThrough && data.adBudget && data.adBudget > 0) {
-      pdfItems.push({
-        serviceName: "Ad Budget (Paid Ads Spend)",
-        finalPrice: data.adBudget,
-        price: data.adBudget,
-        quantity: 1,
-        category: "Ad Spend",
-        timeline: "Monthly",
-        pricing_model: "monthly",
-        deliverables: ["Advertising spend budget on Google/Meta networks"]
-      })
     }
 
     const payload = {
@@ -763,6 +824,7 @@ export default function QuotationsPage() {
         adBudgetOverride: form.adBudgetOverride,
         adBudgetBillThrough: form.adBudgetBillThrough,
         customSubtotal: form.customSubtotal,
+        items: form.items || [],
       } as any
 
       if (isSupabaseConfigured()) {
@@ -804,6 +866,26 @@ export default function QuotationsPage() {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
             setGenerating(false)
             return
+          }
+
+          if (form.items && form.items.length > 0) {
+            const { error: itemsErr } = await supabase.from('quotation_items').insert(
+              form.items.map((item, idx) => ({
+                quotation_id: newQ.id,
+                service_id: item.service_id,
+                service_name: item.service_name,
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                discount: item.discount,
+                tax: item.tax,
+                total: item.total,
+                sort_order: idx
+              }))
+            )
+            if (itemsErr) {
+              toast({ title: 'Error saving quotation items', description: itemsErr.message, variant: 'destructive' })
+            }
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
@@ -857,6 +939,7 @@ export default function QuotationsPage() {
       adBudgetOverride: form.adBudgetOverride,
       adBudgetBillThrough: form.adBudgetBillThrough,
       customSubtotal: form.customSubtotal,
+      items: form.items || [],
     } as any
 
     if (isSupabaseConfigured()) {
@@ -893,6 +976,28 @@ export default function QuotationsPage() {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })
           setGenerating(false)
           return
+        }
+
+        // Delete old items and insert new ones
+        await supabase.from('quotation_items').delete().eq('quotation_id', editQuote.id)
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('quotation_items').insert(
+            form.items.map((item, idx) => ({
+              quotation_id: editQuote.id,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving quotation items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
@@ -1421,7 +1526,18 @@ function buildContentBody(q: Quote, svcs: any[]) {
     'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
   ]
 
-  if (svcs && svcs.length > 0) {
+  if (q.items && q.items.length > 0) {
+    const servicesPart = [
+      '## Service Breakdown',
+      ...q.items.flatMap((item: any, i: number) => [
+        `### ${i+1}. ${item.service_name}`,
+        item.description ? `${item.description}` : '',
+        `**Quantity:** ${item.quantity}  |  **Unit Price:** INR ${item.unit_price.toLocaleString('en-IN')}  |  **Tax:** ${item.tax}%`,
+        ''
+      ])
+    ].join('\n')
+    parts.push(servicesPart)
+  } else if (svcs && svcs.length > 0) {
     const servicesPart = [
       '## Service Breakdown',
       ...svcs.flatMap((s: any, i: number) => [

@@ -20,6 +20,7 @@ import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { LineItemsTable } from '@/components/ui/line-items-table'
 
 type SOW = { 
   id: string; docId: string; client: string; contact: string; phone: string; email: string
@@ -40,6 +41,7 @@ type SOW = {
   browser?: string;
   device?: string;
   client_id?: string;
+  items?: any[];
 }
 
 const mockSOWs: SOW[] = []
@@ -97,8 +99,42 @@ export default function SOWPage() {
     revisions: '2 rounds of revisions included per deliverable',
     confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.',
     jurisdiction: 'Hyderabad, Telangana, India',
-    customTerms: compileDefaultSowTerms(null)
+    customTerms: compileDefaultSowTerms(null),
+    items: [] as any[]
   })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('clientId') || params.get('prefill_client_id')
+    const autoOpen = params.get('autoOpen') || params.get('prefill')
+
+    if (clientId && autoOpen === 'true') {
+      const fetchClient = async () => {
+        if (isSupabaseConfigured()) {
+          const { data: client, error } = await supabase
+            .from('crm_clients')
+            .select('*')
+            .eq('id', clientId)
+            .maybeSingle()
+          if (client) {
+            setForm(prev => ({
+              ...prev,
+              client: client.business || client.name,
+              contact: client.name,
+              phone: client.phone || '',
+              email: client.email || '',
+              businessType: client.type || prev.businessType
+            }))
+            setShowCreate(true)
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+          }
+        }
+      }
+      fetchClient()
+    }
+  }, [sows])
 
   function resetForm(sow?: SOW | null, docs?: any) {
     if (sow) {
@@ -120,7 +156,8 @@ export default function SOWPage() {
         revisions: sow.revisions,
         confidentiality: '',
         jurisdiction: sow.jurisdiction,
-        customTerms: getSowTerms(sow, docs)
+        customTerms: getSowTerms(sow, docs),
+        items: sow.items || []
       })
     } else {
       setForm({
@@ -141,7 +178,8 @@ export default function SOWPage() {
         revisions: '2 rounds of revisions included per deliverable',
         confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.',
         jurisdiction: 'Hyderabad, Telangana, India',
-        customTerms: compileDefaultSowTerms(docs)
+        customTerms: compileDefaultSowTerms(docs),
+        items: [] as any[]
       })
     }
   }
@@ -164,10 +202,10 @@ export default function SOWPage() {
       if (isSupabaseConfigured()) {
         try {
           const [sRes, qRes, iRes, svRes, cRes] = await Promise.all([
-            supabase.from('sows').select('*').order('created_at', { ascending: false }),
+            supabase.from('sows').select('*, sow_items(*)').order('created_at', { ascending: false }),
             supabase.from('quotations').select('*').order('created_at', { ascending: false }),
             supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('id, name, deliverables'),
+            supabase.from('services').select('id, name, deliverables').eq('status', 'active'),
             supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
@@ -279,6 +317,7 @@ export default function SOWPage() {
               browser: s.browser || '',
               device: s.device || '',
               client_id: s.client_id || '',
+              items: s.sow_items || []
             }))
             setSows(mappedSows)
           }
@@ -376,7 +415,34 @@ export default function SOWPage() {
     toast({ title: 'Extracted Pricing from Invoice' })
   }
 
-  function buildPayload(f: typeof form, clientName: string, project: string, docId: string) {
+  function buildPayload(f: typeof form | any, clientName: string, project: string, docId: string) {
+    let sub = Number(f.value) || 0
+    let dAmt = 0
+    let tot = Number(f.value) || 0
+    let pdfItems: any[] = []
+    let deliverablesMarkdown = ''
+
+    if (f.items && f.items.length > 0) {
+      sub = f.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+      const lineDisc = f.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+      dAmt = lineDisc
+      const lineTax = f.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      tot = (sub - dAmt) + lineTax
+
+      deliverablesMarkdown = f.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
+      pdfItems = f.items.map((item: any) => ({
+        serviceName: item.service_name,
+        finalPrice: item.total,
+        price: item.unit_price,
+        quantity: item.quantity,
+        category: 'Service',
+        pricing_model: 'fixed',
+        deliverables: item.description ? item.description.split('\n') : []
+      }))
+    } else {
+      deliverablesMarkdown = f.deliverables ? f.deliverables.split('\n').filter(Boolean).map((d: string) => d.trim().startsWith('-') || d.trim().startsWith('•') ? d : `- ${d}`).join('\n') : ''
+    }
+
     const contentParts = [
       '## Project Overview',
       `**Project:** ${project}`,
@@ -384,18 +450,17 @@ export default function SOWPage() {
       `**Business Name:** ${clientName}`,
       f.phone ? `**Phone:** ${f.phone}` : '',
       f.email ? `**Email:** ${f.email}` : '',
-      f.value ? `**Contract Value:** ${formatCurrency(Number(f.value))}` : '',
+      `**Contract Value:** ${formatCurrency(tot)}`,
     ].filter(Boolean)
 
     if (f.objectives && f.objectives.trim()) {
       contentParts.push('## Objectives', f.objectives)
     }
-    if (f.deliverables && f.deliverables.trim()) {
-      const cleanedDel = f.deliverables.split('\n').filter(Boolean).map(d => d.trim().startsWith('-') || d.trim().startsWith('•') ? d : `- ${d}`).join('\n')
-      contentParts.push('## Deliverables', cleanedDel)
+    if (deliverablesMarkdown) {
+      contentParts.push('## Deliverables', deliverablesMarkdown)
     }
     if (f.milestones && f.milestones.trim()) {
-      contentParts.push('## Project Milestones', f.milestones.split('\n').filter(Boolean).map((m, i) => `**Milestone ${i + 1}:** ${m}`).join('\n'))
+      contentParts.push('## Project Milestones', f.milestones.split('\n').filter(Boolean).map((m: any, i: number) => `**Milestone ${i + 1}:** ${m}`).join('\n'))
     }
     if (f.payment && f.payment.trim()) {
       contentParts.push('## Payment Terms', f.payment)
@@ -404,7 +469,7 @@ export default function SOWPage() {
       contentParts.push('## Revision Policy', f.revisions)
     }
     if (f.exclusions && f.exclusions.trim()) {
-      contentParts.push('## Exclusions', f.exclusions.split(',').map(e => e.trim()).filter(Boolean).map(e => `- ${e}`).join('\n'))
+      contentParts.push('## Exclusions', f.exclusions.split(',').map((e: any) => e.trim()).filter(Boolean).map((e: any) => `- ${e}`).join('\n'))
     }
     if (f.jurisdiction && f.jurisdiction.trim()) {
       contentParts.push('## Jurisdiction', `This agreement shall be governed by the laws of **${f.jurisdiction}**.`)
@@ -418,10 +483,10 @@ export default function SOWPage() {
       companyName: clientName,
       clientInfo: { mobile: f.phone },
       content,
-      items: [],
-      subtotal: Number(f.value) || 0,
-      discountTotal: 0,
-      grandTotal: Number(f.value) || 0,
+      items: pdfItems,
+      subtotal: sub,
+      discountTotal: dAmt,
+      grandTotal: tot,
       docsSettings: {
         customTerms: f.customTerms || getSowTerms(f, companyDocs)
       }
@@ -588,6 +653,17 @@ export default function SOWPage() {
         : [{ date: new Date().toISOString().split('T')[0], action: 'Document generated' }]
       const targetStatus = editItem ? editItem.status : 'draft'
 
+      const lineSubtotal = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+        : Number(form.value) || 0
+      const lineDiscount = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+        : 0
+      const lineTax = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        : 0
+      const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
+
       const newSOW: SOW = { 
         id: targetId, 
         docId, 
@@ -596,7 +672,7 @@ export default function SOWPage() {
         phone: form.phone,
         email: form.email || '',
         project: form.project, 
-        value: Number(form.value) || 0, 
+        value: calculatedValue, 
         timeline: form.timeline, 
         objectives: form.objectives, 
         deliverables: form.deliverables, 
@@ -608,7 +684,8 @@ export default function SOWPage() {
         status: targetStatus, 
         created: targetCreated, 
         history: targetHistory,
-        customTerms: form.customTerms
+        customTerms: form.customTerms,
+        items: form.items || []
       }
 
       if (isSupabaseConfigured()) {
@@ -620,7 +697,7 @@ export default function SOWPage() {
           phone: form.phone,
           email: form.email || '',
           project: form.project,
-          value: Number(form.value) || 0,
+          value: calculatedValue,
           timeline: form.timeline,
           objectives: form.objectives,
           deliverables: form.deliverables,
@@ -643,6 +720,30 @@ export default function SOWPage() {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
           setGenerating(false)
           return
+        }
+
+        if (editItem) {
+          await supabase.from('sow_items').delete().eq('sow_id', targetId)
+        }
+
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('sow_items').insert(
+            form.items.map((item, idx) => ({
+              sow_id: targetId,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving SOW items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       }
 
@@ -805,7 +906,19 @@ export default function SOWPage() {
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                 <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Project Name *</Label><Input placeholder="e.g. E-Commerce Platform Build" value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Contract Value (₹)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="149999" 
+                    value={form.items && form.items.length > 0
+                      ? form.items.reduce((sum, item) => sum + item.total, 0)
+                      : form.value} 
+                    onChange={e => setForm({ ...form, value: e.target.value })} 
+                    readOnly={form.items && form.items.length > 0}
+                    className={form.items && form.items.length > 0 ? "bg-muted/50 cursor-not-allowed font-medium text-gold" : ""}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Timeline</Label><Input placeholder="e.g. 8 Weeks from kickoff" value={form.timeline} onChange={e => setForm({ ...form, timeline: e.target.value })} /></div>
               </div>
             </div>
@@ -813,24 +926,37 @@ export default function SOWPage() {
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Scope Details</p>
               <div className="space-y-3">
                 <div className="space-y-1"><Label>Objectives</Label><Textarea className="h-16 resize-none" placeholder="What will be achieved? What problems are solved?" value={form.objectives} onChange={e => setForm({ ...form, objectives: e.target.value })} /></div>
-                <div className="space-y-1">
-                  <Label>Search & Add Service Deliverables</Label>
-                  <ServiceAutocomplete
-                    placeholder="Search for a service to append..."
-                    onSelect={(svc) => {
-                      const bulletPoints = svc.deliverables && Array.isArray(svc.deliverables)
-                        ? svc.deliverables.map((d: string) => `- ${d}`).join('\n')
-                        : ''
-                      const entry = `**${svc.name}**\n${bulletPoints}`
-                      setForm(prev => ({
-                        ...prev,
-                        deliverables: prev.deliverables ? `${prev.deliverables}\n\n${entry}` : entry
-                      }))
-                      toast({ title: `${svc.name} deliverables added` })
-                    }}
-                  />
-                </div>
-                <div className="space-y-1"><Label>Deliverables (one per line)</Label><Textarea className="h-24 resize-none" placeholder="Fully functional Shopify store&#10;Mobile responsive design&#10;Payment gateway integration&#10;Admin dashboard&#10;Training session" value={form.deliverables} onChange={e => setForm({ ...form, deliverables: e.target.value })} /></div>
+                
+                {(!form.items || (form.items.length === 0 && form.deliverables)) ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Search & Add Service Deliverables</Label>
+                      <ServiceAutocomplete
+                        placeholder="Search for a service to append..."
+                        onSelect={(svc) => {
+                          const bulletPoints = svc.deliverables && Array.isArray(svc.deliverables)
+                            ? svc.deliverables.map((d: string) => `- ${d}`).join('\n')
+                            : ''
+                          const entry = `**${svc.name}**\n${bulletPoints}`
+                          setForm(prev => ({
+                            ...prev,
+                            deliverables: prev.deliverables ? `${prev.deliverables}\n\n${entry}` : entry
+                          }))
+                          toast({ title: `${svc.name} deliverables added` })
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1"><Label>Deliverables (one per line)</Label><Textarea className="h-24 resize-none" placeholder="Fully functional Shopify store&#10;Mobile responsive design..." value={form.deliverables} onChange={e => setForm({ ...form, deliverables: e.target.value })} /></div>
+                  </>
+                ) : (
+                  <div className="space-y-1">
+                    <LineItemsTable
+                      items={form.items}
+                      onChange={(items) => setForm({ ...form, items })}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-1"><Label>Milestones (one per line)</Label><Textarea className="h-20 resize-none" placeholder="Discovery & Kickoff (Week 1)&#10;Design Mockups (Week 2-3)&#10;Development (Week 4-7)&#10;Testing & Launch (Week 8)" value={form.milestones} onChange={e => setForm({ ...form, milestones: e.target.value })} /></div>
               </div>
             </div>

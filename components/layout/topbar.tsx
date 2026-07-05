@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Moon, Sun, Bell, Search, Plus, Settings, User, LogOut, ChevronDown, Shield, MessageSquare, X, Check, AlertCircle, Info, Menu } from 'lucide-react'
+import { Moon, Sun, Bell, Plus, Settings, User, LogOut, ChevronDown, Shield, MessageSquare, X, Check, AlertCircle, Info, Menu } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -170,15 +170,6 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Quick search */}
-        <div className="relative hidden md:flex items-center">
-          <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            className="pl-8 h-8 w-56 text-xs bg-muted/50 border-transparent focus:border-gold/30"
-            placeholder="Search anything..."
-          />
-        </div>
-
         {/* Theme toggle */}
         <Button
           variant="ghost" size="icon" className="h-8 w-8"

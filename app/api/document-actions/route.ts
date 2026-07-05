@@ -55,12 +55,13 @@ export async function POST(request: NextRequest) {
     // 2. Perform the requested action
     switch (action) {
       case 'log_timeline': {
+        const eventVal = body.event || 'viewed'
         const { error: timelineErr } = await supabase.from('document_timeline').insert({
           document_type: type,
           document_id: id,
-          event: 'viewed',
+          event: eventVal,
           user_name: username,
-          notes: notes || 'Client opened and viewed the document.'
+          notes: notes || `Document ${eventVal} by ${username}.`
         })
         if (timelineErr) throw timelineErr
 

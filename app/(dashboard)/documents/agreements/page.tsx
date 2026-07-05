@@ -20,6 +20,7 @@ import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { LineItemsTable } from '@/components/ui/line-items-table'
 
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
 const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'needs revision', 'signed', 'completed', 'expired', 'rejected']
@@ -43,6 +44,7 @@ type Agreement = {
   browser?: string;
   device?: string;
   client_id?: string;
+  items?: any[];
 }
 
 const INITIAL: Agreement[] = []
@@ -70,8 +72,8 @@ function getAgreementTerms(agr: Agreement | any, companyDocs?: any) {
   return compileDefaultAgreementTerms(companyDocs)
 }
 
-function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> {
-  return { client: '', contact: '', phone: '', email: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs) }
+function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 'history'> & { items: any[] } {
+  return { client: '', contact: '', phone: '', email: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs), items: [] }
 }
 
 export default function AgreementsPage() {
@@ -93,6 +95,38 @@ export default function AgreementsPage() {
   const [companyDocs, setCompanyDocs] = useState<any>(null)
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const clientId = params.get('clientId') || params.get('prefill_client_id')
+    const autoOpen = params.get('autoOpen') || params.get('prefill')
+
+    if (clientId && autoOpen === 'true') {
+      const fetchClient = async () => {
+        if (isSupabaseConfigured()) {
+          const { data: client, error } = await supabase
+            .from('crm_clients')
+            .select('*')
+            .eq('id', clientId)
+            .maybeSingle()
+          if (client) {
+            setForm(prev => ({
+              ...prev,
+              client: client.business || client.name,
+              contact: client.name,
+              phone: client.phone || '',
+              email: client.email || ''
+            }))
+            setShowCreate(true)
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+          }
+        }
+      }
+      fetchClient()
+    }
+  }, [agreements])
+
   function resetForm(agr?: Agreement | null, docs?: any) {
     if (agr) {
       setForm({
@@ -108,7 +142,8 @@ export default function AgreementsPage() {
         cancellation: agr.cancellation,
         jurisdiction: agr.jurisdiction,
         status: agr.status,
-        customTerms: getAgreementTerms(agr, docs)
+        customTerms: getAgreementTerms(agr, docs),
+        items: agr.items || []
       } as any)
     } else {
       setForm({
@@ -124,7 +159,8 @@ export default function AgreementsPage() {
         cancellation: '30 days written notice required from either party to terminate this agreement.',
         jurisdiction: 'Hyderabad, Telangana, India',
         status: 'draft',
-        customTerms: compileDefaultAgreementTerms(docs)
+        customTerms: compileDefaultAgreementTerms(docs),
+        items: [] as any[]
       } as any)
     }
   }
@@ -147,10 +183,10 @@ export default function AgreementsPage() {
       if (isSupabaseConfigured()) {
         try {
           const [aRes, qRes, iRes, svRes, cRes] = await Promise.all([
-            supabase.from('agreements').select('*').order('created_at', { ascending: false }),
+            supabase.from('agreements').select('*, agreement_items(*)').order('created_at', { ascending: false }),
             supabase.from('quotations').select('*').order('created_at', { ascending: false }),
             supabase.from('invoices').select('*').order('created', { ascending: false }),
-            supabase.from('services').select('id, name, deliverables'),
+            supabase.from('services').select('id, name, deliverables').eq('status', 'active'),
             supabase.from('company_settings').select('*').limit(1).maybeSingle()
           ])
 
@@ -211,6 +247,7 @@ export default function AgreementsPage() {
               browser: a.browser || '',
               device: a.device || '',
               client_id: a.client_id || '',
+              items: a.agreement_items || []
             }))
             setAgreements(mappedAgreements)
           }
@@ -270,7 +307,7 @@ export default function AgreementsPage() {
     }))
   }
 
-  function buildContent(f: typeof form, client: string) {
+  function buildContent(f: typeof form | any, client: string, calculatedValue: number, servicesStr: string) {
     const parts = [
       `## Agreement Details`,
       `**Agreement Type:** ${f.type}`,
@@ -278,12 +315,12 @@ export default function AgreementsPage() {
       `**Business Name:** ${client}`,
       f.phone ? `**Phone:** ${f.phone}` : '',
       f.email ? `**Email:** ${f.email}` : '',
-      `**Contract Value:** ${f.value > 0 ? formatCurrency(f.value) : '—'}`,
+      `**Contract Value:** ${calculatedValue > 0 ? formatCurrency(calculatedValue) : '—'}`,
       f.duration ? `**Duration:** ${f.duration}` : '',
     ].filter(Boolean)
 
-    if (f.services && f.services.trim()) {
-      const cleanSvc = f.services.split('\n').filter(Boolean).map(s => s.trim().startsWith('-') || s.trim().startsWith('•') ? s : `- ${s.trim()}`).join('\n')
+    if (servicesStr && servicesStr.trim()) {
+      const cleanSvc = servicesStr.split('\n').filter(Boolean).map(s => s.trim().startsWith('-') || s.trim().startsWith('•') ? s : `- ${s.trim()}`).join('\n')
       parts.push('## Scope of Services', cleanSvc)
     }
 
@@ -313,17 +350,42 @@ export default function AgreementsPage() {
   }
 
   async function downloadPdf(agr: Agreement) {
+    let sub = Number(agr.value) || 0
+    let dAmt = 0
+    let tot = Number(agr.value) || 0
+    let pdfItems: any[] = []
+    let servicesStr = agr.services || ''
+
+    if (agr.items && agr.items.length > 0) {
+      sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+      const lineDisc = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+      dAmt = lineDisc
+      const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      tot = (sub - dAmt) + lineTax
+
+      servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
+      pdfItems = agr.items.map((item: any) => ({
+        serviceName: item.service_name,
+        finalPrice: item.total,
+        price: item.unit_price,
+        quantity: item.quantity,
+        category: 'Service',
+        pricing_model: 'fixed',
+        deliverables: item.description ? item.description.split('\n') : []
+      }))
+    }
+
     const payload = {
       docType: 'Agreement',
       clientName: agr.contact || agr.client,
       projectTitle: `${agr.type} — ${agr.client}`,
       companyName: agr.client,
       clientInfo: { business: agr.type, mobile: agr.phone },
-      content: buildContent({ ...agr, value: agr.value }, agr.client),
-      items: [],
-      subtotal: agr.value,
-      discountTotal: 0,
-      grandTotal: agr.value,
+      content: buildContent({ ...agr, value: tot }, agr.client, tot, servicesStr),
+      items: pdfItems,
+      subtotal: sub,
+      discountTotal: dAmt,
+      grandTotal: tot,
       docsSettings: {
         customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
       }
@@ -351,7 +413,27 @@ export default function AgreementsPage() {
       const targetId = String(Date.now())
       const targetCreated = new Date().toISOString().slice(0, 10)
       const targetHistory = [{ date: new Date().toISOString().split('T')[0], action: 'Document generated' }]
-      const newAgr: Agreement = { id: targetId, docId, ...form, created: targetCreated, history: targetHistory }
+
+      const lineSubtotal = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+        : Number(form.value) || 0
+      const lineDiscount = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+        : 0
+      const lineTax = form.items && form.items.length > 0
+        ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        : 0
+      const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
+
+      const newAgr: Agreement = { 
+        id: targetId, 
+        docId, 
+        ...form, 
+        value: calculatedValue, 
+        created: targetCreated, 
+        history: targetHistory,
+        items: form.items || []
+      }
 
       await downloadPdf(newAgr)
 
@@ -364,7 +446,7 @@ export default function AgreementsPage() {
           phone: form.phone,
           email: (form as any).email || '',
           type: form.type,
-          value: form.value,
+          value: calculatedValue,
           duration: form.duration,
           services: form.services,
           ip: form.ip,
@@ -379,6 +461,26 @@ export default function AgreementsPage() {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
           setGenerating(false)
           return
+        }
+
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('agreement_items').insert(
+            form.items.map((item, idx) => ({
+              agreement_id: targetId,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving agreement items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       }
 
@@ -396,7 +498,25 @@ export default function AgreementsPage() {
   async function handleSaveEdit() {
     if (!editItem) return
     const targetHistory = [...editItem.history, { date: new Date().toISOString().split('T')[0], action: 'Document updated' }]
-    const updated: Agreement = { ...editItem, ...form, history: targetHistory }
+    
+    const lineSubtotal = form.items && form.items.length > 0
+      ? form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+      : Number(form.value) || 0
+    const lineDiscount = form.items && form.items.length > 0
+      ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+      : 0
+    const lineTax = form.items && form.items.length > 0
+      ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      : 0
+    const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
+
+    const updated: Agreement = { 
+      ...editItem, 
+      ...form, 
+      value: calculatedValue, 
+      history: targetHistory,
+      items: form.items || []
+    }
 
     if (isSupabaseConfigured()) {
       try {
@@ -406,7 +526,7 @@ export default function AgreementsPage() {
           phone: form.phone,
           email: (form as any).email || '',
           type: form.type,
-          value: form.value,
+          value: calculatedValue,
           duration: form.duration,
           services: form.services,
           ip: form.ip,
@@ -420,6 +540,28 @@ export default function AgreementsPage() {
         if (error) {
           toast({ title: 'Error saving edit to database', description: error.message, variant: 'destructive' })
           return
+        }
+
+        // Delete old items and insert new ones
+        await supabase.from('agreement_items').delete().eq('agreement_id', editItem.id)
+        if (form.items && form.items.length > 0) {
+          const { error: itemsErr } = await supabase.from('agreement_items').insert(
+            form.items.map((item, idx) => ({
+              agreement_id: editItem.id,
+              service_id: item.service_id,
+              service_name: item.service_name,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount: item.discount,
+              tax: item.tax,
+              total: item.total,
+              sort_order: idx
+            }))
+          )
+          if (itemsErr) {
+            toast({ title: 'Error saving agreement items', description: itemsErr.message, variant: 'destructive' })
+          }
         }
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
@@ -697,24 +839,48 @@ export default function AgreementsPage() {
                     <SelectContent>{AGR_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
+                <div className="space-y-1">
+                  <Label>Contract Value (₹)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="149999" 
+                    value={form.items && form.items.length > 0
+                      ? form.items.reduce((sum, item) => sum + item.total, 0)
+                      : form.value || ''} 
+                    onChange={e => setForm({ ...form, value: Number(e.target.value) })} 
+                    readOnly={form.items && form.items.length > 0}
+                    className={form.items && form.items.length > 0 ? "bg-muted/50 cursor-not-allowed font-medium text-gold" : ""}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Search & Add Service to Scope</Label>
-                  <ServiceAutocomplete
-                    placeholder="Search for a service to add to scope..."
-                    onSelect={(svc) => {
-                      setForm(prev => ({
-                        ...prev,
-                        services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
-                      }))
-                      toast({ title: `${svc.name} added to scope` })
-                    }}
-                  />
-                </div>
-                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                
+                {(!form.items || (form.items.length === 0 && form.services)) ? (
+                  <>
+                    <div className="col-span-1 sm:col-span-2 space-y-1">
+                      <Label>Search & Add Service to Scope</Label>
+                      <ServiceAutocomplete
+                        placeholder="Search for a service to add to scope..."
+                        onSelect={(svc) => {
+                          setForm(prev => ({
+                            ...prev,
+                            services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
+                          }))
+                          toast({ title: `${svc.name} added to scope` })
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                  </>
+                ) : (
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
+                    <LineItemsTable
+                      items={form.items}
+                      onChange={(items) => setForm({ ...form, items })}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div>
@@ -765,24 +931,48 @@ export default function AgreementsPage() {
                     <SelectContent>{AGR_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1"><Label>Contract Value (₹)</Label><Input type="number" placeholder="149999" value={form.value || ''} onChange={e => setForm({ ...form, value: Number(e.target.value) })} /></div>
+                <div className="space-y-1">
+                  <Label>Contract Value (₹)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="149999" 
+                    value={form.items && form.items.length > 0
+                      ? form.items.reduce((sum, item) => sum + item.total, 0)
+                      : form.value || ''} 
+                    onChange={e => setForm({ ...form, value: Number(e.target.value) })} 
+                    readOnly={form.items && form.items.length > 0}
+                    className={form.items && form.items.length > 0 ? "bg-muted/50 cursor-not-allowed font-medium text-gold" : ""}
+                  />
+                </div>
                 <div className="space-y-1"><Label>Duration</Label><Input placeholder="e.g. 6 months, 12 months" value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Phone</Label><Input placeholder="Client phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Client Email</Label><Input type="email" placeholder="client@company.com" value={(form as any).email || ''} onChange={e => setForm({ ...form, email: e.target.value } as any)} /></div>
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Search & Add Service to Scope</Label>
-                  <ServiceAutocomplete
-                    placeholder="Search for a service to add to scope..."
-                    onSelect={(svc) => {
-                      setForm(prev => ({
-                        ...prev,
-                        services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
-                      }))
-                      toast({ title: `${svc.name} added to scope` })
-                    }}
-                  />
-                </div>
-                <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                
+                {(!form.items || (form.items.length === 0 && form.services)) ? (
+                  <>
+                    <div className="col-span-1 sm:col-span-2 space-y-1">
+                      <Label>Search & Add Service to Scope</Label>
+                      <ServiceAutocomplete
+                        placeholder="Search for a service to add to scope..."
+                        onSelect={(svc) => {
+                          setForm(prev => ({
+                            ...prev,
+                            services: prev.services ? `${prev.services}\n${svc.name}` : svc.name
+                          }))
+                          toast({ title: `${svc.name} added to scope` })
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Services Covered (one per line)</Label><Textarea className="h-20 resize-none" placeholder="CRM Setup & Automation&#10;Social Media Management&#10;Meta Ads Management" value={form.services} onChange={e => setForm({ ...form, services: e.target.value })} /></div>
+                  </>
+                ) : (
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
+                    <LineItemsTable
+                      items={form.items}
+                      onChange={(items) => setForm({ ...form, items })}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div>
@@ -895,6 +1085,29 @@ export default function AgreementsPage() {
               subject = emailDetails?.subject || `${agr.type}: ${agr.docId} — ${agr.client}`
               message = emailDetails?.message || `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
               
+              let calculatedValue = agr.value
+              let servicesStr = agr.services || ''
+              let pdfItems: any[] = []
+              let sub = agr.value
+              let dAmt = 0
+
+              if (agr.items && agr.items.length > 0) {
+                sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+                dAmt = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+                const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                calculatedValue = (sub - dAmt) + lineTax
+                servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
+                pdfItems = agr.items.map((item: any) => ({
+                  serviceName: item.service_name,
+                  finalPrice: item.total,
+                  price: item.unit_price,
+                  quantity: item.quantity,
+                  category: 'Service',
+                  pricing_model: 'fixed',
+                  deliverables: item.description ? item.description.split('\n') : []
+                }))
+              }
+
               // Generate matching PDF payload on the fly
               pdfPayload = {
                 docType: 'Agreement',
@@ -902,11 +1115,11 @@ export default function AgreementsPage() {
                 projectTitle: `${agr.type} — ${agr.client}`,
                 companyName: agr.client,
                 clientInfo: { business: agr.type, mobile: agr.phone },
-                content: buildContent({ ...agr, value: agr.value }, agr.client),
-                items: [],
-                subtotal: agr.value,
-                discountTotal: 0,
-                grandTotal: agr.value,
+                content: buildContent({ ...agr, value: calculatedValue }, agr.client, calculatedValue, servicesStr),
+                items: pdfItems,
+                subtotal: sub,
+                discountTotal: dAmt,
+                grandTotal: calculatedValue,
                 docsSettings: {
                   customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
                 }

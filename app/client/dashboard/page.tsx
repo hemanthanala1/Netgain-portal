@@ -387,7 +387,21 @@ export default function ClientDashboardPage() {
     else if (action === 'download') updates.downloaded_at = nowStr
     else if (action === 'sign') { updates.signed_at = nowStr; updates.status = 'signed' }
     else if (action === 'approve') { updates.signed_at = nowStr; updates.status = 'approved' }
-    try { await supabase.from(tableName).update(updates).eq('id', doc.id); await fetchClientData(true) } catch (err) { console.error(err) }
+    try { 
+      await supabase.from(tableName).update(updates).eq('id', doc.id)
+      
+      const eventName = action === 'view' ? 'viewed' : action === 'download' ? 'downloaded' : action === 'sign' ? 'signed' : 'approved'
+      const logNotes = `${doc.type} ${doc.docId} was ${eventName} by client (${updates.device}, IP: ${ip})`
+      await supabase.from('document_timeline').insert({
+        document_type: doc.type,
+        document_id: doc.id,
+        event: eventName,
+        user_name: session?.name || 'Client',
+        notes: logNotes
+      })
+
+      await fetchClientData(true) 
+    } catch (err) { console.error(err) }
   }
 
   const openDoc = (doc: ClientDoc) => { setSelectedDoc(doc); trackActivity(doc, 'view') }

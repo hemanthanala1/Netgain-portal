@@ -211,6 +211,21 @@ export default function VaultPage() {
     setSelectedDoc(doc)
     setShowDetails(true)
     fetchDocDetails(doc)
+
+    if (isSupabaseConfigured()) {
+      fetch('/api/document-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_timeline',
+          id: doc.id,
+          type: doc.type,
+          event: 'viewed',
+          notes: `Document viewed in vault by staff member ${user?.name || user?.email || 'Staff Member'}`,
+          approver: user?.name || user?.email || 'Staff Member'
+        })
+      }).catch(err => console.error('Error logging view event:', err))
+    }
   }
 
   const handleDocAction = async (action: string, notesText?: string) => {
@@ -383,7 +398,7 @@ export default function VaultPage() {
         supabase.from('agreements').select('*'),
         supabase.from('prds').select('*'),
         supabase.from('marketing_reports').select('*'),
-        supabase.from('services').select('*').neq('status', 'archived').order('created_at', { ascending: false }),
+        supabase.from('services').select('*').eq('status', 'active').order('created_at', { ascending: false }),
         supabase.from('company_settings').select('*').limit(1).maybeSingle()
       ])
 
@@ -902,6 +917,26 @@ export default function VaultPage() {
     setDownloadingId(doc.id)
     try {
       toast({ title: 'Download Started', description: `Generating PDF for ${doc.docId}...` })
+
+      if (isSupabaseConfigured()) {
+        try {
+          await fetch('/api/document-actions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'log_timeline',
+              id: doc.id,
+              type: doc.type,
+              event: 'downloaded',
+              notes: `Document downloaded by staff member ${user?.name || user?.email || 'Staff Member'}`,
+              approver: user?.name || user?.email || 'Staff Member'
+            })
+          })
+        } catch (err) {
+          console.error('Error logging download event:', err)
+        }
+      }
+
       if (doc.type === 'Quotation') {
         await downloadQuotation(doc)
       } else if (doc.type === 'Invoice') {

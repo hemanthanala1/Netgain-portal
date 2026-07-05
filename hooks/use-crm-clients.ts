@@ -17,6 +17,7 @@ export interface CRMClient {
   gst?: string
   address?: string
   website?: string
+  pan?: string
 }
 
 const mockClients: CRMClient[] = [
@@ -32,7 +33,8 @@ const mockClients: CRMClient[] = [
     city: 'Mumbai',
     gst: '27AABCF1234M1Z2',
     address: '401, Fashion Tower, Bandra West',
-    website: 'https://fashionhub.in'
+    website: 'https://fashionhub.in',
+    pan: 'ABCDE1234F'
   },
   {
     id: 'mock-2',
@@ -120,7 +122,8 @@ export function useCRMClients() {
             city: c.city || '',
             gst: c.gst || '',
             address: c.address || '',
-            website: c.website || ''
+            website: c.website || '',
+            pan: c.pan || ''
           }))
           setClients(mapped)
         }
@@ -167,7 +170,8 @@ export function useCRMClients() {
                 city: newRecord.city || '',
                 gst: newRecord.gst || '',
                 address: newRecord.address || '',
-                website: newRecord.website || ''
+                website: newRecord.website || '',
+                pan: newRecord.pan || ''
               }
               setClients((prev) => [mapped, ...prev])
             } else if (eventType === 'UPDATE' && newRecord) {
@@ -184,7 +188,8 @@ export function useCRMClients() {
                 city: newRecord.city || '',
                 gst: newRecord.gst || '',
                 address: newRecord.address || '',
-                website: newRecord.website || ''
+                website: newRecord.website || '',
+                pan: newRecord.pan || ''
               }
               setClients((prev) =>
                 prev.map((c) => (c.id === mapped.id ? mapped : c))

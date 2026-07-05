@@ -49,7 +49,7 @@ export function ServiceAutocomplete({
           const { data, error } = await supabase
             .from('services')
             .select('*')
-            .neq('status', 'archived')
+            .eq('status', 'active')
             .order('name', { ascending: true })
           
           if (data) {

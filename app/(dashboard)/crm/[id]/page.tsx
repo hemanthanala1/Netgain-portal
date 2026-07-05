@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit, Loader2, KeyRound, UserCheck, UserX, Copy, ExternalLink, ShieldCheck, MonitorSmartphone } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit, Loader2, KeyRound, UserCheck, UserX, Copy, ExternalLink, ShieldCheck, MonitorSmartphone, Trash2, History } from 'lucide-react'
 import Link from 'next/link'
 import { getInitials, formatDate, formatCurrency, getLeadStatusColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -51,11 +51,42 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
   const [notes, setNotes] = useState<any[]>([])
   const [newNote, setNewNote] = useState('')
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editNoteContent, setEditNoteContent] = useState('')
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<any>(null)
+  const [versions, setVersions] = useState<any[]>([])
+  const [loadingVersions, setLoadingVersions] = useState(false)
   const [activities, setActivities] = useState<any[]>([])
   const [newActivityDescription, setNewActivityDescription] = useState('')
   const [newActivityType, setNewActivityType] = useState('call')
   const [documents, setDocuments] = useState<any[]>([])
   const [meetings, setMeetings] = useState<any[]>([])
+  const [historyNoteId, setHistoryNoteId] = useState<string | null>(null)
+  const [noteHistory, setNoteHistory] = useState<any[]>([])
+  const [loadingNoteHistory, setLoadingNoteHistory] = useState(false)
+
+  const fetchNoteHistory = async (noteId: string) => {
+    setHistoryNoteId(noteId)
+    setLoadingNoteHistory(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('crm_notes_history')
+          .select('*')
+          .eq('note_id', noteId)
+          .order('edited_at', { ascending: false })
+        if (data) setNoteHistory(data)
+      } catch (err) {
+        console.error('Error fetching note history:', err)
+      }
+    } else {
+      setNoteHistory([
+        { id: 'h1', note_id: noteId, content_before: 'Met with client to discuss roadmap.', content_after: 'Met with client to discuss roadmap and finalized milestones.', edited_by: 'Staff Member', edited_at: new Date().toISOString() }
+      ])
+    }
+    setLoadingNoteHistory(false)
+  }
 
   const isPrivileged = user?.role === 'Founder' || user?.role === 'Admin'
 
@@ -182,6 +213,12 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     }
   }
 
+  const [businessTypes, setBusinessTypes] = useState<string[]>([
+    'Restaurant', 'Hospital', 'School', 'College', 'Software Company',
+    'Construction', 'Real Estate', 'Manufacturing', 'Retail', 'Ecommerce',
+    'Healthcare', 'Education', 'Other'
+  ])
+
   useEffect(() => {
     async function fetchClient() {
       setLoading(true)
@@ -196,8 +233,15 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               email: data.email, phone: data.phone, gst: data.gst, website: data.website,
               address: data.address, city: data.city, status: data.status,
               revenue: Number(data.revenue) || 0,
-              joined: data.created_at ? new Date(data.created_at).toISOString().slice(0, 10) : '2024-05-15'
+              joined: data.created_at ? new Date(data.created_at).toISOString().slice(0, 10) : '2024-05-15',
+              pan: data.pan || ''
             })
+          }
+
+          // Fetch active Business Types
+          const { data: bData } = await supabase.from('business_types').select('name').eq('status', 'active').order('name', { ascending: true })
+          if (bData && bData.length > 0) {
+            setBusinessTypes(bData.map((b: any) => b.name))
           }
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
@@ -217,7 +261,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
     async function fetchAllData() {
       if (isSupabaseConfigured()) {
-        const { data: nData } = await supabase.from('crm_notes').select('*').eq('client_id', params.id).order('created_at', { ascending: false })
+        const { data: nData } = await supabase.from('crm_notes').select('*').eq('client_id', params.id).neq('is_deleted', true).order('created_at', { ascending: false })
         if (active && nData) setNotes(nData)
         const { data: aData } = await supabase.from('crm_activities').select('*').eq('client_id', params.id).order('created_at', { ascending: false })
         if (active && aData) setActivities(aData)
@@ -242,7 +286,13 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           if (!active) return
           const { eventType, new: newRec, old: oldRec } = payload
           if (eventType === 'INSERT') setNotes(prev => [newRec, ...prev])
-          else if (eventType === 'UPDATE') setNotes(prev => prev.map(n => n.id === newRec.id ? newRec : n))
+          else if (eventType === 'UPDATE') {
+            if (newRec.is_deleted) {
+              setNotes(prev => prev.filter(n => n.id !== newRec.id))
+            } else {
+              setNotes(prev => prev.map(n => n.id === newRec.id ? newRec : n))
+            }
+          }
           else if (eventType === 'DELETE') setNotes(prev => prev.filter(n => n.id !== oldRec.id))
         }).subscribe()
 
@@ -299,6 +349,90 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setSubmitting(false)
   }
 
+  const handleEditNote = async () => {
+    if (!editingNoteId || !editNoteContent.trim()) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('crm_notes')
+          .update({ content: editNoteContent.trim(), last_modified: new Date().toISOString() })
+          .eq('id', editingNoteId)
+        if (error) {
+          toast({ title: 'Error updating note', description: error.message, variant: 'destructive' })
+        } else {
+          toast({ title: 'Note Updated ✓' })
+          setNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, content: editNoteContent.trim(), last_modified: new Date().toISOString() } : n))
+          setEditingNoteId(null)
+          setEditNoteContent('')
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      setNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, content: editNoteContent.trim(), last_modified: new Date().toISOString() } : n))
+      setEditingNoteId(null)
+      setEditNoteContent('')
+      toast({ title: 'Note Updated (Mock) ✓' })
+    }
+    setSubmitting(false)
+  }
+
+  const handleDeleteNote = async () => {
+    if (!deletingNoteId) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('crm_notes')
+          .update({ is_deleted: true })
+          .eq('id', deletingNoteId)
+        if (error) {
+          toast({ title: 'Error deleting note', description: error.message, variant: 'destructive' })
+        } else {
+          toast({ title: 'Note Deleted ✓' })
+          setNotes(prev => prev.filter(n => n.id !== deletingNoteId))
+          setDeletingNoteId(null)
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      setNotes(prev => prev.filter(n => n.id !== deletingNoteId))
+      setDeletingNoteId(null)
+      toast({ title: 'Note Deleted (Mock) ✓' })
+    }
+    setSubmitting(false)
+  }
+
+  const handlePreviewDoc = async (doc: any) => {
+    setPreviewDoc(doc)
+    setVersions([])
+    setLoadingVersions(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const res = await fetch('/api/document-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_versions', id: doc.id, type: doc.type })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data && data.versions) {
+            setVersions(data.versions)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching versions:', err)
+      }
+    } else {
+      setVersions([
+        { version: 1, created_at: new Date().toISOString(), created_by: 'Staff Member', action: 'Created initial draft' }
+      ])
+    }
+    setLoadingVersions(false)
+  }
+
   const handleAddActivity = async () => {
     if (!newActivityDescription.trim()) return
     setSubmitting(true)
@@ -320,7 +454,21 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setSubmitting(true)
     if (isSupabaseConfigured()) {
       try {
-        const dbData = { name: editClient.name, business: editClient.business, type: editClient.type, email: editClient.email, phone: editClient.phone, status: editClient.status, revenue: editClient.revenue, last_contact: editClient.lastContact || new Date().toISOString().slice(0, 10), city: editClient.city, gst: editClient.gst, address: editClient.address, website: editClient.website }
+        const dbData = {
+          name: editClient.name,
+          business: editClient.business,
+          type: editClient.type,
+          email: editClient.email,
+          phone: editClient.phone,
+          status: editClient.status,
+          revenue: editClient.revenue,
+          last_contact: editClient.lastContact || new Date().toISOString().slice(0, 10),
+          city: editClient.city,
+          gst: editClient.gst,
+          address: editClient.address,
+          website: editClient.website,
+          pan: editClient.pan
+        }
         const { error } = await supabase.from('crm_clients').update(dbData).eq('id', editClient.id)
         if (error) { toast({ title: 'Error updating client', description: error.message, variant: 'destructive' }); setSubmitting(false); return }
       } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }); setSubmitting(false); return }
@@ -378,7 +526,25 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">Rep: {client.name} · {client.city}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5 self-start sm:self-auto" onClick={() => setEditClient({ ...client })}><Edit className="h-3.5 w-3.5" />Edit</Button>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <Button variant="outline" size="sm" onClick={() => setEditClient({ ...client })} className="gap-1.5"><Edit className="h-3.5 w-3.5" />Edit Details</Button>
+          <Select onValueChange={(val) => {
+            if (val === 'quotation') window.location.href = `/documents/quotations?clientId=${client.id}&autoOpen=true`
+            if (val === 'invoice') window.location.href = `/documents/invoices?clientId=${client.id}&autoOpen=true`
+            if (val === 'sow') window.location.href = `/documents/sow?clientId=${client.id}&autoOpen=true`
+            if (val === 'agreement') window.location.href = `/documents/agreements?clientId=${client.id}&autoOpen=true`
+          }}>
+            <SelectTrigger className="w-36 h-8 bg-gold text-slate-900 border-none font-semibold hover:bg-gold/90 transition-colors text-xs py-1">
+              <SelectValue placeholder="Quick Create" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="quotation" className="text-xs">New Quotation</SelectItem>
+              <SelectItem value="invoice" className="text-xs">New Invoice</SelectItem>
+              <SelectItem value="sow" className="text-xs">New SOW</SelectItem>
+              <SelectItem value="agreement" className="text-xs">New Agreement</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -500,11 +666,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             </Card>
           )}
 
-          {/* Quick Actions */}
-          <div className="flex gap-2">
-            <Link href="/documents/quotations" className="flex-1"><Button variant="outline" size="sm" className="w-full gap-1.5"><FileText className="h-3.5 w-3.5" />New Quote</Button></Link>
-            <Link href="/documents/invoices" className="flex-1"><Button variant="outline" size="sm" className="w-full gap-1.5"><Receipt className="h-3.5 w-3.5" />New Invoice</Button></Link>
-          </div>
+
         </div>
 
         <div className="lg:col-span-2">
@@ -571,7 +733,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
                             <Badge variant={d.status === 'paid' || d.status === 'signed' || d.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
-                            <Link href={docLink}><Button variant="ghost" size="sm" className="h-8">View</Button></Link>
+                            <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -595,7 +757,48 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     {notes.map((n, i) => (
                       <Card key={n.id || i}>
                         <CardContent className="p-4 space-y-1">
-                          <div className="flex justify-between items-center text-xs text-muted-foreground"><span>Added by {n.author}</span><span>{formatDate(n.created_at)}</span></div>
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <div className="flex flex-col sm:flex-row sm:gap-2">
+                              <span>Added by {n.author}</span>
+                              <span className="hidden sm:inline">·</span>
+                              <span>{formatDate(n.created_at)}</span>
+                              {n.last_modified && n.last_modified !== n.created_at && (
+                                <span className="text-muted-foreground/75 italic">
+                                  (Edited: {formatDate(n.last_modified)})
+                                </span>
+                              )}
+                            </div>
+                              <div className="flex items-center gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  onClick={() => fetchNoteHistory(n.id)}
+                                  title="View Edit History"
+                                >
+                                  <History className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-blue-400 hover:text-blue-300"
+                                  onClick={() => {
+                                    setEditingNoteId(n.id)
+                                    setEditNoteContent(n.content)
+                                  }}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-red-400 hover:text-red-300"
+                                  onClick={() => setDeletingNoteId(n.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                          </div>
                           <p className="text-sm whitespace-pre-wrap leading-relaxed mt-1 text-foreground/90">{n.content}</p>
                         </CardContent>
                       </Card>
@@ -608,6 +811,187 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         </div>
       </div>
 
+      {/* Edit Note Dialog */}
+      <Dialog open={!!editingNoteId} onOpenChange={v => !v && setEditingNoteId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Textarea 
+              placeholder="Edit your note..." 
+              value={editNoteContent} 
+              onChange={e => setEditNoteContent(e.target.value)} 
+              className="min-h-[120px] resize-none" 
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingNoteId(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" onClick={handleEditNote} disabled={submitting || !editNoteContent.trim()} className="gold-gradient text-white border-0">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Note'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Note Alert Dialog */}
+      <Dialog open={!!deletingNoteId} onOpenChange={v => !v && setDeletingNoteId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Note?</DialogTitle>
+            <p className="text-sm text-muted-foreground">Are you sure you want to delete this note? This action can be undone by restoring it in the database.</p>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setDeletingNoteId(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteNote} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete Note'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Note History Dialog */}
+      <Dialog open={!!historyNoteId} onOpenChange={v => !v && setHistoryNoteId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Note Edit History</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            {loadingNoteHistory ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-gold" /></div>
+            ) : noteHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No edits recorded for this note yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {noteHistory.map((h) => (
+                  <div key={h.id} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10 text-xs">
+                    <div className="flex justify-between text-muted-foreground mb-1">
+                      <span className="font-medium text-gold">Edited by {h.edited_by || 'Staff Member'}</span>
+                      <span>{formatDate(h.edited_at)}</span>
+                    </div>
+                    {h.content_before && (
+                      <div className="space-y-0.5">
+                        <span className="font-semibold text-red-400">Before:</span>
+                        <p className="text-muted-foreground line-through whitespace-pre-wrap">{h.content_before}</p>
+                      </div>
+                    )}
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-emerald-400">After:</span>
+                      <p className="text-foreground whitespace-pre-wrap">{h.content_after}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryNoteId(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* Document Preview Modal */}
+      <Dialog open={!!previewDoc} onOpenChange={v => !v && setPreviewDoc(null)}>
+        <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 flex flex-col md:flex-row overflow-hidden bg-[#050e0c] border-[#1E3A2F]/30">
+          {previewDoc && (
+            <>
+              {/* Left Side: PDF IFrame Preview */}
+              <div className="flex-1 h-full bg-[#030807] border-r border-[#1E3A2F]/20 relative">
+                <iframe
+                  src={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
+                  className="w-full h-full border-0 rounded-l-lg"
+                  title={`Preview of ${previewDoc.doc_id}`}
+                />
+              </div>
+
+              {/* Right Side: Document Details & Version History */}
+              <div className="w-full md:w-80 h-full p-6 flex flex-col justify-between overflow-y-auto shrink-0 space-y-6">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-gold">{previewDoc.doc_id}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{previewDoc.type}</p>
+                  </div>
+
+                  <div className="space-y-3 bg-muted/20 p-4 rounded-lg border border-[#1E3A2F]/10 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Amount:</span>
+                      <span className="font-semibold text-gold">{formatCurrency(previewDoc.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Date:</span>
+                      <span>{formatDate(previewDoc.date)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge variant={previewDoc.status === 'paid' || previewDoc.status === 'signed' || previewDoc.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">
+                        {previewDoc.status}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2">
+                    <a
+                      href={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
+                      download={`Document_${previewDoc.doc_id}.pdf`}
+                      className="w-full"
+                    >
+                      <Button variant="gold" className="w-full gap-1.5 gold-gradient text-white border-0">
+                        Download PDF
+                      </Button>
+                    </a>
+                    <a
+                      href={previewDoc.type === 'Quotation' ? `/documents/quotations` : previewDoc.type === 'Invoice' ? `/documents/invoices` : previewDoc.type === 'SOW' ? `/documents/sow` : `/documents/agreements`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full"
+                    >
+                      <Button variant="outline" className="w-full gap-1.5">
+                        Open original page
+                      </Button>
+                    </a>
+                  </div>
+
+                  {/* Version History */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Version History</h4>
+                    {loadingVersions ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                        <Loader2 className="h-3 w-3 animate-spin text-gold" /> Loading versions...
+                      </div>
+                    ) : versions.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No other versions recorded.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        {versions.map((v, i) => (
+                          <div key={v.id || i} className="text-xs border border-[#1E3A2F]/10 rounded p-2 space-y-0.5 bg-[#081713]/40">
+                            <div className="flex justify-between font-medium text-foreground">
+                              <span>Version {v.version}</span>
+                              <span className="text-muted-foreground text-[10px]">{formatDate(v.created_at)}</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">Saved by {v.created_by || 'System'}</p>
+                            {v.document_data?.history && v.document_data.history.length > 0 && (
+                              <p className="text-[10px] text-gold/80 italic mt-0.5">
+                                "{v.document_data.history[v.document_data.history.length - 1]?.action}"
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Button variant="ghost" onClick={() => setPreviewDoc(null)} className="w-full">
+                  Close Preview
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Client Dialog */}
       <Dialog open={!!editClient} onOpenChange={(open) => !open && setEditClient(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -619,10 +1003,10 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               <div className="space-y-1"><Label>Email *</Label><Input type="email" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
               <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={editClient.phone} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} /></div>
               <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={editClient.city} onChange={e => setEditClient({ ...editClient, city: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Industry Type</Label>
+              <div className="space-y-1"><Label>Business Type *</Label>
                 <Select value={editClient.type} onValueChange={v => setEditClient({ ...editClient, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{['E-Commerce', 'B2B SaaS', 'Retail Chain', 'Healthcare', 'Agriculture', 'Manufacturing', 'Education'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>{businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1"><Label>Lead Status</Label>
@@ -632,7 +1016,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 </Select>
               </div>
               <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({ ...editClient, gst: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Website</Label><Input placeholder="https://example.com" value={editClient.website || ''} onChange={e => setEditClient({ ...editClient, website: e.target.value })} /></div>
+              <div className="space-y-1 sm:col-span-2"><Label>Website</Label><Input placeholder="https://example.com" value={editClient.website || ''} onChange={e => setEditClient({ ...editClient, website: e.target.value })} /></div>
               <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({ ...editClient, address: e.target.value })} /></div>
             </div>
           )}
