@@ -26,6 +26,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { PublishDialog } from '@/components/ui/publish-dialog'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
@@ -337,8 +338,20 @@ export default function MarketingIntelligencePage() {
       <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search reports..." value={search} onChange={e => setSearch(e.target.value)} /></div>
 
       {/* Report Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.map(r => (
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={Brain}
+          title="No Marketing Reports"
+          description="Your marketing intelligence archive is empty. Generate a new report using marketing data metrics."
+          action={{
+            label: "New Report",
+            onClick: () => { setForm(emptyForm); setGeneratedPrompt(''); setCurrentStep(1); setShowCreate(true) },
+            icon: Plus
+          }}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtered.map(r => (
           <Card key={r.id} className="ai-card ai-card-glow cursor-pointer" onClick={() => openDetail(r)}>
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
@@ -365,19 +378,20 @@ export default function MarketingIntelligencePage() {
                 <div className="flex flex-col gap-2 items-end">
                   <ApprovalBadge status={r.approvalStatus || 'draft'} />
                   <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(r)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className={`h-7 w-7 ${r.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(r)}>
+                    <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(r)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${r.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(r)}>
                       <Globe className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (r.reportDetails) setForm(r.reportDetails as MarketingIntelligenceForm); else setForm({...emptyForm, client: r.client, period: r.period, channels: r.channels}); setEditId(r.id) }}><Edit className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (r.reportDetails) setForm(r.reportDetails as MarketingIntelligenceForm); else setForm({...emptyForm, client: r.client, period: r.period, channels: r.channels}); setEditId(r.id) }}><Edit className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* CREATE DIALOG */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
@@ -527,7 +541,7 @@ export default function MarketingIntelligencePage() {
                         <a href={h.downloadUrl || h.file_path} target="_blank" rel="noopener noreferrer" download>
                           <Button 
                             variant="ghost" 
-                            size="icon" 
+                            size="icon" aria-label="Action" 
                             className="h-8 w-8 text-muted-foreground hover:text-gold"
                           >
                             <Download className="h-4 w-4" />

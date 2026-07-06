@@ -314,10 +314,10 @@ export default function CommunicationsPage() {
                             setForm(f => ({ ...f, template: t.id, subject: t.subject, body: t.body, channel: t.channel, recipient: defaultRecipient || '', attachments: (t as any).attachments || [] }));
                             setShowCompose(true)
                           }}>Use Template</Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setTemplateForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] }); setEditTemplateId(t.id); setShowCreateTemplate(true) }}>
+                          <Button variant="ghost" size="icon" aria-label="Action" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setTemplateForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body, attachments: (t as any).attachments || [] }); setEditTemplateId(t.id); setShowCreateTemplate(true) }}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteTemplateId(t.id)}>
+                          <Button variant="ghost" size="icon" aria-label="Action" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteTemplateId(t.id)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

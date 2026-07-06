@@ -1,18 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
+import { DataTable } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/ui/skeletons'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Checkbox } from '@/components/ui/checkbox'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { FormInput, FormTextarea, FormSelect, FormCheckbox } from '@/components/ui/form-inputs'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Search, Plus, Users, TrendingUp, Phone, Mail, Building2, MoreHorizontal, Eye, Edit, Trash2, Filter, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate, getInitials, getLeadStatusColor } from '@/lib/utils'
@@ -21,8 +21,6 @@ import Link from 'next/link'
 
 const LEAD_STATUSES = ['new', 'contacted', 'proposal_sent', 'quotation_sent', 'negotiation', 'won', 'lost', 'active']
 
-const mockClients: any[] = []
-
 const statusLabels: Record<string, string> = {
   new: 'New', contacted: 'Contacted', proposal_sent: 'Proposal Sent',
   quotation_sent: 'Quotation Sent', negotiation: 'Negotiation',
@@ -30,11 +28,10 @@ const statusLabels: Record<string, string> = {
 }
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-import { useEffect } from 'react'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
 
-export default function CRMPage() {
+function CRMPageContent() {
   const [clients, setClients] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -59,6 +56,102 @@ export default function CRMPage() {
     createAccount: false, clientPassword: '',
     pan: ''
   })
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    const autoOpen = searchParams.get('autoOpen')
+    if (autoOpen === 'true') {
+      setShowAdd(true)
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [searchParams])
+
+  const columns = useMemo(() => [
+    {
+      header: 'Client',
+      accessor: 'name',
+      sortable: true,
+      sticky: true,
+      cell: (client: any) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="gold-gradient text-white text-xs font-bold">
+              {getInitials(client.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-sm text-foreground">{client.name}</span>
+              {portalAccounts.has(client.id) && (
+                <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 text-[9px] px-1 py-0.25 font-bold font-mono">
+                  Portal Active
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{client.city}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Business',
+      accessor: 'business',
+      sortable: true,
+      cell: (client: any) => (
+        <div>
+          <p className="text-sm font-medium text-foreground">{client.business}</p>
+          <p className="text-xs text-muted-foreground">{client.type}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Contact',
+      accessor: 'email',
+      cell: (client: any) => (
+        <div className="space-y-0.5 text-xs text-slate-300">
+          <p className="flex items-center gap-1"><Mail className="h-3 w-3 text-gold/80" />{client.email}</p>
+          <p className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3.5 w-3.5" />{client.phone}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (client: any) => (
+        <span className={`status-badge border ${getLeadStatusColor(client.status)}`}>
+          {statusLabels[client.status]}
+        </span>
+      )
+    },
+    {
+      header: 'Revenue',
+      accessor: 'revenue',
+      sortable: true,
+      className: 'text-right',
+      cell: (client: any) => (
+        <span className="font-semibold text-sm text-gold">
+          {client.revenue > 0 ? formatCurrency(client.revenue) : '—'}
+        </span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (client: any) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/crm/${client.id}`}>
+            <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7 hover:text-gold"><Eye className="h-3.5 w-3.5" /></Button>
+          </Link>
+          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 hover:text-gold" onClick={() => setEditClient(client)}><Edit className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteClient({id: client.id, name: client.name})}><Trash2 className="h-3.5 w-3.5" /></Button>
+        </div>
+      )
+    }
+  ], [portalAccounts])
 
   useEffect(() => {
     const cached = getCachedData<any[]>('crm_clients')
@@ -68,13 +161,19 @@ export default function CRMPage() {
     }
 
     async function fetchClients() {
+      if (!isSupabaseConfigured()) {
+        setClients([])
+        setLoading(false)
+        return
+      }
+      
       if (!cached) setLoading(true)
-      if (isSupabaseConfigured()) {
-        try {
-          const { data, error } = await supabase.from('crm_clients').select('*').order('created_at', { ascending: false })
-          if (error) {
-            toast({ title: 'Error fetching clients', description: error.message, variant: 'destructive' })
-          } else if (data) {
+
+      try {
+        const { data, error } = await supabase.from('crm_clients').select('*').order('created_at', { ascending: false })
+        if (error) {
+          toast({ title: 'Error fetching clients', description: error.message, variant: 'destructive' })
+        } else if (data) {
             const mapped = data.map((c: any) => ({
               id: c.id,
               name: c.name,
@@ -109,10 +208,6 @@ export default function CRMPage() {
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
-      } else {
-        setClients(mockClients)
-        setCachedData('crm_clients', mockClients)
-      }
       setLoading(false)
     }
     fetchClients()
@@ -237,7 +332,6 @@ export default function CRMPage() {
   const handleDelete = async () => {
     if (!deleteClient) return
     setSubmitting(true)
-
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.from('crm_clients').delete().eq('id', deleteClient.id)
@@ -257,9 +351,64 @@ export default function CRMPage() {
     setClients(updatedList)
     setCachedData('crm_clients', updatedList)
     invalidateCache('dashboard')
-    toast({ title: 'Client Removed', description: `${deleteClient.name} has been removed from the CRM.` })
     setDeleteClient(null)
+    toast({ title: 'Client Deleted', description: `${deleteClient.name} has been removed.` })
     setSubmitting(false)
+  }
+
+
+  const handleBulkAction = async (action: string, selectedRows: any[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} clients?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('crm_clients').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting clients', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = clients.filter(c => !idsSet.has(c.id))
+      setClients(updatedList)
+      setCachedData('crm_clients', updatedList)
+      invalidateCache('dashboard')
+      toast({ title: 'Clients Deleted', description: `${selectedRows.length} clients have been removed.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('crm_clients').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = clients.map(c => idsSet.has(c.id) ? { ...c, status: newStatus } : c)
+      setClients(updatedList)
+      setCachedData('crm_clients', updatedList)
+      invalidateCache('dashboard')
+      toast({ title: 'Status Updated', description: `${selectedRows.length} clients marked as ${statusLabels[newStatus] || newStatus}.` })
+      setLoading(false)
+    }
   }
 
 
@@ -280,22 +429,27 @@ export default function CRMPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Client Relationship Manager</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage leads, clients, and relationship pipeline.</p>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+      <PageHeader
+        title="Client Relationship Manager"
+        description="Manage leads, clients, and relationship pipeline."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'CRM' }
+        ]}
+        primaryAction={{
+          label: 'Add Client',
+          onClick: () => setShowAdd(true),
+          icon: Plus,
+          variant: 'gold'
+        }}
+        secondaryActions={
           <Link href="/crm/business-types">
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <Button variant="outline" size="sm">
               Manage Business Types
             </Button>
           </Link>
-          <Button variant="gold" size="sm" onClick={() => setShowAdd(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" /> Add Client
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -313,240 +467,146 @@ export default function CRMPage() {
           </Card>
         ))}
       </div>
+      {/* Client List Table */}
+      {loading ? (
+        <TableSkeleton rows={8} cols={5} />
+      ) : clients.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No clients found"
+          description="Get started by creating your first client in the CRM pipeline."
+          action={{
+            label: "Add Client",
+            onClick: () => setShowAdd(true),
+            icon: Plus
+          }}
+        />
+      ) : (
+        <DataTable
+          data={clients}
+          columns={columns}
+          searchPlaceholder="Search clients by name, business, email, city..."
+          searchKeys={['name', 'business', 'email', 'city']}
+          exportFileName="crm_clients"
+          onRowClick={row => router.push(`/crm/${row.id}`)}
+          initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+          savedFiltersKey="crm_clients"
+          enableBulkSelect={true}
+          bulkActions={[
+            { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+            { label: 'Mark Won', action: 'status_won', icon: TrendingUp },
+            { label: 'Mark Active', action: 'status_active', icon: TrendingUp }
+          ]}
+          onBulkAction={handleBulkAction}
+          filterDefs={[
+            {
+              key: 'status',
+              label: 'Lead Status',
+              options: LEAD_STATUSES.map(s => ({ label: statusLabels[s], value: s }))
+            }
+          ]}
+        />
+      )}
 
-      {/* Filters & Controls */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search clients..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {LEAD_STATUSES.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Client Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Business</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Contact</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Revenue</th>
-                <th className="py-3 px-4" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((client) => (
-                <tr key={client.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="gold-gradient text-white text-xs font-bold">
-                          {getInitials(client.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-medium text-sm">{client.name}</p>
-                          {portalAccounts.has(client.id) && (
-                            <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 text-[9px] px-1 py-0.25 font-bold font-mono">
-                              Portal Active
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{client.city}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 hidden md:table-cell">
-                    <p className="text-sm">{client.business}</p>
-                    <p className="text-xs text-muted-foreground">{client.type}</p>
-                  </td>
-                  <td className="py-3 px-4 hidden lg:table-cell">
-                    <div className="space-y-0.5">
-                      <p className="text-xs flex items-center gap-1"><Mail className="h-3 w-3" />{client.email}</p>
-                      <p className="text-xs flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{client.phone}</p>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`status-badge border ${getLeadStatusColor(client.status)}`}>
-                      {statusLabels[client.status]}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right hidden sm:table-cell">
-                    <span className="font-semibold text-sm">{client.revenue > 0 ? formatCurrency(client.revenue) : '—'}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center justify-end gap-1">
-                      <Link href={`/crm/${client.id}`}>
-                        <Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-3.5 w-3.5" /></Button>
-                      </Link>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditClient(client)}><Edit className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteClient({id: client.id, name: client.name})}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No clients found</p>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Add Client Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add New Client</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            <div className="space-y-1"><Label>Client Name *</Label><Input placeholder="John Doe" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} /></div>
-            <div className="space-y-1"><Label>Business Name</Label><Input placeholder="Company LLC" value={newClient.business} onChange={e => setNewClient({ ...newClient, business: e.target.value })} /></div>
-            <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} /></div>
-            <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} /></div>
-            <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} /></div>
-            <div className="space-y-1">
-              <Label>Business Type *</Label>
-              <Select value={newClient.type} onValueChange={v => setNewClient({ ...newClient, type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Lead Status</Label>
-              <Select value={newClient.status} onValueChange={v => setNewClient({...newClient, status: v})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LEAD_STATUSES.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={newClient.gst} onChange={e => setNewClient({...newClient, gst: e.target.value})} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label>Website</Label><Input placeholder="https://example.com" value={newClient.website} onChange={e => setNewClient({...newClient, website: e.target.value})} /></div>
-            <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={newClient.address} onChange={e => setNewClient({...newClient, address: e.target.value})} /></div>
-            
-            <div className="col-span-1 sm:col-span-2 border-t border-[#1E3A2F]/20 pt-4 mt-2 space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="createAccount"
-                  checked={newClient.createAccount}
-                  onCheckedChange={(checked) => setNewClient({ ...newClient, createAccount: !!checked })}
-                />
-                <Label htmlFor="createAccount" className="cursor-pointer text-xs font-bold text-slate-300">
-                  Enable Client Portal Account (Login using email)
-                </Label>
-              </div>
-              
-              {newClient.createAccount && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-400">Portal Password</Label>
-                    <Input
-                      type="password"
-                      placeholder="Welcome123! (or custom)"
-                      value={newClient.clientPassword}
-                      onChange={e => setNewClient({ ...newClient, clientPassword: e.target.value })}
-                    />
-                    <p className="text-[10px] text-slate-500 font-sans">Defaults to "Welcome123!" if blank</p>
-                  </div>
-                </div>
-              )}
-            </div>
+      {/* Add Client Drawer */}
+      <Drawer
+        isOpen={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="Add New Client"
+        description="Enter the client profile details to add them to the CRM pipeline."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleAdd} disabled={submitting} className="gap-1.5">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Add Client
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormInput label="Client Name" required placeholder="John Doe" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
+          <FormInput label="Business Name" placeholder="Company LLC" value={newClient.business} onChange={e => setNewClient({ ...newClient, business: e.target.value })} />
+          <FormInput label="Email" type="email" required placeholder="client@company.com" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} />
+          <FormInput label="Phone" placeholder="+91 9876543210" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} />
+          <FormInput label="City" placeholder="e.g. Mumbai" value={newClient.city} onChange={e => setNewClient({ ...newClient, city: e.target.value })} />
+          <FormSelect label="Business Type" required value={newClient.type} onChange={e => setNewClient({ ...newClient, type: e.target.value })} options={businessTypes.map(t => ({ label: t, value: t }))} />
+          <FormSelect label="Lead Status" value={newClient.status} onChange={e => setNewClient({ ...newClient, status: e.target.value })} options={LEAD_STATUSES.map(s => ({ label: statusLabels[s], value: s }))} />
+          <FormInput label="GST Number" placeholder="Optional" value={newClient.gst} onChange={e => setNewClient({ ...newClient, gst: e.target.value })} />
+          <FormInput label="Website" placeholder="https://example.com" value={newClient.website} onChange={e => setNewClient({ ...newClient, website: e.target.value })} />
+          <FormTextarea label="Address" placeholder="Business address..." className="h-20" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} />
+          
+          <div className="border-t border-border pt-4 mt-2 space-y-3">
+            <FormCheckbox
+              label="Enable Client Portal Account"
+              description="Allows the client to log in using their email address"
+              checked={newClient.createAccount}
+              onChange={e => setNewClient({ ...newClient, createAccount: e.target.checked })}
+            />
+            {newClient.createAccount && (
+              <FormInput
+                label="Portal Password"
+                type="password"
+                placeholder="Welcome123! (or custom)"
+                value={newClient.clientPassword}
+                onChange={e => setNewClient({ ...newClient, clientPassword: e.target.value })}
+                helperText="Defaults to 'Welcome123!' if left blank"
+              />
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-            <Button variant="gold" onClick={handleAdd} disabled={submitting} className="gap-2">
-              {submitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Adding...</>
-              ) : (
-                'Add Client'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </Drawer>
 
-      {/* Edit Client Dialog */}
-      <Dialog open={!!editClient} onOpenChange={(open) => !open && setEditClient(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Client</DialogTitle>
-          </DialogHeader>
-          {editClient && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-              <div className="space-y-1"><Label>Client Name *</Label><Input placeholder="John Doe" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Business Name</Label><Input placeholder="Company LLC" value={editClient.business} onChange={e => setEditClient({ ...editClient, business: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="client@company.com" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Phone</Label><Input placeholder="+91 9876543210" value={editClient.phone} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} /></div>
-              <div className="space-y-1"><Label>City</Label><Input placeholder="e.g. Mumbai" value={editClient.city} onChange={e => setEditClient({ ...editClient, city: e.target.value })} /></div>
-              <div className="space-y-1">
-                <Label>Business Type *</Label>
-                <Select value={editClient.type} onValueChange={v => setEditClient({ ...editClient, type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {businessTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Lead Status</Label>
-                <Select value={editClient.status} onValueChange={v => setEditClient({...editClient, status: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {LEAD_STATUSES.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({...editClient, gst: e.target.value})} /></div>
-              <div className="space-y-1 sm:col-span-2"><Label>Website</Label><Input placeholder="https://example.com" value={editClient.website || ''} onChange={e => setEditClient({...editClient, website: e.target.value})} /></div>
-              <div className="col-span-1 sm:col-span-2 space-y-1"><Label>Address</Label><Textarea placeholder="Business address..." className="resize-none h-16" value={editClient.address || ''} onChange={e => setEditClient({...editClient, address: e.target.value})} /></div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditClient(null)} disabled={submitting}>Cancel</Button>
-            <Button variant="gold" onClick={handleEditSubmit} disabled={submitting} className="gap-2">
-              {submitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Saving...</>
-              ) : (
-                'Save Changes'
-              )}
+      {/* Edit Client Drawer */}
+      <Drawer
+        isOpen={!!editClient}
+        onClose={() => setEditClient(null)}
+        title="Edit Client"
+        description="Modify client settings, status, and profile information."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditClient(null)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleEditSubmit} disabled={submitting} className="gap-1.5">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save Changes
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
- 
+          </>
+        }
+      >
+        {editClient && (
+          <div className="space-y-4">
+            <FormInput label="Client Name" required placeholder="John Doe" value={editClient.name} onChange={e => setEditClient({ ...editClient, name: e.target.value })} />
+            <FormInput label="Business Name" placeholder="Company LLC" value={editClient.business} onChange={e => setEditClient({ ...editClient, business: e.target.value })} />
+            <FormInput label="Email" type="email" required placeholder="client@company.com" value={editClient.email} onChange={e => setEditClient({ ...editClient, email: e.target.value })} />
+            <FormInput label="Phone" placeholder="+91 9876543210" value={editClient.phone} onChange={e => setEditClient({ ...editClient, phone: e.target.value })} />
+            <FormInput label="City" placeholder="e.g. Mumbai" value={editClient.city} onChange={e => setEditClient({ ...editClient, city: e.target.value })} />
+            <FormSelect label="Business Type" required value={editClient.type} onChange={e => setEditClient({ ...editClient, type: e.target.value })} options={businessTypes.map(t => ({ label: t, value: t }))} />
+            <FormSelect label="Lead Status" value={editClient.status} onChange={e => setEditClient({ ...editClient, status: e.target.value })} options={LEAD_STATUSES.map(s => ({ label: statusLabels[s], value: s }))} />
+            <FormInput label="GST Number" placeholder="Optional" value={editClient.gst || ''} onChange={e => setEditClient({ ...editClient, gst: e.target.value })} />
+            <FormInput label="Website" placeholder="https://example.com" value={editClient.website || ''} onChange={e => setEditClient({ ...editClient, website: e.target.value })} />
+            <FormTextarea label="Address" placeholder="Business address..." className="h-20" value={editClient.address || ''} onChange={e => setEditClient({ ...editClient, address: e.target.value })} />
+          </div>
+        )}
+      </Drawer>
+
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteClient} onOpenChange={(open) => !open && setDeleteClient(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete <strong>{deleteClient?.name}</strong> and remove their data from our servers.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete Client</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteDialog
+        isOpen={!!deleteClient}
+        onClose={() => setDeleteClient(null)}
+        title="Delete Client"
+        description={`This action cannot be undone. This will permanently delete ${deleteClient?.name} and remove their records.`}
+        confirmLabel="Delete Client"
+        onConfirm={handleDelete}
+        loading={submitting}
+      />
     </div>
+  )
+}
+
+export default function CRMPage() {
+  return (
+    <Suspense fallback={<TableSkeleton rows={8} cols={5} />}>
+      <CRMPageContent />
+    </Suspense>
   )
 }

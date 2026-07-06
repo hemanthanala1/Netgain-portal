@@ -775,9 +775,9 @@ export default function CampaignStrategyPage() {
                 <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />{p.timeline || 'Not set'}</div>
               </div>
               <div className="flex gap-2 justify-end border-t border-border pt-3" onClick={e => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)} title="View Details"><Eye className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm(p.businessDetails || emptyForm); setEditId(p.id) }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="icon" aria-label="View Details" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)} title="View Details"><Eye className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm(p.businessDetails || emptyForm); setEditId(p.id) }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             </CardContent>
           </Card>
@@ -1105,7 +1105,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1213,7 +1213,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1320,7 +1320,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1477,7 +1477,7 @@ export default function CampaignStrategyPage() {
                   {cat !== 'Other' && (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon" aria-label="Action"
                       className="h-7 w-7 text-red-400 hover:text-red-400"
                       onClick={() => handleDeleteCategory(cat)}
                       title="Delete Category"

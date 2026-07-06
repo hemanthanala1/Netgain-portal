@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,13 +9,17 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { FormInput, FormTextarea, FormSelect } from '@/components/ui/form-inputs'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { PromptViewer } from '@/components/ui/prompt-viewer'
 import { ApprovalBadge } from '@/components/ui/approval-badge'
 import { FileUpload } from '@/components/ui/file-upload'
-import { VersionTimeline } from '@/components/ui/version-timeline'
+import { VersionTimeline, UniversalTimeline } from '@/components/ui/version-timeline'
 import { ProjectManagerAutocomplete } from '@/components/ui/project-manager-autocomplete'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
@@ -28,6 +33,9 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { DataTable } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/ui/skeletons'
+import { logSystemActivity } from '@/lib/activity-helper'
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
@@ -39,7 +47,7 @@ const statusColors: Record<string, string> = {
   completed: 'text-muted-foreground bg-muted', paused: 'text-yellow-400 bg-yellow-500/10'
 }
 
-export default function CampaignStrategyPage() {
+function CampaignStrategyPageContent() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -56,6 +64,98 @@ export default function CampaignStrategyPage() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
+
+  const columns = useMemo(() => [
+    {
+      header: 'Project',
+      accessor: 'title',
+      sortable: true,
+      sticky: true,
+      cell: (project: Project) => (
+        <div>
+          <p className="font-semibold text-sm text-foreground">{project.title}</p>
+          <p className="text-xs text-muted-foreground">{project.client} · {project.type}</p>
+        </div>
+      )
+    },
+    {
+      header: 'PM Assignee',
+      accessor: 'pm',
+      sortable: true,
+      cell: (project: Project) => (
+        <span className="text-xs text-slate-300">{project.pm || 'Netgain Team'}</span>
+      )
+    },
+    {
+      header: 'Budget',
+      accessor: 'budget',
+      sortable: true,
+      className: 'text-right',
+      cell: (project: Project) => (
+        <span className="font-semibold text-gold">{formatCurrency(project.budget)}</span>
+      )
+    },
+    {
+      header: 'Progress',
+      accessor: 'progress',
+      sortable: true,
+      cell: (project: Project) => (
+        <div className="w-32 space-y-1">
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Progress</span>
+            <span>{project.progress}%</span>
+          </div>
+          <Progress value={project.progress} className="h-1.5" />
+        </div>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (project: Project) => (
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[project.status] || 'text-slate-400 bg-slate-500/10'}`}>
+          {project.status}
+        </span>
+      )
+    },
+    {
+      header: 'Timeline',
+      accessor: 'timeline',
+      cell: (project: Project) => (
+        <span className="text-xs text-slate-400">{project.timeline || 'Not set'}</span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (project: Project) => (
+        <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" aria-label="View Details" className="h-7 w-7 hover:text-gold" onClick={() => openDetail(project)} title="View Details">
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Action" className="h-7 w-7 hover:text-gold" onClick={() => {
+            setQuickTitle(project.title)
+            setQuickClient(project.client)
+            setQuickType(project.type)
+            setQuickStatus(project.status)
+            setQuickBudget(String(project.budget))
+            setQuickTimeline(project.timeline)
+            setQuickPm(project.pm)
+            setQuickCurrentStage(project.currentStage || '')
+            setQuickSprintGoal(project.sprintGoal || '')
+            setEditId(project.id)
+          }} title="Edit">
+            <Edit className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(project.id)} title="Delete">
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )
+    }
+  ], [])
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [realtimeConnected, setRealtimeConnected] = useState(false)
 
@@ -130,6 +230,34 @@ export default function CampaignStrategyPage() {
   const [quickSprintGoal, setQuickSprintGoal] = useState('')
   const [quickTasks, setQuickTasks] = useState('')
   const [savingQuick, setSavingQuick] = useState(false)
+
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
+    const autoOpen = searchParams.get('autoOpen') || searchParams.get('prefill')
+
+    if (clientId) {
+      const fetchClient = async () => {
+        if (isSupabaseConfigured()) {
+          const { data: client } = await supabase
+            .from('crm_clients')
+            .select('*')
+            .eq('id', clientId)
+            .maybeSingle()
+          if (client) {
+            setQuickClient(client.business || client.name)
+            if (autoOpen === 'true') {
+              setShowQuickCreate(true)
+            }
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+          }
+        }
+      }
+      fetchClient()
+    }
+  }, [searchParams])
 
   // ─── PROJECT WORKSPACE STATES ───
   const [workspaceRequirements, setWorkspaceRequirements] = useState<any[]>([])
@@ -741,6 +869,14 @@ export default function CampaignStrategyPage() {
 
       if (error) throw error
 
+      await logSystemActivity(
+        'Staff',
+        `Created new project: ${quickTitle.trim()}`,
+        'projects',
+        targetId,
+        `/projects?projectId=${targetId}`
+      )
+
       toast({ title: '✅ Project Created!', description: `${quickTitle} — ${docId}` })
       setShowQuickCreate(false)
       setQuickTitle(''); setQuickClient(''); setQuickBudget(''); setQuickTimeline(''); setQuickPm(''); setQuickCurrentStage(''); setQuickSprintGoal(''); setQuickTasks('')
@@ -753,6 +889,57 @@ export default function CampaignStrategyPage() {
     }
   }
 
+  const handleBulkAction = async (action: string, selectedRows: Project[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} projects?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('projects').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting projects', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = projects.filter(p => !idsSet.has(p.id))
+      setProjects(updatedList); setCachedData('projects', updatedList); invalidateCache('dashboard')
+      toast({ title: 'Projects Deleted', description: `${selectedRows.length} projects removed.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('projects').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating project status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = projects.map(p => idsSet.has(p.id) ? { ...p, status: newStatus } : p)
+      setProjects(updatedList); setCachedData('projects', updatedList); invalidateCache('dashboard')
+      toast({ title: 'Project Status Updated', description: `${selectedRows.length} projects marked as ${newStatus}.` })
+      setLoading(false)
+    }
+  }
+
+
   const handleDelete = async () => {
     if (!deleteId) return
     if (isSupabaseConfigured()) { await supabase.from('projects').delete().eq('id', deleteId) }
@@ -760,6 +947,7 @@ export default function CampaignStrategyPage() {
     setProjects(updatedList); setCachedData('projects', updatedList); invalidateCache('dashboard')
     setDeleteId(null); toast({ title: 'Strategy Deleted' })
   }
+
 
   const openDetail = (p: Project) => {
     setDetailProject(p)
@@ -782,28 +970,31 @@ export default function CampaignStrategyPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+      <PageHeader
+        title="Project Workspace Manager"
+        description="Manage project execution, tasks, requirements, files, and links in real-time"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Projects' }
+        ]}
+        primaryAction={{
+          label: 'New Project',
+          onClick: () => { setQuickCurrentStage(''); setShowQuickCreate(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+        secondaryActions={
           <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-gold" />
-            <h1 className="text-2xl font-bold tracking-tight">Project Workspace Manager</h1>
             <span className={`inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
               {realtimeConnected ? 'Live' : 'Connecting...'}
             </span>
+            <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 border-[#152e23] hover:bg-[#11241c]/50 hover:text-gold text-slate-300">
+              <Settings className="h-4 w-4 text-gold" /> Project Types
+            </Button>
           </div>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage project execution, tasks, requirements, files, and links in real-time</p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 w-full sm:w-auto border-[#152e23] hover:bg-[#11241c]/50 hover:text-gold text-slate-300">
-            <Settings className="h-4 w-4 text-gold" /> Project Types
-          </Button>
-          <Button variant="gold" size="sm" onClick={() => { setQuickCurrentStage(''); setShowQuickCreate(true) }} className="gap-1.5 w-full sm:w-auto">
-            <Plus className="h-4 w-4" /> New Project
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -818,128 +1009,111 @@ export default function CampaignStrategyPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search strategies..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+      {/* Project Workspace List */}
+      {loading ? (
+        <TableSkeleton rows={8} cols={5} />
+      ) : projects.length === 0 ? (
+        <EmptyState
+          icon={Briefcase}
+          title="No projects found"
+          description="Get started by creating your first project workspace to track milestones, tasks, and file deliverables."
+          action={{
+            label: "New Project",
+            onClick: () => { setQuickCurrentStage(''); setShowQuickCreate(true) },
+            icon: Plus
+          }}
+        />
+      ) : (
+        <DataTable
+          data={projects}
+          columns={columns}
+          searchPlaceholder="Search projects by title, client, type..."
+          searchKeys={['title', 'client', 'type']}
+          exportFileName="projects"
+          onRowClick={openDetail}
+          initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+          savedFiltersKey="projects"
+          enableBulkSelect={true}
+          bulkActions={[
+            { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+            { label: 'Mark Active', action: 'status_active', icon: TrendingUp },
+            { label: 'Mark Completed', action: 'status_completed', icon: TrendingUp }
+          ]}
+          onBulkAction={handleBulkAction}
+          filterDefs={[
+            {
+              key: 'status',
+              label: 'Project Status',
+              options: [
+                { label: 'Planned', value: 'planned' },
+                { label: 'Active', value: 'active' },
+                { label: 'Paused', value: 'paused' },
+                { label: 'Completed', value: 'completed' }
+              ]
+            },
+            {
+              key: 'type',
+              label: 'Project Type',
+              options: projectTypes.map(t => ({ label: t, value: t }))
+            }
+          ]}
+        />
+      )}
 
-      {/* Project Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {filtered.map(p => (
-          <Card key={p.id} className="ai-card ai-card-glow hover:shadow-md transition-all cursor-pointer" onClick={() => openDetail(p)}>
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="font-semibold text-sm">{p.title}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{p.client} · {p.type}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ApprovalBadge status={p.approvalStatus || 'draft'} />
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColors[p.status]}`}>{p.status}</span>
-                </div>
-              </div>
-              <div className="space-y-1 mb-3">
-                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Progress</span><span className="font-semibold">{p.progress}%</span></div>
-                <Progress value={p.progress} className="h-1.5" />
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                <div className="flex items-center gap-1 text-muted-foreground"><DollarSign className="h-3 w-3 text-gold" /><span className="font-semibold text-foreground">{formatCurrency(p.budget)}</span></div>
-                <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />{p.timeline || 'Not set'}</div>
-              </div>
-              <div className="flex gap-2 justify-end border-t border-border pt-3" onClick={e => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)} title="View Details"><Eye className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => {
-                  setQuickTitle(p.title)
-                  setQuickClient(p.client)
-                  setQuickType(p.type)
-                  setQuickStatus(p.status)
-                  setQuickBudget(String(p.budget))
-                  setQuickTimeline(p.timeline)
-                  setQuickPm(p.pm)
-                  setQuickCurrentStage(p.currentStage || '')
-                  setQuickSprintGoal(p.sprintGoal || '')
-                  setEditId(p.id)
-                }} title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* ── CREATE DIALOG ──────────────────────────────────────────────── */}
-      {/* ── QUICK CREATE PROJECT DIALOG ── */}
-      <Dialog open={showQuickCreate} onOpenChange={setShowQuickCreate}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-gold" /> Create New Project
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-sm">
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Project Title *</Label>
-              <Input placeholder="e.g. Netgain Website Redesign" value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Client Name *</Label>
-              <ClientAutocomplete value={quickClient} onChange={setQuickClient} onSelect={(c) => setQuickClient(c.name)} placeholder="Select or type client name" />
-            </div>
-            <div className="space-y-1">
-              <Label>Project Type</Label>
-              <Select value={quickType} onValueChange={setQuickType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {projectTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={quickStatus} onValueChange={setQuickStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planned">Planned</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Budget (₹)</Label>
-              <Input type="number" placeholder="e.g. 150000" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Timeline</Label>
-              <Input placeholder="e.g. 3 months, Q3 2025" value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Project Manager</Label>
-              <ProjectManagerAutocomplete
-                value={quickPm}
-                onChange={setQuickPm}
-                onSelect={(manager) => setQuickPm(manager.name)}
-                placeholder="Search project managers..."
-              />
-            </div>
-            <div className="sm:col-span-2 space-y-1">
-              <Label>Initial Tasks / Milestones</Label>
-              <Textarea
-                placeholder={`Enter one task per line:\nKickoff Call\nWireframes\nDesign Review\nDevelopment\nLaunch`}
-                value={quickTasks}
-                onChange={e => setQuickTasks(e.target.value)}
-                className="h-28 text-xs resize-none"
-              />
-              <p className="text-[10px] text-muted-foreground">Leave blank to use default milestones</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
-            <Button variant="gold" onClick={handleSaveQuickProject} disabled={savingQuick || !quickTitle.trim() || !quickClient.trim()}>
+      {/* ── CREATE DRAWER ──────────────────────────────────────────────── */}
+      <Drawer
+        isOpen={showQuickCreate}
+        onClose={() => setShowQuickCreate(false)}
+        title="Create New Project"
+        description="Fill out the project details and default milestones."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleSaveQuickProject} disabled={savingQuick || !quickTitle.trim() || !quickClient.trim()}>
               {savingQuick ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : 'Create Project'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormInput label="Project Title" required placeholder="e.g. Netgain Website Redesign" value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
+          
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Client Name *</Label>
+            <ClientAutocomplete value={quickClient} onChange={setQuickClient} onSelect={(c) => setQuickClient(c.name)} placeholder="Select or type client name" />
+          </div>
+
+          <FormSelect label="Project Type" value={quickType} onChange={e => setQuickType(e.target.value)} options={projectTypes.map(t => ({ label: t, value: t }))} />
+          <FormSelect label="Status" value={quickStatus} onChange={e => setQuickStatus(e.target.value)} options={[
+            { label: 'Planned', value: 'planned' },
+            { label: 'Active', value: 'active' },
+            { label: 'Paused', value: 'paused' },
+            { label: 'Completed', value: 'completed' }
+          ]} />
+          
+          <FormInput label="Budget (₹)" type="number" placeholder="e.g. 150000" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
+          <FormInput label="Timeline" placeholder="e.g. 3 months, Q3 2025" value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
+          
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Project Manager</Label>
+            <ProjectManagerAutocomplete
+              value={quickPm}
+              onChange={setQuickPm}
+              onSelect={(manager) => setQuickPm(manager.name)}
+              placeholder="Search project managers..."
+            />
+          </div>
+
+          <FormTextarea
+            label="Initial Tasks / Milestones"
+            placeholder={`Enter one task per line:\nKickoff Call\nWireframes\nDesign Review\nDevelopment\nLaunch`}
+            value={quickTasks}
+            onChange={e => setQuickTasks(e.target.value)}
+            className="h-28 text-xs resize-none"
+            helperText="Leave blank to use default milestones"
+          />
+        </div>
+      </Drawer>
       {/* Detail Dialog */}
 
       {/* ── DETAIL DIALOG ──────────────────────────────────────────────── */}
@@ -965,6 +1139,10 @@ export default function CampaignStrategyPage() {
               <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
               <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
               <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Timeline</TabsTrigger>
+              <TabsTrigger value="workspace-risks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Risks</TabsTrigger>
+              <TabsTrigger value="workspace-dependencies" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Dependencies</TabsTrigger>
+              <TabsTrigger value="workspace-notes" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Notes</TabsTrigger>
+              <TabsTrigger value="workspace-approvals" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Approvals</TabsTrigger>
             </TabsList>
 
             {/* ── OVERVIEW TAB ── */}
@@ -976,6 +1154,21 @@ export default function CampaignStrategyPage() {
                     <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-slate-300">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
                     <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
                     <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-slate-300">{detailProject.pm || 'N/A'}</p></CardContent></Card>
+                  </div>
+                  {/* Cross-module quick links */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <a href={`/documents/invoices?client=${encodeURIComponent(detailProject.client)}`} className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg border border-gold/25 bg-gold/5 text-gold hover:bg-gold/15 transition-colors font-medium">
+                      <ExternalLink className="h-2.5 w-2.5" />View Invoices
+                    </a>
+                    <a href={`/meetings?client=${encodeURIComponent(detailProject.client)}`} className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg border border-blue-500/25 bg-blue-500/5 text-blue-400 hover:bg-blue-500/15 transition-colors font-medium">
+                      <ExternalLink className="h-2.5 w-2.5" />View Meetings
+                    </a>
+                    <a href={`/documents/vault?client=${encodeURIComponent(detailProject.client)}`} className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg border border-purple-500/25 bg-purple-500/5 text-purple-400 hover:bg-purple-500/15 transition-colors font-medium">
+                      <ExternalLink className="h-2.5 w-2.5" />View Documents
+                    </a>
+                    <a href={`/crm?client=${encodeURIComponent(detailProject.client)}`} className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/15 transition-colors font-medium">
+                      <ExternalLink className="h-2.5 w-2.5" />View in CRM
+                    </a>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1072,6 +1265,52 @@ export default function CampaignStrategyPage() {
                     </div>
                   </div>
 
+                  {/* Time Tracking Panel */}
+                  <div className="mt-6 border-t border-[#152e23] pt-5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Time Tracking & Timesheets</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
+                          <p className="text-xl font-bold text-slate-200">142.5 hrs</p>
+                          <p className="text-[9px] text-muted-foreground">Estimated: 200 hrs</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Burn Rate</p>
+                          <p className="text-xl font-bold text-amber-400">71%</p>
+                          <p className="text-[9px] text-muted-foreground">Budget utilisation</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Billable Amount</p>
+                          <p className="text-xl font-bold text-emerald-400">₹1,78,250</p>
+                          <p className="text-[9px] text-muted-foreground">Based on employee rates</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="mt-4 bg-[#091510]/30 border border-[#152e23] rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between items-center pb-2 border-b border-[#152e23]/60">
+                        <span className="text-xs font-semibold text-slate-300">Mock Timesheet Schema</span>
+                        <Badge variant="outline" className="text-[9px] border-gold/30 text-gold bg-gold/5">Architecture Schema</Badge>
+                      </div>
+                      <pre className="text-[10px] text-slate-400 font-mono overflow-x-auto bg-black/20 p-2.5 rounded border border-[#152e23]/40">
+{`interface TimesheetEntry {
+  id: string; // uuid
+  project_id: string; // foreign key
+  team_member_id: string; // foreign key
+  date: string; // YYYY-MM-DD
+  hours: number; // decimal (e.g. 7.5)
+  billable: boolean;
+  notes: string;
+  milestone_id?: string;
+}`}
+                      </pre>
+                    </div>
+                  </div>
                 </>
               )}
             </TabsContent>
@@ -1103,7 +1342,7 @@ export default function CampaignStrategyPage() {
                           <div className="flex items-center gap-1">
                             <Button 
                               variant="ghost" 
-                              size="icon" 
+                              size="icon" aria-label="Action" 
                               className="h-7 w-7 text-slate-400 hover:text-gold hover:bg-gold/10"
                               onClick={() => {
                                 const newLabel = window.prompt("Edit task description:", cleanLabel);
@@ -1118,7 +1357,7 @@ export default function CampaignStrategyPage() {
                             </Button>
                             <Button 
                               variant="ghost" 
-                              size="icon" 
+                              size="icon" aria-label="Action" 
                               className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-500/10"
                               onClick={() => handleDeleteMilestone(detailProject, idx)}
                             >
@@ -1424,7 +1663,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1532,7 +1771,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1639,7 +1878,7 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
@@ -1659,100 +1898,314 @@ export default function CampaignStrategyPage() {
             <TabsContent value="workspace-timeline" className="mt-4 space-y-3">
               {detailProject && (
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Audit & Timeline Logs</h4>
-                  
-                  <div className="relative pl-4 border-l border-[#152e23] space-y-4 max-h-[300px] overflow-y-auto">
-                    {workspaceTimeline.map((item, idx) => (
-                      <div key={item.id || idx} className="relative text-xs">
-                        <div className="absolute -left-[20px] top-1 h-2 w-2 rounded-full bg-gold border border-black" />
-                        <div className="flex justify-between font-bold text-slate-200">
-                          <span className="text-xs font-semibold">{item.action}</span>
-                          <span className="text-[10px] text-slate-500 font-normal">{new Date(item.created_at).toLocaleString('en-IN')}</span>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Project Audit & Timeline Logs</h4>
+                  <UniversalTimeline
+                    enableFilters={true}
+                    entries={workspaceTimeline.map((item: any) => ({
+                      action: item.action,
+                      actionType: item.action?.toLowerCase().includes('risk') ? 'note' : item.action?.toLowerCase().includes('note') ? 'note' : item.action?.toLowerCase().includes('dependency') ? 'custom' : 'custom',
+                      by: item.user_name,
+                      date: item.created_at,
+                      comment: item.notes,
+                      module: 'Projects'
+                    }))}
+                  />
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── RISKS TAB ── */}
+            <TabsContent value="workspace-risks" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Risk Register</h4>
+                    <p className="text-[10px] text-muted-foreground">Track project risks, blockers and mitigation strategies</p>
+                  </div>
+                  {/* Risk input form */}
+                  <Card className="bg-[#091510] border-[#152e23]">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-2 space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Risk Description</label>
+                          <Input
+                            placeholder="Describe the risk or blocker..."
+                            className="h-8 text-xs bg-black/20 border-[#152e23]"
+                            id={`risk-title-${detailProject.id}`}
+                          />
                         </div>
-                        <p className="text-[10px] text-slate-400">By {item.user_name}</p>
-                        {item.notes && <p className="text-[10px] text-slate-500 mt-1 italic font-mono bg-[#0b1b15]/60 p-1.5 rounded border border-[#152e23]/30">"{item.notes}"</p>}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Impact Level</label>
+                          <Select defaultValue="medium">
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-[#152e23]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="critical">Critical</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                    ))}
-                    {workspaceTimeline.length === 0 && (
-                      <p className="text-xs text-slate-500 italic py-4 text-center">No timeline activity logs recorded.</p>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Mitigation Plan</label>
+                        <textarea
+                          rows={2}
+                          placeholder="How will this risk be mitigated?"
+                          className="w-full h-16 text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                          const titleEl = document.getElementById(`risk-title-${detailProject.id}`) as HTMLInputElement
+                          if (titleEl?.value?.trim()) {
+                            logWorkspaceActivity(detailProject.id, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
+                            titleEl.value = ''
+                            toast({ title: 'Risk logged to project timeline' })
+                          }
+                        }}>
+                          Log Risk
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Risk timeline from activity log */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Logged Risks from Timeline</p>
+                    <UniversalTimeline
+                      entries={workspaceTimeline
+                        .filter((t: any) => t.action?.toLowerCase().includes('risk'))
+                        .map((t: any) => ({
+                          action: t.action,
+                          actionType: 'note' as const,
+                          by: t.user_name,
+                          date: t.created_at,
+                          comment: t.notes
+                        }))}
+                      compact
+                    />
+                    {workspaceTimeline.filter((t: any) => t.action?.toLowerCase().includes('risk')).length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No risks logged yet. Use the form above to log risks.</p>
                     )}
                   </div>
                 </div>
               )}
             </TabsContent>
 
+            {/* ── INTERNAL NOTES TAB ── */}
+            <TabsContent value="workspace-notes" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Internal Notes</h4>
+                    <p className="text-[10px] text-muted-foreground">Private team-facing notes — not visible to client</p>
+                  </div>
+                  <Card className="bg-[#091510] border-[#152e23]">
+                    <CardContent className="p-4 space-y-3">
+                      <textarea
+                        rows={4}
+                        placeholder="Add an internal note for your team... (e.g. client prefers dark theme, PM confirmed budget extension)"
+                        id={`note-text-${detailProject.id}`}
+                        className="w-full text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                      />
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                          const el = document.getElementById(`note-text-${detailProject.id}`) as HTMLTextAreaElement
+                          if (el?.value?.trim()) {
+                            logWorkspaceActivity(detailProject.id, 'Internal Note Added', el.value.trim())
+                            el.value = ''
+                            toast({ title: 'Note saved to project timeline' })
+                          }
+                        }}>
+                          Save Note
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Notes from timeline */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Saved Notes</p>
+                    <UniversalTimeline
+                      entries={workspaceTimeline
+                        .filter((t: any) => t.action?.includes('Internal Note'))
+                        .map((t: any) => ({
+                          action: t.action,
+                          actionType: 'note' as const,
+                          by: t.user_name,
+                          date: t.created_at,
+                          comment: t.notes
+                        }))}
+                      compact
+                    />
+                    {workspaceTimeline.filter((t: any) => t.action?.includes('Internal Note')).length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No internal notes yet. Add notes above.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+ 
+            {/* ── DEPENDENCIES TAB ── */}
+            <TabsContent value="workspace-dependencies" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Dependencies</h4>
+                    <p className="text-[10px] text-muted-foreground">Track blockages, external tasks, or resources required</p>
+                  </div>
+                  {/* Dependency logging form */}
+                  <Card className="bg-[#091510] border-[#152e23]">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-2 space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Dependency Name / Title</label>
+                          <Input
+                            placeholder="e.g. Payment Gateway Credentials, Domain Delegation..."
+                            className="h-8 text-xs bg-black/20 border-[#152e23]"
+                            id={`dep-title-${detailProject.id}`}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Criticality</label>
+                          <Select defaultValue="high">
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-[#152e23]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low (Non-blocking)</SelectItem>
+                              <SelectItem value="medium">Medium (Potential delay)</SelectItem>
+                              <SelectItem value="high">High (Critical path)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Details & Assignee</label>
+                        <textarea
+                          rows={2}
+                          id={`dep-notes-${detailProject.id}`}
+                          placeholder="Specify who is responsible and what is needed..."
+                          className="w-full h-16 text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                          const titleEl = document.getElementById(`dep-title-${detailProject.id}`) as HTMLInputElement
+                          const notesEl = document.getElementById(`dep-notes-${detailProject.id}`) as HTMLTextAreaElement
+                          if (titleEl?.value?.trim()) {
+                            const noteStr = `Dependency: ${titleEl.value.trim()}. Details: ${notesEl?.value?.trim() || 'None'}`
+                            logWorkspaceActivity(detailProject.id, 'Dependency Logged', noteStr)
+                            titleEl.value = ''
+                            if (notesEl) notesEl.value = ''
+                            toast({ title: 'Dependency logged to project timeline' })
+                          }
+                        }}>
+                          Log Dependency
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Dependency list from activity log */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Active Dependencies</p>
+                    <UniversalTimeline
+                      entries={workspaceTimeline
+                        .filter((t: any) => t.action?.includes('Dependency'))
+                        .map((t: any) => ({
+                          action: t.action,
+                          actionType: 'note' as const,
+                          by: t.user_name,
+                          date: t.created_at,
+                          comment: t.notes
+                        }))}
+                      compact
+                    />
+                    {workspaceTimeline.filter((t: any) => t.action?.includes('Dependency')).length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No active dependencies logged yet. Log dependencies above.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── APPROVALS TAB ── */}
+            <TabsContent value="workspace-approvals" className="mt-4 space-y-4">
+              {detailProject && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Approvals Queue</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Track sign-offs, SOW approvals, and budget adjustments</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      { id: 'app-sow', name: 'Scope of Work (SOW) Sign-off', requester: 'Client Portal Integration', status: detailProject.status === 'completed' ? 'approved' : 'pending' },
+                      { id: 'app-budget', name: 'Phase 1 Budget Reallocation', requester: 'Founder Team', status: 'approved' },
+                      { id: 'app-milestone-1', name: 'Milestone 1 Deliverable Approval', requester: 'Project Manager', status: 'approved' },
+                      { id: 'app-milestone-2', name: 'Milestone 2 Deliverable Approval', requester: 'Project Manager', status: 'pending' },
+                    ].map(approval => (
+                      <Card key={approval.id} className="bg-[#091510]/40 border-[#152e23] hover:border-gold/15 transition-all">
+                        <CardContent className="p-3.5 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-200">{approval.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-slate-400 font-medium">{approval.requester}</span></p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {approval.status === 'approved' ? (
+                              <Badge className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
+                            ) : approval.status === 'rejected' ? (
+                              <Badge className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
+                            ) : (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-[10px] border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                                  onClick={() => {
+                                    logWorkspaceActivity(detailProject.id, 'Approval Granted', `Approved: ${approval.name}`)
+                                    toast({ title: 'Approval Granted', description: `${approval.name} has been approved.` })
+                                  }}
+                                >
+                                  Approve
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-[10px] border-red-500/20 text-red-400 hover:bg-red-500/10"
+                                  onClick={() => {
+                                    logWorkspaceActivity(detailProject.id, 'Approval Declined', `Declined: ${approval.name}`)
+                                    toast({ title: 'Approval Declined', description: `${approval.name} has been declined.` })
+                                  }}
+                                >
+                                  Decline
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editId} onOpenChange={open => !open && setEditId(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Project Details</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 text-sm">
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Project Title *</Label>
-              <Input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Client Name *</Label>
-              <ClientAutocomplete
-                value={quickClient}
-                onChange={setQuickClient}
-                onSelect={(client) => setQuickClient(client.name)}
-                placeholder="Select or type client name"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Project Type</Label>
-              <Select value={quickType} onValueChange={setQuickType}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {projectTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={quickStatus} onValueChange={setQuickStatus}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planned">Planned</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Budget (₹)</Label>
-              <Input type="number" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Timeline</Label>
-              <Input value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Current Stage</Label>
-              <Input placeholder="e.g. Development & Integration" value={quickCurrentStage} onChange={e => setQuickCurrentStage(e.target.value)} />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Sprint Goal</Label>
-              <Textarea placeholder="e.g. Final API integrations and validation checks." value={quickSprintGoal} onChange={e => setQuickSprintGoal(e.target.value)} className="min-h-20" />
-            </div>
-            <div className="col-span-1 sm:col-span-2 space-y-1">
-              <Label>Project Manager</Label>
-              <ProjectManagerAutocomplete
-                value={quickPm}
-                onChange={setQuickPm}
-                onSelect={(manager) => setQuickPm(manager.name)}
-                placeholder="Search project managers..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditId(null)}>Cancel</Button>
-            <Button variant="gold" onClick={async () => {
+      {/* Edit Project Drawer */}
+      <Drawer
+        isOpen={!!editId}
+        onClose={() => setEditId(null)}
+        title="Edit Project Details"
+        description="Modify project details, status, timeline, and PM allocation."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditId(null)}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={async () => {
               if (!editId) return
               const target = projects.find(p => p.id === editId)
               if (!target) return
@@ -1799,23 +2252,58 @@ export default function CampaignStrategyPage() {
               setProjects(updatedList); setCachedData('projects', updatedList); invalidateCache('dashboard')
               setEditId(null); toast({ title: '✅ Project Updated' })
             }}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        {editId && (
+          <div className="space-y-4">
+            <FormInput label="Project Title" required value={quickTitle} onChange={e => setQuickTitle(e.target.value)} />
+            
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Client Name *</Label>
+              <ClientAutocomplete
+                value={quickClient}
+                onChange={setQuickClient}
+                onSelect={(client) => setQuickClient(client.name)}
+                placeholder="Select or type client name"
+              />
+            </div>
 
-      {/* Delete */}
-      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. All workspace tasks, files, links and requirements will remain in database but the project reference will be lost.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Delete Project</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <FormSelect label="Project Type" value={quickType} onChange={e => setQuickType(e.target.value)} options={projectTypes.map(t => ({ label: t, value: t }))} />
+            <FormSelect label="Status" value={quickStatus} onChange={e => setQuickStatus(e.target.value)} options={[
+              { label: 'Planned', value: 'planned' },
+              { label: 'Active', value: 'active' },
+              { label: 'Paused', value: 'paused' },
+              { label: 'Completed', value: 'completed' }
+            ]} />
+            
+            <FormInput label="Budget (₹)" type="number" value={quickBudget} onChange={e => setQuickBudget(e.target.value)} />
+            <FormInput label="Timeline" value={quickTimeline} onChange={e => setQuickTimeline(e.target.value)} />
+            <FormInput label="Current Stage" placeholder="e.g. Development & Integration" value={quickCurrentStage} onChange={e => setQuickCurrentStage(e.target.value)} />
+            <FormTextarea label="Sprint Goal" placeholder="e.g. Final API integrations and validation checks." value={quickSprintGoal} onChange={e => setQuickSprintGoal(e.target.value)} className="min-h-20" />
+            
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Project Manager</Label>
+              <ProjectManagerAutocomplete
+                value={quickPm}
+                onChange={setQuickPm}
+                onSelect={(manager) => setQuickPm(manager.name)}
+                placeholder="Search project managers..."
+              />
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Delete Project Dialog */}
+      <DeleteDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete Project?"
+        description="This action cannot be undone. All workspace tasks, files, links and requirements will remain in database but the project reference will be deleted."
+        confirmLabel="Delete Project"
+        onConfirm={handleDelete}
+      />
       {/* Manage Categories Dialog */}
       <Dialog open={showManageCategories} onOpenChange={setShowManageCategories}>
         <DialogContent className="max-w-md">
@@ -1841,7 +2329,7 @@ export default function CampaignStrategyPage() {
                   {cat !== 'Other' && (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon" aria-label="Action"
                       className="h-7 w-7 text-red-400 hover:text-red-400"
                       onClick={() => handleDeleteCategory(cat)}
                       title="Delete Category"
@@ -1898,7 +2386,7 @@ export default function CampaignStrategyPage() {
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="icon" aria-label="Action"
                           className="h-7 w-7 text-muted-foreground hover:text-gold"
                           onClick={() => {
                             setEditingTypeIndex(idx)
@@ -1911,7 +2399,7 @@ export default function CampaignStrategyPage() {
                         {type !== 'Other' && (
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon" aria-label="Action"
                             className="h-7 w-7 text-red-400 hover:text-red-400"
                             onClick={() => handleDeleteProjectType(type)}
                             title="Delete Project Type"
@@ -1932,5 +2420,13 @@ export default function CampaignStrategyPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function CampaignStrategyPage() {
+  return (
+    <Suspense fallback={null}>
+      <CampaignStrategyPageContent />
+    </Suspense>
   )
 }

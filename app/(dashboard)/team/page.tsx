@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,11 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { FormInput, FormSelect } from '@/components/ui/form-inputs'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Plus, UserCog, Mail, Phone, Shield, MoreHorizontal, Edit, Trash2, Activity, Loader2 } from 'lucide-react'
-import { getInitials, formatDate } from '@/lib/utils'
+import { getInitials, formatDate, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
 const ROLES = [
@@ -49,6 +53,20 @@ const MODULE_LABELS: Record<string, string> = {
   settings: 'Portal Settings'
 }
 
+const OPERATIONS = ['read', 'create', 'update', 'delete', 'approve', 'export', 'print', 'manage', 'share']
+
+const OPERATION_LABELS: Record<string, string> = {
+  read: 'View',
+  create: 'Create',
+  update: 'Edit',
+  delete: 'Delete',
+  approve: 'Approve',
+  export: 'Export',
+  print: 'Print',
+  manage: 'Manage',
+  share: 'Share'
+}
+
 
 const roleColors: Record<string, string> = {
   Founder: 'bg-gold/10 text-gold border-gold/20',
@@ -84,6 +102,7 @@ export default function TeamPage() {
   const [deleteMember, setDeleteMember] = useState<{id: string, name: string} | null>(null)
   const [editRoleId, setEditRoleId] = useState<string | null>(null)
   const [deleteRole, setDeleteRole] = useState<Role | null>(null)
+  const [matrixRoleId, setMatrixRoleId] = useState<string>('')
   const { toast } = useToast()
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'Employee', password: '' })
 
@@ -96,12 +115,16 @@ export default function TeamPage() {
           if (rolesErr) {
             toast({ title: 'Error loading custom roles', description: rolesErr.message, variant: 'destructive' })
           } else if (dbRoles) {
-            setRoles(dbRoles.map((r: any) => ({
+            const mapped = dbRoles.map((r: any) => ({
               id: r.id,
               name: r.name,
               isSystem: r.is_system,
               permissions: r.permissions || []
-            })))
+            }))
+            setRoles(mapped)
+            if (mapped.length > 0) {
+              setMatrixRoleId(mapped[0].id)
+            }
           }
 
           // Fetch from profiles table (auth-linked users)
@@ -157,6 +180,9 @@ export default function TeamPage() {
       } else {
         setTeam(mockTeam)
         setRoles(initialRoles)
+        if (initialRoles.length > 0) {
+          setMatrixRoleId(initialRoles[0].id)
+        }
       }
       setLoading(false)
     }
@@ -344,12 +370,70 @@ export default function TeamPage() {
     setShowAdd(true)
   }
 
+  const handleTogglePermission = async (roleId: string, mod: string, op: string) => {
+    const role = roles.find(r => r.id === roleId)
+    if (!role) return
+    if (role.name === 'Founder') return
+
+    const perm = `${mod}:${op}`
+    let updatedPermissions = [...role.permissions]
+
+    if (updatedPermissions.includes(perm)) {
+      updatedPermissions = updatedPermissions.filter(p => p !== perm)
+    } else {
+      updatedPermissions.push(perm)
+    }
+
+    if (role.permissions.includes('all')) {
+      updatedPermissions = []
+      MODULES.forEach(m => {
+        OPERATIONS.forEach(o => {
+          if (m === mod && o === op) return
+          updatedPermissions.push(`${m}:${o}`)
+        })
+      })
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('custom_roles')
+          .update({ permissions: updatedPermissions })
+          .eq('id', roleId)
+
+        if (error) {
+          toast({ title: 'Error saving permissions', description: error.message, variant: 'destructive' })
+          return
+        }
+      } catch (err: any) {
+        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+        return
+      }
+    } else {
+      const storageKey = `nbos_permissions_${roleId}`
+      localStorage.setItem(storageKey, JSON.stringify(updatedPermissions))
+    }
+
+    setRoles(prev => prev.map(r => r.id === roleId ? { ...r, permissions: updatedPermissions } : r))
+    toast({ title: 'Permissions updated!' })
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">Team Management</h1><p className="text-muted-foreground text-sm mt-0.5">Manage your team members, roles, and access levels.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />Add Employee</Button>
-      </div>
+      <PageHeader
+        title="Team Management"
+        description="Manage your team members, roles, and access levels."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Team' }
+        ]}
+        primaryAction={{
+          label: 'Add Employee',
+          onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ label: 'Total Team', value: team.length }, { label: 'Active', value: team.filter(t => t.status === 'active').length }, { label: 'Managers', value: team.filter(t => ['Founder', 'Admin', 'Project Manager'].includes(t.role)).length }, { label: 'Staff', value: team.filter(t => ['Sales Executive', 'Employee'].includes(t.role)).length }].map(s => (
@@ -361,10 +445,19 @@ export default function TeamPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="team">Employees</TabsTrigger>
           <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
+          <TabsTrigger value="matrix">Permission Matrix</TabsTrigger>
         </TabsList>
         <TabsContent value="team">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-3">
+          {team.length === 0 && (
+            <EmptyState
+              icon={UserCog}
+              title="No team members found"
+              description="Add your first team member to get started."
+              action={{ label: 'Add Employee', onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) }, icon: Plus }}
+            />
+          )}
           {team.map(member => (
             <Card key={member.id} className="hover:shadow-md hover:border-gold/20 transition-all">
               <CardContent className="p-4">
@@ -387,8 +480,8 @@ export default function TeamPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">Joined {formatDate(member.joined)} · {member.projects} active projects</p>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(member)}><Edit className="h-3.5 w-3.5" /></Button>
-                    {member.role !== 'Founder' && <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteMember({id: member.id, name: member.name})}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                    <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7" onClick={() => openEdit(member)}><Edit className="h-3.5 w-3.5" /></Button>
+                    {member.role !== 'Founder' && <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteMember({id: member.id, name: member.name})}><Trash2 className="h-3.5 w-3.5" /></Button>}
                   </div>
                 </div>
               </CardContent>
@@ -428,7 +521,7 @@ export default function TeamPage() {
                     <div className="flex gap-1">
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon" aria-label="Action"
                         className="h-7 w-7"
                         onClick={() => {
                           setEditRoleId(r.id);
@@ -442,7 +535,7 @@ export default function TeamPage() {
                       {r.name !== 'Founder' && r.name !== 'Admin' ? (
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="icon" aria-label="Action"
                           className="h-7 w-7 text-destructive hover:text-destructive"
                           onClick={() => setDeleteRole(r)}
                           title="Delete Role"
@@ -452,11 +545,11 @@ export default function TeamPage() {
                       ) : (
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="icon" aria-label="Action"
                           className="h-7 w-7 text-muted-foreground/30 cursor-not-allowed"
                           disabled
                           title={`${r.name} role cannot be deleted`}
-                        >
+                          >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -473,35 +566,129 @@ export default function TeamPage() {
             ))}
           </div>
         </TabsContent>
+        {/* ── PERMISSION MATRIX TAB ── */}
+        <TabsContent value="matrix" className="space-y-4">
+          {(() => {
+            const activeRole = roles.find(r => r.id === matrixRoleId) || roles[0]
+            if (!activeRole) return <div className="text-xs text-muted-foreground italic">No roles available</div>
+
+            const isFounder = activeRole.name === 'Founder'
+            const isAdmin = activeRole.name === 'Admin'
+
+            return (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0a1612]/20 p-3 rounded-xl border border-border/40">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Interactive Permission Matrix</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Customize fine-grained CRUD and workflow actions for team roles</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-muted-foreground shrink-0">Configure Role:</Label>
+                    <Select value={matrixRoleId || activeRole.id} onValueChange={setMatrixRoleId}>
+                      <SelectTrigger className="h-8.5 w-48 text-xs border-border/60 bg-background/30 focus-visible:ring-gold text-slate-200">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map(r => (
+                          <SelectItem key={r.id} value={r.id} className="text-xs">{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {isFounder ? (
+                  <div className="p-6 border border-gold/30 rounded-xl bg-gold/5 text-gold text-xs text-center font-medium max-w-xl mx-auto space-y-2">
+                    <Shield className="h-8 w-8 mx-auto mb-2" />
+                    <p className="font-bold text-sm">Founder Role (System Override)</p>
+                    <p className="text-muted-foreground leading-relaxed">The Founder role has absolute system-wide access to all resources, administrative capabilities, and financial configuration. These permissions are hardcoded and cannot be modified.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-border/70 bg-muted/20">
+                            <th className="py-3 px-4 text-left font-bold text-slate-200 min-w-40 border-r border-border/10">Module / Resource</th>
+                            {OPERATIONS.map(op => (
+                              <th key={op} className="py-3 px-2 text-center font-bold text-gold uppercase tracking-wider min-w-20">
+                                {OPERATION_LABELS[op]}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {MODULES.map(mod => {
+                            return (
+                              <tr key={mod} className="hover:bg-muted/10 transition-colors">
+                                <td className="py-3.5 px-4 font-semibold text-slate-300 border-r border-border/10">
+                                  {MODULE_LABELS[mod] || mod}
+                                </td>
+                                {OPERATIONS.map(op => {
+                                  const hasPerm = activeRole.permissions.includes('all') || activeRole.permissions.includes(`${mod}:${op}`)
+                                  return (
+                                    <td key={op} className="py-3.5 px-2 text-center">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasPerm}
+                                        disabled={isAdmin}
+                                        onChange={() => handleTogglePermission(activeRole.id, mod, op)}
+                                        className="h-4.5 w-4.5 rounded border-border/80 bg-[#0a1612]/30 text-gold focus:ring-gold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        aria-label={`Toggle ${op} permission for ${mod}`}
+                                      />
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {isAdmin && (
+                  <p className="text-[10px] text-muted-foreground italic text-center">
+                    * The System Admin role has full module permissions enabled by default.
+                  </p>
+                )}
+              </>
+            )
+          })()}
+        </TabsContent>
       </Tabs>
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editId ? 'Edit Employee Account' : 'Create Employee Account'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-            {!editId && (
-              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 sm:col-span-2">
-                ⚠️ Only Founders can create employee accounts. Employees cannot self-register.
-              </p>
-            )}
-            <div className="space-y-1 sm:col-span-2"><Label>Full Name *</Label><Input placeholder="Employee full name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Email *</Label><Input type="email" placeholder="employee@netgain.studio" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
-            <div className="space-y-1"><Label>Phone</Label><Input placeholder="Mobile number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
-            <div className={`space-y-1 ${editId ? 'sm:col-span-2' : ''}`}><Label>Role</Label><Select value={form.role} onValueChange={v => setForm({...form, role: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ROLES.filter(r => r !== 'Founder').map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-            {!editId && <div className="space-y-1 sm:col-span-2"><Label>Temporary Password</Label><Input type="password" placeholder="Must be changed on first login" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
-            <Button variant="gold" onClick={handleAddOrEdit} disabled={submitting} className="gap-2">
+      <Drawer
+        isOpen={showAdd}
+        onClose={() => setShowAdd(false)}
+        title={editId ? 'Edit Employee Account' : 'Create Employee Account'}
+        description="Configure team member name, contact details, role, and temporary password."
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleAddOrEdit} disabled={submitting} className="gap-2">
               {submitting ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />{editId ? 'Saving...' : 'Creating...'}</>
               ) : (
                 editId ? 'Save Changes' : 'Create Account'
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-4 py-2">
+          {!editId && (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+              ⚠️ Only Founders can create employee accounts. Employees cannot self-register.
+            </p>
+          )}
+          <FormInput label="Full Name" required placeholder="Employee full name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          <FormInput label="Email" type="email" required placeholder="employee@netgain.studio" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+          <FormInput label="Phone" placeholder="Mobile number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+          <FormSelect label="Role" value={form.role} onChange={e => setForm({...form, role: e.target.value})} options={ROLES.filter(r => r !== 'Founder').map(r => ({ label: r, value: r }))} />
+          {!editId && <FormInput label="Temporary Password" type="password" placeholder="Must be changed on first login" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />}
+        </div>
+      </Drawer>
 
       <Dialog open={showRoleCreate} onOpenChange={v => { setShowRoleCreate(v); if (!v) { setEditRoleId(null); setRoleForm({ name: '', permissions: [] }) } }}>
         <DialogContent className="max-w-md">
@@ -625,35 +812,24 @@ export default function TeamPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteMember} onOpenChange={(open) => !open && setDeleteMember(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete <strong>{deleteMember?.name}</strong> from your team. They will lose access to the portal immediately.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDelete}>Remove User</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={!!deleteRole} onOpenChange={(open) => !open && setDeleteRole(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Role?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the <strong>{deleteRole?.name}</strong> role? This action cannot be undone. Users with this role may lose access to resources.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white" onClick={handleDeleteRole}>Delete Role</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Member Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteMember}
+        onClose={() => setDeleteMember(null)}
+        title="Remove Team Member?"
+        description={`This action cannot be undone. This will permanently remove ${deleteMember?.name} from your team, and they will lose access immediately.`}
+        confirmLabel="Remove User"
+        onConfirm={handleDelete}
+      />
+      {/* Delete Role Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteRole}
+        onClose={() => setDeleteRole(null)}
+        title="Delete Role?"
+        description={`This action cannot be undone. Are you sure you want to delete the ${deleteRole?.name} role? Users with this role may lose access to resources.`}
+        confirmLabel="Delete Role"
+        onConfirm={handleDeleteRole}
+      />
     </div>
   )
 }

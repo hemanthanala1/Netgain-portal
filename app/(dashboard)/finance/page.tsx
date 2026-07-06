@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 const COLORS = ['#34d399', '#f87171', '#60a5fa', '#fbbf24', '#a78bfa', '#f472b6']
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { EmptyState } from '@/components/ui/empty-state'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default function FinancePage() {
   const [expenses, setExpenses] = useState<any[]>([])
@@ -249,16 +251,24 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Finance Tracking</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Manage revenues, expenses, and payroll in one place.</p>
-        </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) }} className="gap-1.5 flex-1 sm:flex-none"><Plus className="h-4 w-4" /> Add Expense</Button>
-          <Button variant="gold" size="sm" onClick={() => { setEditSalaryId(null); setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' }); setShowSalaryAdd(true) }} className="gap-1.5 flex-1 sm:flex-none"><Plus className="h-4 w-4" /> Process Payroll</Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Finance Tracking"
+        description="Manage revenues, expenses, and payroll in one place."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Finance' }
+        ]}
+        primaryAction={{
+          label: 'Add Expense',
+          onClick: () => { setEditExpenseId(null); setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' }); setShowExpenseAdd(true) },
+          icon: Plus
+        }}
+        secondaryActions={
+          <Button variant="outline" size="sm" onClick={() => { setEditSalaryId(null); setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' }); setShowSalaryAdd(true) }}>
+            <Plus className="h-4 w-4 mr-2" /> Process Payroll
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-emerald-500/5 border-emerald-500/20">
@@ -406,7 +416,24 @@ export default function FinancePage() {
           <Card>
             <CardContent className="p-0">
               <div className="divide-y divide-border">
-                {expenses.length === 0 && <div className="p-8 text-center text-muted-foreground">No expenses recorded yet.</div>}
+                {expenses.length === 0 && (
+                  <div className="p-4">
+                    <EmptyState
+                      icon={Wallet}
+                      title="No Expenses Logged"
+                      description="You haven't recorded any company expenditures yet."
+                      action={{
+                        label: "Log Expense",
+                        onClick: () => {
+                          setExpenseForm({ title: '', category: 'Operations', amount: '', taxAmount: '', date: new Date().toISOString().slice(0,10), status: 'pending' });
+                          setEditExpenseId(null);
+                          setShowExpenseAdd(true);
+                        },
+                        icon: Plus
+                      }}
+                    />
+                  </div>
+                )}
                 {expenses.map(e => (
                   <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
                     <div>
@@ -423,8 +450,8 @@ export default function FinancePage() {
                         {Number(e.tax_amount) > 0 && <p className="text-[10px] text-muted-foreground">Includes {formatCurrency(e.tax_amount)} tax</p>}
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setExpenseForm({ title: e.title, category: e.category, amount: String(e.amount), taxAmount: String(e.tax_amount || ''), date: e.date, status: e.status }); setEditExpenseId(e.id); setShowExpenseAdd(true) }}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteExpense(e.id)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Edit" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setExpenseForm({ title: e.title, category: e.category, amount: String(e.amount), taxAmount: String(e.tax_amount || ''), date: e.date, status: e.status }); setEditExpenseId(e.id); setShowExpenseAdd(true) }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Delete" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteExpense(e.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
                   </div>
@@ -437,7 +464,24 @@ export default function FinancePage() {
           <Card>
             <CardContent className="p-0">
               <div className="divide-y divide-border">
-                {salaries.length === 0 && <div className="p-8 text-center text-muted-foreground">No payroll records yet.</div>}
+                {salaries.length === 0 && (
+                  <div className="p-4">
+                    <EmptyState
+                      icon={Users}
+                      title="No Payroll Records"
+                      description="No salary allocations or payouts have been logged for this period."
+                      action={{
+                        label: "Process Salary",
+                        onClick: () => {
+                          setSalaryForm({ employee: '', role: 'Employee', baseSalary: '', bonus: '', status: 'pending' });
+                          setEditSalaryId(null);
+                          setShowSalaryAdd(true);
+                        },
+                        icon: Plus
+                      }}
+                    />
+                  </div>
+                )}
                 {salaries.map(s => (
                   <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
                     <div>
@@ -454,8 +498,8 @@ export default function FinancePage() {
                         {s.bonus > 0 && <p className="text-[10px] text-muted-foreground">Includes {formatCurrency(s.bonus)} bonus</p>}
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setSalaryForm({ employee: s.employee, role: s.role, baseSalary: String(s.baseSalary), bonus: String(s.bonus || 0), status: s.status }); setEditSalaryId(s.id); setShowSalaryAdd(true) }}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteSalary(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Edit" className="h-8 w-8 text-blue-400 hover:text-blue-400" onClick={() => { setSalaryForm({ employee: s.employee, role: s.role, baseSalary: String(s.baseSalary), bonus: String(s.bonus || 0), status: s.status }); setEditSalaryId(s.id); setShowSalaryAdd(true) }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Delete" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteSalary(s.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
                   </div>

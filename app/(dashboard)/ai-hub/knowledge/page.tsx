@@ -18,6 +18,7 @@ import { formatFileSize, KB_FOLDERS } from '@/lib/ai-utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useUser } from '@/components/user-provider'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { KnowledgeBaseItem } from '@/lib/ai-types'
 import { getCachedData, setCachedData } from '@/lib/data-cache'
 
@@ -404,11 +405,16 @@ export default function KnowledgeBasePage() {
 
       {/* Documents List */}
       {filtered.length === 0 ? (
-        <Card className="ai-card"><CardContent className="p-12 text-center">
-          <FolderOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm font-medium">No documents found</p>
-          <p className="text-xs text-muted-foreground mt-1">Add your first company document to the knowledge base.</p>
-        </CardContent></Card>
+        <EmptyState
+          icon={FolderOpen}
+          title="No AI Knowledge Base Documents"
+          description={isFounder ? "Your AI Knowledge Base has no reference docs yet. Upload training manuals or business logic." : "No documents are available in the repository yet."}
+          action={isFounder ? {
+            label: "Add Document",
+            onClick: () => { setForm({ title: '', folder: 'General', description: '', tags: '' }); setUploadedFiles([]); setShowUpload(true) },
+            icon: Plus
+          } : undefined}
+        />
       ) : (
         <div className="space-y-2">
           {filtered.map(item => {
@@ -458,7 +464,7 @@ export default function KnowledgeBasePage() {
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(item.id)} title="Delete">
+                        <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(item.id)} title="Delete">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </>

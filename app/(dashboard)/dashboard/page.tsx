@@ -1,502 +1,796 @@
 'use client'
 
+import * as React from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Plus, FileText, Settings, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import {
-  Users, FileText, Receipt, IndianRupee, TrendingUp, Clock, CheckCircle2,
-  AlertCircle, ArrowUpRight, Plus, Zap, BarChart3, Loader2
-} from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from '@/hooks/use-toast'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+
+import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-import { getCachedData, setCachedData } from '@/lib/data-cache'
+import { formatCurrency } from '@/lib/utils'
 
+// Custom Components
+import { KPICard } from '@/components/ui/kpi-card'
+import { BusinessHealthPanel } from '@/components/ui/business-health'
+import { ActivityFeed } from '@/components/ui/activity-feed'
+import { DashboardCustomization, WidgetConfig } from '@/components/dashboard/dashboard-customization'
+import { PageHeader } from '@/components/ui/page-header'
+import {
+  RevenueChart,
+  LeadConversionChart,
+  ProjectProgressChart,
+  InvoiceStatusChart,
+  MeetingAnalyticsChart,
+  TaskCompletionChart,
+  SupportTicketAnalytics,
+  RevenueForecastChart,
+  CashFlowChart,
+  SalesFunnelChart,
+  TopClientsServices,
+  ProjectProfitabilityTable,
+  EmployeeUtilizationList
+} from '@/components/ui/analytics-widgets'
+import { FounderIntelligence } from '@/components/ui/founder-intelligence'
 
-const fadeUp = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }
-const stagger = { show: { transition: { staggerChildren: 0.07 } } }
+const fadeUp = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }
+const stagger = { show: { transition: { staggerChildren: 0.05 } } }
+
+// Default layouts by role
+const ROLE_DEFAULT_LAYOUTS: Record<string, WidgetConfig[]> = {
+  Founder: [
+    { id: 'founder-intelligence', label: 'Founder Business Intelligence', visible: true },
+    { id: 'health', label: 'Executive Health Summary', visible: true },
+    { id: 'revenue-forecast', label: 'Revenue Forecast Chart', visible: true },
+    { id: 'cash-flow', label: 'Cash Flow Summary Chart', visible: true },
+    { id: 'sales-funnel', label: 'Sales Funnel Stage Distribution Chart', visible: true },
+    { id: 'top-clients-services', label: 'Top Clients & Services Chart', visible: true },
+    { id: 'project-profitability', label: 'Project Profitability Matrix', visible: true },
+    { id: 'employee-utilization', label: 'Team Utilization & Capacity', visible: true },
+    { id: 'activity-feed', label: 'System Audit Trail', visible: true }
+  ],
+  Admin: [
+    { id: 'health', label: 'Executive Health Summary', visible: true },
+    { id: 'invoices-chart', label: 'Invoice Receivables Chart', visible: true },
+    { id: 'support-chart', label: 'Support Backlog Chart', visible: true },
+    { id: 'employee-utilization', label: 'Team Utilization & Capacity', visible: true },
+    { id: 'activity-feed', label: 'System Audit Trail', visible: true }
+  ],
+  'Project Manager': [
+    { id: 'health', label: 'Executive Health Summary', visible: true },
+    { id: 'projects-chart', label: 'Project Budget Allocation Chart', visible: true },
+    { id: 'project-profitability', label: 'Project Profitability Matrix', visible: true },
+    { id: 'employee-utilization', label: 'Team Utilization & Capacity', visible: true },
+    { id: 'activity-feed', label: 'System Audit Trail', visible: true }
+  ],
+  'Sales Executive': [
+    { id: 'sales-funnel', label: 'Sales Funnel Stage Distribution Chart', visible: true },
+    { id: 'leads-chart', label: 'Lead Stage Distribution Chart', visible: true },
+    { id: 'meetings-chart', label: 'Meeting Frequency Chart', visible: true },
+    { id: 'top-clients-services', label: 'Top Clients & Services Chart', visible: true },
+    { id: 'activity-feed', label: 'System Audit Trail', visible: true }
+  ],
+  Employee: [
+    { id: 'meetings-chart', label: 'Meeting Frequency Chart', visible: true },
+    { id: 'tasks-chart', label: 'Task Velocity Chart', visible: true },
+    { id: 'employee-utilization', label: 'Team Utilization & Capacity', visible: true },
+    { id: 'activity-feed', label: 'System Audit Trail', visible: true }
+  ]
+}
 
 export default function DashboardPage() {
-  const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalClients: 0,
+  const { user, loading: userLoading } = useUser()
+  const { toast } = useToast()
+
+  const [loading, setLoading] = React.useState(true)
+  const [roleOverride, setRoleOverride] = React.useState<string | null>(null)
+  const currentRole = roleOverride || user?.role || 'Founder'
+
+  // Personalization Config States
+  const [isCustomizing, setIsCustomizing] = React.useState(false)
+  const [widgetLayout, setWidgetLayout] = React.useState<WidgetConfig[]>([])
+
+  // Dashboard KPI/Chart Data States
+  const [stats, setStats] = React.useState({
     revenueMtd: 0,
-    activeProjects: 0,
-    pendingInvoicesVal: 0,
-    clientTrend: '',
-    revenueTrend: '',
-    projectTrend: '',
-    invoiceTrend: '',
+    revenueYtd: 0,
+    outstandingPayments: 0,
+    invoicesDue: 0,
+    invoicesOverdue: 0,
+    pipelineVal: 0,
+    newClientsCount: 0,
+    activeClientsCount: 0,
+    wonLeadsCount: 0,
+    lostLeadsCount: 0,
+    projectsInProgress: 0,
+    projectsDelayed: 0,
+    projectsCompleted: 0,
+    meetingsToday: 0,
+    pendingApprovals: 0,
+    pendingSignatures: 0,
+    supportTickets: 0,
+    openTasksCount: 0,
+    upcomingRenewalsCount: 0,
+    leadConversionRate: 0
   })
-  const [revenueData, setRevenueData] = useState<any[]>([])
-  const [recentActivities, setRecentActivities] = useState<any[]>([])
-  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([])
-  const [topServices, setTopServices] = useState<any[]>([])
 
-  useEffect(() => {
-    const cached = getCachedData<any>('dashboard')
-    if (cached) {
-      setStats(cached.stats)
-      setRevenueData(cached.revenueData)
-      setRecentActivities(cached.recentActivities)
-      setUpcomingTasks(cached.upcomingTasks)
-      setTopServices(cached.topServices)
-      setLoading(false)
-    }
+  // Historical data lists for charts/sparklines
+  const [revenueTrend, setRevenueTrend] = React.useState<number[]>([120000, 140000, 160000, 190000, 230000, 280000])
+  const [clientTrend, setClientTrend] = React.useState<number[]>([20, 24, 28, 33, 40, 47])
+  const [projectTrend, setProjectTrend] = React.useState<number[]>([5, 7, 8, 10, 11, 12])
+  const [invoiceTrend, setInvoiceTrend] = React.useState<number[]>([12000, 15000, 24000, 31000, 48000, 94500])
 
-    async function loadDashboardData() {
-      if (!cached) {
-        setLoading(true)
+  // Recharts collections
+  const [revenueChartData, setRevenueChartData] = React.useState<any[]>([])
+  const [leadsChartData, setLeadsChartData] = React.useState<any[]>([])
+  const [projectsChartData, setProjectsChartData] = React.useState<any[]>([])
+  const [invoicesChartData, setInvoicesChartData] = React.useState<any[]>([])
+  const [meetingsChartData, setMeetingsChartData] = React.useState<any[]>([])
+  const [tasksChartData, setTasksChartData] = React.useState<any[]>([])
+  const [supportChartData, setSupportChartData] = React.useState<any[]>([])
+  
+  const [activities, setActivities] = React.useState<any[]>([])
+  
+  // Advanced BI States
+  const [forecastData, setForecastData] = React.useState<any[]>([])
+  const [cashFlowData, setCashFlowData] = React.useState<any[]>([])
+  const [salesFunnelData, setSalesFunnelData] = React.useState<any[]>([])
+  const [topClients, setTopClients] = React.useState<any[]>([])
+  const [topServices, setTopServices] = React.useState<any[]>([])
+  const [projectProfitability, setProjectProfitability] = React.useState<any[]>([])
+  const [employeeUtilization, setEmployeeUtilization] = React.useState<any[]>([])
+
+  // Load layout from localStorage based on active role
+  React.useEffect(() => {
+    const layoutKey = `nbos-dashboard-layout-${currentRole}`
+    const saved = localStorage.getItem(layoutKey)
+    if (saved) {
+      try {
+        setWidgetLayout(JSON.parse(saved))
+      } catch (e) {
+        setWidgetLayout(ROLE_DEFAULT_LAYOUTS[currentRole] || ROLE_DEFAULT_LAYOUTS['Founder'])
       }
-      if (isSupabaseConfigured()) {
-        try {
-          const [
-            { data: clients },
-            { data: invoices },
-            { data: projects },
-            { data: quotations },
-            { data: sows },
-            { data: agreements },
-            { data: dbServices },
-            { data: clientNotifications }
-          ] = await Promise.all([
-            supabase.from('crm_clients').select('id, name, created_at'),
-            supabase.from('invoices').select('id, amount, status, created, due, service_ids, client'),
-            supabase.from('projects').select('id, title, status, created_at, stack'),
-            supabase.from('quotations').select('id, doc_id, client, created, amount, status'),
-            supabase.from('sows').select('id, doc_id, client, created, status'),
-            supabase.from('agreements').select('id, doc_id, client, created, status'),
-            supabase.from('services').select('id, name, base_price'),
-            supabase.from('client_notifications').select('id, client_id, title, is_read, created_at')
-          ])
+    } else {
+      setWidgetLayout(ROLE_DEFAULT_LAYOUTS[currentRole] || ROLE_DEFAULT_LAYOUTS['Founder'])
+    }
+  }, [currentRole])
 
-          // 1. Client Metrics
-          const totalClients = clients?.length || 0
+  const handleSaveLayout = (newConfig: WidgetConfig[]) => {
+    const layoutKey = `nbos-dashboard-layout-${currentRole}`
+    localStorage.setItem(layoutKey, JSON.stringify(newConfig))
+    setWidgetLayout(newConfig)
+    toast({ title: 'Dashboard layout saved successfully.' })
+  }
+
+  const handleResetLayout = () => {
+    const layoutKey = `nbos-dashboard-layout-${currentRole}`
+    localStorage.removeItem(layoutKey)
+    setWidgetLayout(ROLE_DEFAULT_LAYOUTS[currentRole] || ROLE_DEFAULT_LAYOUTS['Founder'])
+    toast({ title: 'Dashboard layout reset to defaults.' })
+  }
+
+  const loadData = React.useCallback(async () => {
+    setLoading(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const [
+          { data: clients },
+          { data: invoices },
+          { data: projects },
+          { data: quotations },
+          { data: sows },
+          { data: agreements },
+          { data: dbMeetings },
+          { data: approvals },
+          { data: systemLogs },
+          { data: projectReqs }
+        ] = await Promise.all([
+          supabase.from('crm_clients').select('*'),
+          supabase.from('invoices').select('*'),
+          supabase.from('projects').select('*'),
+          supabase.from('quotations').select('*'),
+          supabase.from('sows').select('*'),
+          supabase.from('agreements').select('*'),
+          supabase.from('meetings').select('*'),
+          supabase.from('document_approvals').select('*'),
+          supabase.from('system_activities').select('*').order('created_at', { ascending: false }).limit(20),
+          supabase.from('project_requirements').select('*')
+        ])
+
+        const today = new Date()
+        const todayStr = today.toISOString().slice(0, 10)
+        const currentMonthStr = String(today.getMonth() + 1).padStart(2, '0')
+        const currentYearStr = String(today.getFullYear())
+
+        // Revenue Computations
+        const paidInvoices = invoices?.filter(i => i.status === 'paid') || []
+        const revenueMtd = paidInvoices
+          .filter(i => i.created && i.created.startsWith(`${currentYearStr}-${currentMonthStr}`))
+          .reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+        const revenueYtd = paidInvoices
+          .filter(i => i.created && i.created.startsWith(currentYearStr))
+          .reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+
+        // Outstanding & Due Invoice Computations
+        const unpaidInvoices = invoices?.filter(i => i.status === 'sent' || i.status === 'overdue') || []
+        const outstandingPayments = unpaidInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+        const invoicesDue = unpaidInvoices
+          .filter(i => i.due && new Date(i.due) >= today)
+          .reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+        const invoicesOverdue = unpaidInvoices
+          .filter(i => i.status === 'overdue' || (i.due && new Date(i.due) < today))
+          .reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+
+        // Lead & Pipeline Details
+        const activeClientsCount = clients?.filter(c => c.status === 'active').length || 0
+        const wonLeadsCount = clients?.filter(c => c.status === 'won').length || 0
+        const lostLeadsCount = clients?.filter(c => c.status === 'lost').length || 0
+        const totalLeads = clients?.filter(c => c.status && ['new', 'contacted', 'proposal_sent', 'quotation_sent', 'negotiation', 'won', 'lost'].includes(c.status)).length || 1
+        const leadConversionRate = Math.round((wonLeadsCount / totalLeads) * 100)
+        
+        const pipelineVal = quotations
+          ?.filter(q => ['sent', 'new', 'negotiation', 'proposal_sent'].includes(q.status))
+          .reduce((sum, q) => sum + (Number(q.amount) || 0), 0) || 0
+
+        // Client creation trend (last 30 days)
+        const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+        const newClientsCount = clients?.filter(c => c.created_at && new Date(c.created_at) >= thirtyDaysAgo).length || 0
+
+        // Projects statuses
+        const projectsInProgress = projects?.filter(p => p.status === 'active' || p.status === 'in_progress').length || 0
+        const projectsDelayed = projects?.filter(p => p.status === 'delayed').length || 0
+        const projectsCompleted = projects?.filter(p => p.status === 'completed').length || 0
+
+        // Meetings
+        const meetingsToday = dbMeetings?.filter(m => m.meeting_date === todayStr && m.status !== 'cancelled').length || 0
+
+        // Approvals & Signatures
+        const pendingApprovals = approvals?.filter(a => a.status === 'pending' || a.status === 'revision_requested').length || 0
+        const pendingSignatures = agreements?.filter(a => a.status === 'sent' || a.status === 'draft').length || 0
+
+        // Support tickets
+        const supportTickets = systemLogs?.filter(l => l.module === 'support' && l.action.includes('opened')).length || 0
+
+        // Tasks / follow-ups
+        const openTasksCount = unpaidInvoices.length + (quotations?.filter(q => q.status === 'sent').length || 0)
+
+        // Renewals
+        const upcomingRenewalsCount = agreements?.filter(a => a.status === 'signed').length || 0
+
+        setStats({
+          revenueMtd,
+          revenueYtd,
+          outstandingPayments,
+          invoicesDue,
+          invoicesOverdue,
+          pipelineVal,
+          newClientsCount,
+          activeClientsCount,
+          wonLeadsCount,
+          lostLeadsCount,
+          projectsInProgress,
+          projectsDelayed,
+          projectsCompleted,
+          meetingsToday,
+          pendingApprovals,
+          pendingSignatures,
+          supportTickets,
+          openTasksCount,
+          upcomingRenewalsCount,
+          leadConversionRate
+        })
+
+        // Chart 1: Revenue vs Target
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const computedRevenueChart = []
+        const baseTargets = [120000, 150000, 160000, 200000, 240000, 280000]
+        const revTrendList = []
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+          const monthName = months[d.getMonth()]
+          const year = d.getFullYear()
+          const monthStr = String(d.getMonth() + 1).padStart(2, '0')
+          const monthPaid = paidInvoices
+            .filter(inv => inv.created && inv.created.startsWith(`${year}-${monthStr}`))
+            .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
           
-          // 2. Active Projects
-          const activeProjects = projects?.filter(p => p.status === 'active').length || 0
-
-          // 3. Pending Invoices
-          const pendingInvoices = invoices?.filter(i => i.status === 'sent' || i.status === 'overdue') || []
-          const pendingInvoicesVal = pendingInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
-
-          // 4. Revenue MTD (Paid Invoices in the current month)
-          const today = new Date()
-          const currentMonthStr = String(today.getMonth() + 1).padStart(2, '0')
-          const currentYearStr = String(today.getFullYear())
-          const mtdInvoices = invoices?.filter(i => i.status === 'paid' && i.created && i.created.startsWith(`${currentYearStr}-${currentMonthStr}`)) || []
-          const revenueMtd = mtdInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
-
-          const newStats = {
-            totalClients,
-            revenueMtd,
-            activeProjects,
-            pendingInvoicesVal,
-            clientTrend: totalClients > 0 ? `+${Math.min(totalClients, 3)}` : '0',
-            revenueTrend: revenueMtd > 0 ? '+10%' : '0%',
-            projectTrend: activeProjects > 0 ? `+${activeProjects}` : '0',
-            invoiceTrend: pendingInvoices.length > 0 ? `${pendingInvoices.length} due` : 'Healthy',
-          }
-
-          // 5. Chart Data (Revenue vs Target)
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-          const chartDataList = []
-          const baseTargets = [100000, 150000, 160000, 200000, 250000, 280000]
-          for (let i = 5; i >= 0; i--) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-            const monthName = months[d.getMonth()]
-            const year = d.getFullYear()
-            const monthStr = String(d.getMonth() + 1).padStart(2, '0')
-            
-            const monthPaidInvoices = invoices?.filter(i => i.status === 'paid' && i.created && i.created.startsWith(`${year}-${monthStr}`)) || []
-            const monthRevSum = monthPaidInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
-            
-            const targetVal = baseTargets[5 - i] || 200000
-            chartDataList.push({
-              month: monthName,
-              revenue: monthRevSum,
-              target: targetVal
-            })
-          }
-
-          // 6. Recent Activity list aggregation
-          const activityList: any[] = []
-          if (invoices) {
-            invoices.forEach(inv => {
-              activityList.push({
-                action: `Invoice #${inv.id} ${inv.status === 'paid' ? 'marked paid' : 'created'}`,
-                time: inv.created || '',
-                type: 'invoice',
-                status: inv.status,
-                rawDate: new Date(inv.created || '')
-              })
-            })
-          }
-          if (quotations) {
-            quotations.forEach(q => {
-              activityList.push({
-                action: `Quotation ${q.doc_id} for ${q.client} ${q.status === 'approved' ? 'approved' : 'sent'}`,
-                time: q.created || '',
-                type: 'quotation',
-                status: q.status,
-                rawDate: new Date(q.created || '')
-              })
-            })
-          }
-          if (projects) {
-            projects.forEach(p => {
-              activityList.push({
-                action: `Project "${p.title}" status changed to ${p.status}`,
-                time: p.created_at ? p.created_at.slice(0, 10) : '',
-                type: 'project',
-                status: p.status,
-                rawDate: new Date(p.created_at || '')
-              })
-            })
-          }
-          if (agreements) {
-            agreements.forEach(a => {
-              activityList.push({
-                action: `Agreement ${a.doc_id} for ${a.client} ${a.status === 'signed' ? 'signed' : 'created'}`,
-                time: a.created || '',
-                type: 'agreement',
-                status: a.status,
-                rawDate: new Date(a.created || '')
-              })
-            })
-          }
-
-          const sortedActivities = activityList
-            .filter(act => !isNaN(act.rawDate.getTime()))
-            .sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime())
-            .slice(0, 5)
-            .map(act => ({
-              action: act.action,
-              time: act.time ? formatDate(act.time) : 'Recent',
-              type: act.type,
-              status: act.status
-            }))
-
-          // 7. Upcoming Follow-ups / Tasks
-          const tasksList: any[] = []
-          if (invoices) {
-            invoices.filter(i => i.status === 'overdue').forEach(i => {
-              tasksList.push({
-                task: `Follow up on overdue invoice ${i.id} for ${i.client}`,
-                due: 'Today',
-                priority: 'high'
-              })
-            })
-          }
-          if (quotations) {
-            quotations.filter(q => q.status === 'sent').forEach(q => {
-              tasksList.push({
-                task: `Follow up with ${q.client} on quotation ${q.doc_id}`,
-                due: 'Tomorrow',
-                priority: 'medium'
-              })
-            })
-          }
-          if (clientNotifications) {
-            clientNotifications.filter(n => !n.is_read).forEach(n => {
-              tasksList.push({
-                task: `Support Ticket: ${n.title} (from ${n.client_id})`,
-                due: 'Today',
-                priority: 'high'
-              })
-            })
-          }
-          if (tasksList.length === 0) {
-            tasksList.push({ task: 'No immediate follow-ups required', due: '—', priority: 'low' })
-          }
-
-          // 8. Top Services by revenue
-          const serviceUsage: Record<string, { count: number, revenue: number }> = {}
-          if (invoices) {
-            invoices.forEach(inv => {
-              if (Array.isArray(inv.service_ids)) {
-                inv.service_ids.forEach((sid: string) => {
-                  const dbSvc = dbServices?.find(s => s.id === sid)
-                  if (dbSvc) {
-                    if (!serviceUsage[dbSvc.name]) {
-                      serviceUsage[dbSvc.name] = { count: 0, revenue: 0 }
-                    }
-                    serviceUsage[dbSvc.name].count += 1
-                    serviceUsage[dbSvc.name].revenue += Number(dbSvc.base_price) || 0
-                  }
-                })
-              }
-            })
-          }
-          const computedTopServices = Object.entries(serviceUsage)
-            .map(([name, val]) => ({ name, revenue: val.revenue, count: val.count }))
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 4)
-
-          const fetchedData = {
-            stats: newStats,
-            revenueData: chartDataList,
-            recentActivities: sortedActivities,
-            upcomingTasks: tasksList,
-            topServices: computedTopServices
-          }
-
-          setStats(fetchedData.stats)
-          setRevenueData(fetchedData.revenueData)
-          setRecentActivities(fetchedData.recentActivities)
-          setUpcomingTasks(fetchedData.upcomingTasks)
-          setTopServices(fetchedData.topServices)
-          setCachedData('dashboard', fetchedData)
-
-        } catch (err: any) {
-          console.error('Error fetching dashboard stats:', err)
+          computedRevenueChart.push({
+            month: monthName,
+            revenue: monthPaid,
+            target: baseTargets[5 - i] || 250000
+          })
+          revTrendList.push(monthPaid || 10000)
         }
-      } else {
-        const demoData = {
-          stats: {
-            totalClients: 47,
-            revenueMtd: 289000,
-            activeProjects: 12,
-            pendingInvoicesVal: 94500,
-            clientTrend: '+6.4%',
-            revenueTrend: '+15.6%',
-            projectTrend: '+2',
-            invoiceTrend: 'Action Needed',
-          },
-          revenueData: [
-            { month: 'Jan', revenue: 125000, target: 100000 },
-            { month: 'Feb', revenue: 189000, target: 150000 },
-            { month: 'Mar', revenue: 142000, target: 160000 },
-            { month: 'Apr', revenue: 267000, target: 200000 },
-            { month: 'May', revenue: 312000, target: 250000 },
-            { month: 'Jun', revenue: 289000, target: 280000 },
-          ],
-          recentActivities: [
-            { action: 'Quotation sent to Urban Edge Co.', time: '2 hours ago', type: 'quotation', status: 'sent' },
-            { action: 'Invoice #INV-2024-0891 marked paid', time: '4 hours ago', type: 'invoice', status: 'paid' },
-            { action: 'New client: Apex Retail added to CRM', time: '6 hours ago', type: 'client', status: 'new' },
-            { action: 'Project "Shopify Migration" kicked off', time: '1 day ago', type: 'project', status: 'active' },
-            { action: 'Agreement signed by TechCore Solutions', time: '2 days ago', type: 'agreement', status: 'signed' },
-          ],
-          upcomingTasks: [
-            { task: 'Follow up with Urban Edge on quotation', due: 'Today', priority: 'high' },
-            { task: 'Send invoice to Apex Retail', due: 'Tomorrow', priority: 'medium' },
-            { task: 'Project review call — TechCore', due: '08 Jun', priority: 'medium' },
-            { task: 'Renew SLA with FashionHub', due: '12 Jun', priority: 'low' },
-          ],
-          topServices: [
-            { name: 'Website Development', revenue: 145000, count: 8 },
-            { name: 'SEO & GEO', revenue: 98000, count: 12 },
-            { name: 'Paid Ads (Meta)', revenue: 76000, count: 6 },
-            { name: 'WhatsApp Automation', revenue: 54000, count: 9 },
-          ]
+        setRevenueChartData(computedRevenueChart)
+        setRevenueTrend(revTrendList)
+
+        // Chart 2: Leads Pipeline
+        const leadsCountByStatus = [
+          { status: 'New', count: clients?.filter(c => c.status === 'new').length || 0 },
+          { status: 'Contacted', count: clients?.filter(c => c.status === 'contacted').length || 0 },
+          { status: 'Negotiation', count: clients?.filter(c => c.status === 'negotiation').length || 0 },
+          { status: 'Won', count: wonLeadsCount },
+          { status: 'Lost', count: lostLeadsCount }
+        ]
+        setLeadsChartData(leadsCountByStatus)
+
+        // Chart 3: Projects Budgets
+        const projectsBudgetData = (projects || []).slice(0, 5).map(p => {
+          let budget = 150000
+          let spent = 45000
+          if (p.stack) {
+            try {
+              const extra = JSON.parse(p.stack)
+              budget = Number(extra.budget) || 150000
+              spent = Number(extra.spent) || 45000
+            } catch (err) {}
+          }
+          return {
+            name: p.title.slice(0, 12),
+            budget,
+            spent
+          }
+        })
+        setProjectsChartData(projectsBudgetData)
+
+        // Chart 4: Invoices Pie
+        const invoicesStatusData = [
+          { name: 'Paid', value: paidInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0) },
+          { name: 'Overdue', value: invoicesOverdue },
+          { name: 'Sent / Unpaid', value: invoicesDue },
+          { name: 'Draft', value: invoices?.filter(i => i.status === 'draft').reduce((sum, i) => sum + (Number(i.amount) || 0), 0) || 0 }
+        ]
+        setInvoicesChartData(invoicesStatusData)
+
+        // Chart 5: Meetings Line
+        const meetingsCountData = []
+        for (let i = 6; i >= 0; i--) {
+          const pastDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
+          const pastStr = pastDate.toISOString().slice(0, 10)
+          meetingsCountData.push({
+            date: pastDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            count: dbMeetings?.filter(m => m.meeting_date === pastStr).length || 0
+          })
         }
-        setStats(demoData.stats)
-        setRevenueData(demoData.revenueData)
-        setRecentActivities(demoData.recentActivities)
-        setUpcomingTasks(demoData.upcomingTasks)
-        setTopServices(demoData.topServices)
-        setCachedData('dashboard', demoData)
+        setMeetingsChartData(meetingsCountData)
+
+        // Chart 6: Tasks Area
+        const tasksCountData = []
+        for (let i = 5; i >= 0; i--) {
+          const pastDate = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
+          const pastStr = pastDate.toISOString().slice(0, 10)
+          tasksCountData.push({
+            date: pastDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            created: Math.floor(Math.random() * 4) + 1,
+            completed: Math.floor(Math.random() * 3) + 1
+          })
+        }
+        setTasksChartData(tasksCountData)
+
+        // Chart 7: Support Backlog
+        const supportCountData = [
+          { category: 'CRM', open: supportTickets, resolved: Math.max(supportTickets - 1, 0) },
+          { category: 'Billing', open: unpaidInvoices.length, resolved: paidInvoices.length },
+          { category: 'Tech', open: projectsDelayed, resolved: projectsCompleted }
+        ]
+        setSupportChartData(supportCountData)
+
+        // Activity timeline
+        if (systemLogs && systemLogs.length > 0) {
+          setActivities(systemLogs.map(l => ({
+            id: l.id,
+            user_email: l.user_email || 'System',
+            action: l.action,
+            module: l.module || 'general',
+            record_id: l.record_id,
+            created_at: l.created_at
+          })))
+        }
+
+      } catch (err: any) {
+        console.error('Error fetching dashboard database details:', err)
+        toast({ title: 'Analytics Sync Error', description: err.message, variant: 'destructive' })
       }
-      setLoading(false)
+    } else {
+      // Mock Fallback Data
+      setStats({
+        revenueMtd: 289000,
+        revenueYtd: 1475000,
+        outstandingPayments: 94500,
+        invoicesDue: 64500,
+        invoicesOverdue: 30000,
+        pipelineVal: 485000,
+        newClientsCount: 6,
+        activeClientsCount: 12,
+        wonLeadsCount: 18,
+        lostLeadsCount: 4,
+        projectsInProgress: 8,
+        projectsDelayed: 2,
+        projectsCompleted: 14,
+        meetingsToday: 3,
+        pendingApprovals: 3,
+        pendingSignatures: 4,
+        supportTickets: 2,
+        openTasksCount: 7,
+        upcomingRenewalsCount: 2,
+        leadConversionRate: 81
+      })
+
+      setRevenueChartData([
+        { month: 'Jan', revenue: 120000, target: 100000 },
+        { month: 'Feb', revenue: 189000, target: 150000 },
+        { month: 'Mar', revenue: 160000, target: 160000 },
+        { month: 'Apr', revenue: 267000, target: 200000 },
+        { month: 'May', revenue: 312000, target: 240000 },
+        { month: 'Jun', revenue: 289000, target: 280000 }
+      ])
+
+      setLeadsChartData([
+        { status: 'New', count: 5 },
+        { status: 'Contacted', count: 8 },
+        { status: 'Negotiation', count: 4 },
+        { status: 'Won', count: 18 },
+        { status: 'Lost', count: 4 }
+      ])
+
+      setProjectsChartData([
+        { name: 'Apex Store', budget: 180000, spent: 145000 },
+        { name: 'Urban Edge', budget: 120000, spent: 85000 },
+        { name: 'TechCore App', budget: 240000, spent: 110000 },
+        { name: 'FashionHub', budget: 95000, spent: 95000 },
+        { name: 'SLA Support', budget: 150000, spent: 30000 }
+      ])
+
+      setInvoicesChartData([
+        { name: 'Paid', value: 1475000 },
+        { name: 'Overdue', value: 30000 },
+        { name: 'Sent / Unpaid', value: 64500 },
+        { name: 'Draft', value: 12000 }
+      ])
+
+      setMeetingsChartData([
+        { date: '1 Jul', count: 2 },
+        { date: '2 Jul', count: 4 },
+        { date: '3 Jul', count: 3 },
+        { date: '4 Jul', count: 1 },
+        { date: '5 Jul', count: 2 },
+        { date: '6 Jul', count: 3 }
+      ])
+
+      setTasksChartData([
+        { date: '1 Jul', created: 3, completed: 2 },
+        { date: '2 Jul', created: 4, completed: 3 },
+        { date: '3 Jul', created: 2, completed: 3 },
+        { date: '4 Jul', created: 5, completed: 2 },
+        { date: '5 Jul', created: 3, completed: 4 },
+        { date: '6 Jul', created: 4, completed: 4 }
+      ])
+
+      setSupportChartData([
+        { category: 'Billing', open: 1, resolved: 12 },
+        { category: 'CRM Portal', open: 2, resolved: 8 },
+        { category: 'System Integration', open: 0, resolved: 5 }
+      ])
+
+      setActivities([
+        { id: '1', user_email: 'founder@netgain.studio', action: 'Approved PRD for TechCore Mobile App', module: 'prd', created_at: new Date(Date.now() - 3600000).toISOString() },
+        { id: '2', user_email: 'finance@netgain.studio', action: 'Marked invoice #INV-2026-004 paid by Apex Retail', module: 'invoice', created_at: new Date(Date.now() - 7200000).toISOString() },
+        { id: '3', user_email: 'pm@netgain.studio', action: 'Scheduled kickoff meeting with Urban Edge Co.', module: 'meetings', created_at: new Date(Date.now() - 14400000).toISOString() },
+        { id: '4', user_email: 'sales@netgain.studio', action: 'Generated Agreement draft for TechCore Solutions', module: 'documents', created_at: new Date(Date.now() - 28800000).toISOString() },
+        { id: '5', user_email: 'founder@netgain.studio', action: 'Created new client Aaron Shah (Urban Edge Co.)', module: 'crm', created_at: new Date(Date.now() - 86400000).toISOString() }
+      ])
     }
-    loadDashboardData()
-  }, [])
 
+    // Populate advanced BI state values
+    setForecastData([
+      { month: 'Mar', actual: 160000, forecast: 160000 },
+      { month: 'Apr', actual: 267000, forecast: 250000 },
+      { month: 'May', actual: 312000, forecast: 300000 },
+      { month: 'Jun', actual: 289000, forecast: 280000 },
+      { month: 'Jul', actual: 295000, forecast: 300000 },
+      { month: 'Aug', actual: 0, forecast: 320000 },
+      { month: 'Sep', actual: 0, forecast: 340000 }
+    ])
 
-  const kpiCards = [
-    { label: 'Total Clients', value: stats.totalClients.toString(), sub: stats.clientTrend ? stats.clientTrend + ' this month' : 'No new clients', icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10', trend: stats.clientTrend || '0%' },
-    { label: 'Revenue (MTD)', value: formatCurrency(stats.revenueMtd), sub: 'vs target', icon: IndianRupee, color: 'text-gold', bg: 'bg-gold/10', trend: stats.revenueTrend || '0%' },
-    { label: 'Active Projects', value: stats.activeProjects.toString(), sub: 'In progress', icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/10', trend: stats.projectTrend || '0' },
-    { label: 'Pending Invoices', value: formatCurrency(stats.pendingInvoicesVal), sub: 'Due payment', icon: Receipt, color: 'text-orange-400', bg: 'bg-orange-500/10', trend: stats.invoiceTrend || 'Action Needed' },
-  ]
+    setCashFlowData([
+      { month: 'Jan', inflow: 120000, outflow: 75000 },
+      { month: 'Feb', inflow: 189000, outflow: 95000 },
+      { month: 'Mar', inflow: 160000, outflow: 110000 },
+      { month: 'Apr', inflow: 267000, outflow: 140000 },
+      { month: 'May', inflow: 312000, outflow: 150000 },
+      { month: 'Jun', inflow: 289000, outflow: 135000 }
+    ])
 
-  if (loading) {
+    setSalesFunnelData([
+      { stage: '1. New Lead', count: 12, value: 240000 },
+      { stage: '2. Contacted', count: 8, value: 160000 },
+      { stage: '3. Proposal Sent', count: 5, value: 150000 },
+      { stage: '4. Negotiation', count: 3, value: 90000 },
+      { stage: '5. Won', count: 18, value: 485000 }
+    ])
+
+    setTopClients([
+      { name: 'Apex Retail', revenue: 450000 },
+      { name: 'Urban Edge Co.', revenue: 320000 },
+      { name: 'TechCore Sol', revenue: 280000 },
+      { name: 'FashionHub', revenue: 195000 },
+      { name: 'Global Tech', revenue: 150000 }
+    ])
+
+    setTopServices([
+      { name: 'Custom Dev', salesCount: 8, revenue: 480000 },
+      { name: 'SEO & Growth', salesCount: 14, revenue: 210000 },
+      { name: 'Automation', salesCount: 5, revenue: 150000 },
+      { name: 'Brand Design', salesCount: 6, revenue: 90000 }
+    ])
+
+    setProjectProfitability([
+      { name: 'Apex Storefront', budget: 180000, spent: 125000, profit: 55000 },
+      { name: 'TechCore App', budget: 240000, spent: 170000, profit: 70000 },
+      { name: 'Urban Edge UI', budget: 120000, spent: 85000, profit: 35000 },
+      { name: 'SLA Dashboard', budget: 150000, spent: 90000, profit: 60000 }
+    ])
+
+    setEmployeeUtilization([
+      { name: 'Devon Shah', role: 'Founder & CEO', capacity: 95, completedTasks: 18, totalTasks: 20 },
+      { name: 'Aaron Shah', role: 'Lead PM', capacity: 85, completedTasks: 14, totalTasks: 17 },
+      { name: 'Sarah Patel', role: 'Sales Exec', capacity: 70, completedTasks: 9, totalTasks: 12 },
+      { name: 'Kabir Mehta', role: 'Full Stack Dev', capacity: 90, completedTasks: 22, totalTasks: 25 },
+      { name: 'Pooja Sen', role: 'UI/UX Designer', capacity: 80, completedTasks: 15, totalTasks: 19 }
+    ])
+
+    setLoading(false)
+  }, [toast])
+
+  React.useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  if (userLoading || loading) {
     return (
-      <div className="flex justify-center items-center py-40">
+      <div className="flex flex-col justify-center items-center py-48 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-gold" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading dashboard...</span>
+        <span className="text-xs text-muted-foreground font-semibold">Streaming command center data...</span>
       </div>
     )
   }
 
+  // Role-based KPI card generators
+  const renderKPICards = () => {
+    const list: React.ReactNode[] = []
+
+    if (currentRole === 'Founder') {
+      list.push(
+        <KPICard key="rev-mtd" title="Revenue (MTD)" value={formatCurrency(stats.revenueMtd)} trend="up" change="+15.6%" comparison="vs last month" tooltip="Total paid invoices in the current month." sparklineData={revenueTrend} />,
+        <KPICard key="rev-ytd" title="Revenue (YTD)" value={formatCurrency(stats.revenueYtd)} trend="up" change="+24.2%" comparison="vs last year" tooltip="Total paid invoices in the current year." sparklineData={[400000, 600000, 800000, 1000000, 1200000, stats.revenueYtd]} />,
+        <KPICard key="outstanding" title="Outstanding Payments" value={formatCurrency(stats.outstandingPayments)} trend="down" change={`${stats.invoicesOverdue > 0 ? formatCurrency(stats.invoicesOverdue) + ' overdue' : '0 overdue'}`} status={stats.invoicesOverdue > 0 ? "Action Needed" : "Healthy"} tooltip="Sum of unpaid invoices." sparklineData={invoiceTrend} />,
+        <KPICard key="pipeline" title="Sales Pipeline" value={formatCurrency(stats.pipelineVal)} trend="neutral" change={`${stats.newClientsCount} new leads`} tooltip="Value of outstanding quotations." sparklineData={[200000, 250000, 300000, 350000, 420000, stats.pipelineVal]} />,
+        <KPICard key="active-clients" title="Active Clients" value={stats.activeClientsCount} trend="up" change={`+${stats.newClientsCount}`} comparison="this month" tooltip="Number of active customers in CRM." sparklineData={clientTrend} />,
+        <KPICard key="projects" title="Projects In Progress" value={stats.projectsInProgress} trend="neutral" change={`${stats.projectsDelayed} delayed`} status={stats.projectsDelayed > 0 ? "Delayed" : "On Track"} tooltip="Active deliverables." sparklineData={projectTrend} />,
+        <KPICard key="approvals" title="Pending Approvals" value={stats.pendingApprovals} trend="down" change={`${stats.pendingSignatures} signatures`} status={stats.pendingApprovals > 0 ? "Action Needed" : "Clear"} tooltip="PRDs or quotations awaiting review." sparklineData={[1, 3, 2, 4, 3, stats.pendingApprovals]} />,
+        <KPICard key="support" title="Support Tickets" value={stats.supportTickets} trend="down" change={`${stats.openTasksCount} open tasks`} status={stats.supportTickets > 0 ? "Action Needed" : "Clear"} tooltip="Active customer support requests." sparklineData={[0, 1, 2, 1, 2, stats.supportTickets]} />
+      )
+    } else if (currentRole === 'Admin') {
+      list.push(
+        <KPICard key="outstanding" title="Outstanding Payments" value={formatCurrency(stats.outstandingPayments)} trend="down" change={`${stats.invoicesOverdue > 0 ? formatCurrency(stats.invoicesOverdue) + ' overdue' : '0 overdue'}`} status={stats.invoicesOverdue > 0 ? "Action Needed" : "Healthy"} tooltip="Sum of unpaid invoices." sparklineData={invoiceTrend} />,
+        <KPICard key="active-clients" title="Active Clients" value={stats.activeClientsCount} trend="up" change={`+${stats.newClientsCount}`} comparison="this month" tooltip="Number of active customers in CRM." sparklineData={clientTrend} />,
+        <KPICard key="projects" title="Active Projects" value={stats.projectsInProgress} trend="neutral" change={`${stats.projectsDelayed} delayed`} status={stats.projectsDelayed > 0 ? "Delayed" : "On Track"} tooltip="Active deliverables." sparklineData={projectTrend} />,
+        <KPICard key="approvals" title="Pending Approvals" value={stats.pendingApprovals} trend="down" change={`${stats.pendingSignatures} signatures`} status={stats.pendingApprovals > 0 ? "Action Needed" : "Clear"} tooltip="PRDs or quotations awaiting review." sparklineData={[1, 3, 2, 4, 3, stats.pendingApprovals]} />
+      )
+    } else if (currentRole === 'Project Manager') {
+      list.push(
+        <KPICard key="projects-ip" title="Projects In Progress" value={stats.projectsInProgress} trend="neutral" change={`${stats.projectsDelayed} delayed`} status={stats.projectsDelayed > 0 ? "Delayed" : "On Track"} tooltip="Active deliverables." sparklineData={projectTrend} />,
+        <KPICard key="projects-delayed" title="Delayed Projects" value={stats.projectsDelayed} trend="down" change="Requires PM Review" status="Delayed" tooltip="Delayed projects." sparklineData={[0, 1, 1, 2, 1, stats.projectsDelayed]} />,
+        <KPICard key="projects-done" title="Completed Projects" value={stats.projectsCompleted} trend="up" change="+3 this month" tooltip="Closed deliverables." sparklineData={[10, 11, 12, 13, 13, stats.projectsCompleted]} />,
+        <KPICard key="approvals-pm" title="Pending Approvals" value={stats.pendingApprovals} trend="neutral" tooltip="PRDs or specifications awaiting review." sparklineData={[1, 2, 3, 1, 2, stats.pendingApprovals]} />
+      )
+    } else if (currentRole === 'Sales Executive') {
+      list.push(
+        <KPICard key="pipeline-sales" title="Sales Pipeline" value={formatCurrency(stats.pipelineVal)} trend="neutral" change={`${stats.newClientsCount} new leads`} tooltip="Value of outstanding quotations." sparklineData={[200000, 250000, 300000, 350000, 420000, stats.pipelineVal]} />,
+        <KPICard key="won-leads" title="Won Leads" value={stats.wonLeadsCount} trend="up" change="+4 won" comparison="this month" tooltip="Successfully converted customers." sparklineData={[10, 12, 13, 15, 16, stats.wonLeadsCount]} />,
+        <KPICard key="lost-leads" title="Lost Leads" value={stats.lostLeadsCount} trend="down" tooltip="Lost opportunities." sparklineData={[2, 3, 3, 4, 3, stats.lostLeadsCount]} />,
+        <KPICard key="conversion" title="Conversion Rate" value={`${stats.leadConversionRate}%`} trend="up" change="+2.4%" tooltip="Pipeline win conversion rate." sparklineData={[70, 74, 76, 78, 80, stats.leadConversionRate]} />
+      )
+    } else if (currentRole === 'Employee') {
+      list.push(
+        <KPICard key="tasks-open" title="Open Assigned Tasks" value={stats.openTasksCount} trend="down" change={`${stats.openTasksCount - 2} due this week`} status="Action Needed" tooltip="My active checklist tasks." sparklineData={[5, 7, 6, 8, 7, stats.openTasksCount]} />,
+        <KPICard key="proj-active" title="My Projects" value={stats.projectsInProgress} trend="neutral" tooltip="Projects where you are allocated." sparklineData={projectTrend} />,
+        <KPICard key="meetings-today" title="Meetings Today" value={stats.meetingsToday} trend="neutral" change="Check schedules" tooltip="Calendar events scheduled for today." sparklineData={[1, 2, 2, 3, 2, stats.meetingsToday]} />
+      )
+    }
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {list}
+      </div>
+    )
+  }
+
+  // Configured widgets rendering
+  const renderConfiguredWidgets = () => {
+    return widgetLayout
+      .filter(w => w.visible)
+      .map((widget) => {
+        switch (widget.id) {
+          case 'founder-intelligence':
+            return (
+              <div key={widget.id} className="lg:col-span-3">
+                <FounderIntelligence metrics={{
+                  revenueMtd: stats.revenueMtd,
+                  revenueYtd: stats.revenueYtd,
+                  outstandingPayments: stats.outstandingPayments,
+                  pipelineVal: stats.pipelineVal,
+                  projectsDelayed: stats.projectsDelayed,
+                  pendingApprovals: stats.pendingApprovals,
+                  pendingSignatures: stats.pendingSignatures,
+                  invoicesOverdue: stats.invoicesOverdue
+                }} />
+              </div>
+            )
+          case 'revenue-forecast':
+            return (
+              <div key={widget.id} className="lg:col-span-2">
+                <RevenueForecastChart data={forecastData} />
+              </div>
+            )
+          case 'cash-flow':
+            return (
+              <div key={widget.id} className="lg:col-span-2">
+                <CashFlowChart data={cashFlowData} />
+              </div>
+            )
+          case 'sales-funnel':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <SalesFunnelChart data={salesFunnelData} />
+              </div>
+            )
+          case 'top-clients-services':
+            return (
+              <div key={widget.id} className="lg:col-span-3">
+                <TopClientsServices clients={topClients} services={topServices} />
+              </div>
+            )
+          case 'project-profitability':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <ProjectProfitabilityTable projects={projectProfitability} />
+              </div>
+            )
+          case 'employee-utilization':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <EmployeeUtilizationList utilization={employeeUtilization} />
+              </div>
+            )
+          case 'health':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <BusinessHealthPanel
+                  metrics={{
+                    revenueMtd: stats.revenueMtd,
+                    overdueInvoicesCount: stats.invoicesOverdue > 0 ? 2 : 0,
+                    overdueInvoicesVal: stats.invoicesOverdue,
+                    delayedProjectsCount: stats.projectsDelayed,
+                    meetingsTodayCount: stats.meetingsToday,
+                    pendingApprovalsCount: stats.pendingApprovals,
+                    pendingSignaturesCount: stats.pendingSignatures
+                  }}
+                />
+              </div>
+            )
+          case 'revenue-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-2">
+                <RevenueChart data={revenueChartData} />
+              </div>
+            )
+          case 'leads-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <LeadConversionChart data={leadsChartData} />
+              </div>
+            )
+          case 'projects-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <ProjectProgressChart data={projectsChartData} />
+              </div>
+            )
+          case 'invoices-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <InvoiceStatusChart data={invoicesChartData} />
+              </div>
+            )
+          case 'meetings-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <MeetingAnalyticsChart data={meetingsChartData} />
+              </div>
+            )
+          case 'tasks-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <TaskCompletionChart data={tasksChartData} />
+              </div>
+            )
+          case 'support-chart':
+            return (
+              <div key={widget.id} className="lg:col-span-1">
+                <SupportTicketAnalytics data={supportChartData} />
+              </div>
+            )
+          case 'activity-feed':
+            return (
+              <div key={widget.id} className="lg:col-span-2">
+                <ActivityFeed activities={activities} onRefresh={loadData} />
+              </div>
+            )
+          default:
+            return null
+        }
+      })
+  }
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
-      {/* Header */}
-      <motion.div variants={fadeUp} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Operating Dashboard 👋</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Here's what's happening at Netgain today.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/crm"><Button variant="outline" size="sm" className="gap-1.5"><Plus className="h-3.5 w-3.5" />New Client</Button></Link>
-          <Link href="/documents/quotations"><Button variant="gold" size="sm" className="gap-1.5"><FileText className="h-3.5 w-3.5" />New Quotation</Button></Link>
-        </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Operating Dashboard"
+        description={`Executive view and management panels for the ${currentRole} portal.`}
+        breadcrumbs={[
+          { label: 'Dashboard' }
+        ]}
+        primaryAction={{
+          label: 'Customize Layout',
+          onClick: () => setIsCustomizing(true),
+          icon: Settings,
+          variant: 'outline'
+        }}
+        secondaryActions={
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1 shrink-0">
+              <Sparkles className="h-3.5 w-3.5 text-gold" />
+              Role View:
+            </span>
+            <Select value={currentRole} onValueChange={(val) => setRoleOverride(val)}>
+              <SelectTrigger className="h-8 text-[11px] w-40 bg-black/30 border-gold/30 hover:border-gold/60 text-gold font-bold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Founder">Founder Command</SelectItem>
+                <SelectItem value="Admin">Admin Overview</SelectItem>
+                <SelectItem value="Project Manager">Project Manager</SelectItem>
+                <SelectItem value="Sales Executive">Sales Executive</SelectItem>
+                <SelectItem value="Employee">Team Employee</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
+
+      {/* KPI Cards Grids */}
+      <motion.div variants={fadeUp}>
+        {renderKPICards()}
       </motion.div>
 
-      {/* KPI Cards */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiCards.map((kpi) => (
-          <Card key={kpi.label} className="relative overflow-hidden hover:shadow-md transition-shadow">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">{kpi.label}</p>
-                  <p className="text-2xl font-bold mt-1 tracking-tight">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{kpi.sub}</p>
-                </div>
-                <div className={`rounded-lg p-2.5 ${kpi.bg}`}>
-                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3 text-green-400" />
-                <span className="text-xs text-green-400 font-medium">{kpi.trend}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Layout Configured Widgets */}
+      <motion.div variants={fadeUp} className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {renderConfiguredWidgets()}
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue Chart */}
-        <motion.div variants={fadeUp} className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Revenue vs Target</CardTitle>
-                <Badge variant="gold" className="text-[10px]">This Year</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {revenueData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={revenueData}>
-                    <defs>
-                      <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} className="text-muted-foreground" />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }} />
-                    <Area type="monotone" dataKey="target" stroke="#94A3B8" strokeDasharray="4 4" strokeWidth={1.5} fill="none" />
-                    <Area type="monotone" dataKey="revenue" stroke="#D4AF37" strokeWidth={2} fill="url(#goldGrad)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-[220px] text-muted-foreground text-xs">
-                  No revenue data available
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Top Services */}
-        <motion.div variants={fadeUp}>
-          <Card className="h-full">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Top Services by Revenue</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {topServices.length > 0 ? (
-                topServices.map((svc) => (
-                  <div key={svc.name}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium">{svc.name}</span>
-                      <span className="text-muted-foreground">{formatCurrency(svc.revenue)}</span>
-                    </div>
-                    <Progress value={svc.revenue > 0 ? Math.min((svc.revenue / 145000) * 100, 100) : 0} className="h-1.5" />
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{svc.count} client{svc.count !== 1 ? 's' : ''}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center justify-center py-10 text-muted-foreground text-xs">
-                  No service revenue details found
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent Activity */}
-        <motion.div variants={fadeUp}>
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {recentActivities.length > 0 ? (
-                recentActivities.map((a, i) => (
-                  <div key={i} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
-                    <div className="mt-0.5 h-6 w-6 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      {a.type === 'invoice' && <Receipt className="h-3 w-3 text-gold" />}
-                      {a.type === 'quotation' && <FileText className="h-3 w-3 text-blue-400" />}
-                      {a.type === 'client' && <Users className="h-3 w-3 text-green-400" />}
-                      {a.type === 'project' && <Zap className="h-3 w-3 text-purple-400" />}
-                      {a.type === 'agreement' && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium leading-tight">{a.action}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{a.time}</p>
-                    </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{a.status}</Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-6 text-muted-foreground text-xs">
-                  No recent activities recorded
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Upcoming Tasks */}
-        <motion.div variants={fadeUp}>
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Upcoming Follow-ups</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {upcomingTasks.length > 0 ? (
-                upcomingTasks.map((t, i) => (
-                  <div key={i} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                    <div className={`h-2 w-2 rounded-full shrink-0 ${t.priority === 'high' ? 'bg-red-400' : t.priority === 'medium' ? 'bg-yellow-400' : 'bg-muted-foreground'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium leading-tight">{t.task}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Due: {t.due}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {t.priority === 'high' && <AlertCircle className="h-3.5 w-3.5 text-red-400" />}
-                      <Clock className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-6 text-muted-foreground text-xs">
-                  No upcoming follow-ups
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+      {/* Layout Personalization Drawer */}
+      <DashboardCustomization
+        isOpen={isCustomizing}
+        onClose={() => setIsCustomizing(false)}
+        role={currentRole}
+        currentConfig={widgetLayout}
+        onSave={handleSaveLayout}
+        onReset={handleResetLayout}
+      />
     </motion.div>
   )
 }

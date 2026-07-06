@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataTable } from '@/components/ui/data-table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,8 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Plus, Download, Pencil, Trash2, Loader2, Send, History, Globe } from 'lucide-react'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { Search, Plus, Download, Pencil, Trash2, Loader2, Send, History, Globe, FileText } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId, getDocStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -70,7 +74,7 @@ function getSowTerms(sow: SOW | any, companyDocs?: any) {
   return compileDefaultSowTerms(companyDocs)
 }
 
-export default function SOWPage() {
+function SOWPageContent() {
   const { user } = useUser()
   const [sows, setSows] = useState<SOW[]>([])
   const [sourceDocs, setSourceDocs] = useState<any[]>([])
@@ -90,6 +94,159 @@ export default function SOWPage() {
   const [publishDoc, setPublishDoc] = useState<SOW | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
 
+  const columns = useMemo(() => [
+    {
+      header: 'Doc ID',
+      accessor: 'docId',
+      sortable: true,
+      sticky: true,
+      cell: (s: SOW) => (
+        <div>
+          <span className="font-mono text-xs text-gold font-bold">{s.docId}</span>
+          {s.published ? (
+            <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+              <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${s.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={s.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                <Globe className="h-2.5 w-2.5" />
+                {s.visibility_status === 'hidden' ? 'Hidden' : `V${s.published_version || 1}`}
+              </span>
+              {s.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(s.viewed_at)}`}>Viewed</span>}
+              {s.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(s.downloaded_at)}`}>DL</span>}
+              {s.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(s.signed_at)}`}>Signed</span>}
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+          )}
+          {s.status === 'needs revision' && (
+            <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
+              ⚠ Client requested changes
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Client',
+      accessor: 'client',
+      sortable: true,
+      cell: (s: SOW) => (
+        <div>
+          <a href={`/crm?search=${encodeURIComponent(s.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+            {s.client}
+          </a>
+          <p className="text-[10px] text-muted-foreground">{s.contact}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Project',
+      accessor: 'project',
+      sortable: true,
+      cell: (s: SOW) => <span className="text-xs text-muted-foreground max-w-[200px] truncate">{s.project}</span>
+    },
+    {
+      header: 'Value',
+      accessor: 'value',
+      sortable: true,
+      cell: (s: SOW) => <span className="font-semibold text-gold text-xs">{s.value > 0 ? formatCurrency(s.value) : '—'}</span>
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (s: SOW) => (
+        <div onClick={e => e.stopPropagation()}>
+          <Select value={s.status} onValueChange={v => updateStatus(s.id, v)}>
+            <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(s.status)}`}><SelectValue /></SelectTrigger>
+            <SelectContent>{STATUS_OPTS.map(o => <SelectItem key={o} value={o} className="text-xs capitalize">{o}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )
+    },
+    {
+      header: 'Created',
+      accessor: 'created',
+      sortable: true,
+      cell: (s: SOW) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(s.created)}</span>
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (s: SOW) => (
+        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(s)}><History className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(s)} disabled={downloadingId === s.id}>
+            {downloadingId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${s.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(s)}>
+            <Globe className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })}><Send className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(s.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )
+    }
+  ], [downloadingId])
+
+  const handleBulkAction = async (action: string, selectedRows: SOW[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} SOWs?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('sows').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting SOWs', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = sows.filter(s => !idsSet.has(s.id))
+      setSows(updatedList)
+      setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'SOWs Deleted', description: `${selectedRows.length} SOWs have been deleted.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('sows').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(s => s.id))
+      const updatedList = sows.map(s => idsSet.has(s.id) ? { ...s, status: newStatus } : s)
+      setSows(updatedList)
+      setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Status Updated', description: `${selectedRows.length} SOWs marked as ${newStatus}.` })
+      setLoading(false)
+    }
+  }
+
   const [form, setForm] = useState({
     client: '', contact: '', phone: '', email: '', businessType: 'E-Commerce',
     project: '', value: '', timeline: '', startDate: '',
@@ -103,11 +260,11 @@ export default function SOWPage() {
     items: [] as any[]
   })
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const clientId = params.get('clientId') || params.get('prefill_client_id')
-    const autoOpen = params.get('autoOpen') || params.get('prefill')
+    const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
+    const autoOpen = searchParams.get('autoOpen') || searchParams.get('prefill')
 
     if (clientId && autoOpen === 'true') {
       const fetchClient = async () => {
@@ -134,7 +291,7 @@ export default function SOWPage() {
       }
       fetchClient()
     }
-  }, [sows])
+  }, [searchParams])
 
   function resetForm(sow?: SOW | null, docs?: any) {
     if (sow) {
@@ -772,77 +929,64 @@ export default function SOWPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">Scope of Work</h1><p className="text-muted-foreground text-sm mt-0.5">Generate detailed scope of work documents.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { resetForm(null, companyDocs); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New SOW</Button>
-      </div>
-      <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">{['Doc ID', 'Client', 'Project', 'Value', 'Status', 'Created', 'Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody>{sows.filter(s => s.client.toLowerCase().includes(search.toLowerCase())).map(s => (
-              <tr key={s.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${s.status === 'needs revision' ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
-                <td className="py-3 px-4">
-                  <span className="font-mono text-xs text-gold">{s.docId}</span>
-                  {s.published ? (
-                    <div className="flex items-center gap-1.5 mt-1 text-[10px]">
-                      <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${s.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={s.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
-                        <Globe className="h-2.5 w-2.5" />
-                        {s.visibility_status === 'hidden' ? 'Hidden' : `V${s.published_version || 1}`}
-                      </span>
-                      {s.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(s.viewed_at)}`}>Viewed</span>}
-                      {s.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(s.downloaded_at)}`}>DL</span>}
-                      {s.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(s.signed_at)}`}>Signed</span>}
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
-                  )}
-                  {s.status === 'needs revision' && (
-                    <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
-                      ⚠ Client requested changes
-                    </div>
-                  )}
-                </td>
-                <td className="py-3 px-4"><p className="font-medium">{s.client}</p><p className="text-xs text-muted-foreground">{s.contact}</p></td>
-                <td className="py-3 px-4 text-xs text-muted-foreground max-w-[200px] truncate">{s.project}</td>
-                <td className="py-3 px-4 font-semibold text-gold">{s.value > 0 ? formatCurrency(s.value) : '—'}</td>
-                <td className="py-3 px-4">
-                  <Select value={s.status} onValueChange={v => updateStatus(s.id, v)}>
-                    <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(s.status)}`}><SelectValue /></SelectTrigger>
-                    <SelectContent>{STATUS_OPTS.map(o => <SelectItem key={o} value={o} className="text-xs capitalize">{o}</SelectItem>)}</SelectContent>
-                  </Select>
-                </td>
-                <td className="py-3 px-4 text-xs text-muted-foreground">{formatDate(s.created)}</td>
-                <td className="py-3 px-4">
-                  <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(s)}><History className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(s)} disabled={downloadingId === s.id}>
-                      {downloadingId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className={`h-7 w-7 ${s.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(s)}>
-                      <Globe className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })}>
-                      <Send className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(s.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </Card>
+      <PageHeader
+        title="Scope of Work"
+        description="Generate detailed scope of work documents."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Documents', href: '/documents' },
+          { label: 'Scope of Work' }
+        ]}
+        primaryAction={{
+          label: 'New SOW',
+          onClick: () => { resetForm(null, companyDocs); setShowCreate(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+      />
+      <DataTable
+        data={sows}
+        columns={columns}
+        searchPlaceholder="Search Scope of Works..."
+        searchKeys={['client', 'project', 'docId']}
+        exportFileName="sows"
+        initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+        savedFiltersKey="sow"
+        enableBulkSelect={true}
+        bulkActions={[
+          { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+          { label: 'Mark Sent', action: 'status_sent', icon: FileText },
+          { label: 'Mark Signed', action: 'status_signed', icon: FileText }
+        ]}
+        onBulkAction={handleBulkAction}
+        filterDefs={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: STATUS_OPTS.map(s => ({ label: s.toUpperCase(), value: s }))
+          }
+        ]}
+        emptyTitle="No Scope of Works found"
+        emptyDescription="Create your first SOW or adjust your filters."
+        emptyIcon={FileText}
+        emptyAction={{ label: 'New SOW', onClick: () => { resetForm(null, companyDocs); setShowCreate(true) }, icon: Plus }}
+      />
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Generate Scope of Work</DialogTitle></DialogHeader>
+      <Drawer
+        isOpen={showCreate}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(null, companyDocs) }}
+        title={editItem ? "Edit Scope of Work" : "Generate Scope of Work"}
+        description="Configure client details, project name, duration, service deliverables, milestones, and exclusions."
+        widthClass="max-w-2xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />{editItem ? 'Saving...' : 'Generating...'}</> : (editItem ? 'Save Changes' : 'Generate SOW')}
+            </Button>
+          </>
+        }
+      >
           <div className="space-y-5 py-2">
             {!editItem && (quotations.length > 0 || invoices.length > 0) && (
               <div className="bg-muted/30 p-4 rounded-lg border border-border space-y-4">
@@ -974,21 +1118,17 @@ export default function SOWPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancel</Button>
-            <Button variant="gold" onClick={handleGenerate} disabled={generating}>
-              {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{editItem ? 'Saving...' : 'Generating...'}</> : (editItem ? 'Save Changes' : 'Generate SOW')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Drawer>
 
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete SOW?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete SOW?"
+        description="This action cannot be undone. This will permanently delete the SOW reference."
+        confirmLabel="Delete SOW"
+        onConfirm={handleDelete}
+      />
 
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
@@ -1019,7 +1159,7 @@ export default function SOWPage() {
                     <p className="text-xs text-muted-foreground">{h.date}</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon"
+                <Button variant="ghost" size="icon" aria-label="Action"
                   className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
                   disabled={downloadingId === historyDoc?.id}
                   onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
@@ -1125,5 +1265,13 @@ export default function SOWPage() {
         onAction={handlePublishAction}
       />
     </div>
+  )
+}
+
+export default function SOWPage() {
+  return (
+    <Suspense fallback={null}>
+      <SOWPageContent />
+    </Suspense>
   )
 }

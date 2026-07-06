@@ -49,6 +49,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'This signing link has been cancelled' }, { status: 410 })
       }
 
+      // Note: 'used' tokens are allowed here — the signed PDF must still be downloadable after signing
+
       if (tokenRecord.expires_at && new Date(tokenRecord.expires_at) < new Date()) {
         return NextResponse.json({ error: 'This signing link has expired' }, { status: 410 })
       }

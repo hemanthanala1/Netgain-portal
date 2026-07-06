@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, Briefcase, FileText, Receipt, ClipboardList, HandshakeIcon,
   FolderOpen, Cpu, TrendingUp, MessageSquare, UserCog, Settings, ChevronLeft,
   ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar,
-  Sparkles, BookOpen, Brain, LifeBuoy
+  Sparkles, BookOpen, Brain, LifeBuoy, PieChart
 } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -59,6 +59,7 @@ const navItems = [
       { href: '/campaign-strategy', icon: TrendingUp, label: 'Campaign Strategy' },
       { href: '/prd', icon: FileCode2, label: 'Dev Blueprint' },
       { href: '/marketing', icon: Brain, label: 'Marketing Intelligence' },
+      { href: '/reports', icon: PieChart, label: 'Enterprise Reports' },
     ],
   },
   {

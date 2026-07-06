@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, cn, getInitials } from '@/lib/utils'
+import { DataTable } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/ui/skeletons'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Search, FileText, Download, Clock, CheckCircle2, AlertTriangle, FileCheck2,
   FolderOpen, Building2, User, Loader2, RefreshCw, LogOut, FileSignature,
@@ -20,6 +23,8 @@ import {
 } from 'lucide-react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { GlobalSearch } from '@/components/ui/global-search'
+import { UniversalTimeline } from '@/components/ui/version-timeline'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
 import {
@@ -117,6 +122,45 @@ export default function ClientDashboardPage() {
   const [notifications, setNotifications] = useState<ClientNotification[]>([])
   const [companySettings, setCompanySettings] = useState<any>(null)
   const [clientDetails, setClientDetails] = useState<any>(null)
+
+  const pendingActions = useMemo(() => {
+    const actions: { label: string; actionText: string; type: string; onClick: () => void }[] = []
+    
+    // 1. Documents awaiting signature
+    docs.filter(d => ['Quotation', 'Agreement', 'SOW'].includes(d.type) && ['sent', 'published', 'viewed', 'needs revision'].includes(d.status)).forEach(d => {
+      actions.push({
+        label: `Action Required: E-Sign ${d.type}`,
+        actionText: `${d.title} (${d.docId}) needs your signature/approval.`,
+        type: 'esign',
+        onClick: () => openDoc(d)
+      })
+    })
+
+    // 2. Unpaid invoices
+    docs.filter(d => d.type === 'Invoice' && d.status !== 'paid').forEach(d => {
+      actions.push({
+        label: `Payment Pending: Tax Invoice`,
+        actionText: `Invoice ${d.docId} for ${formatCurrency(d.amount)} is awaiting payment.`,
+        type: 'payment',
+        onClick: () => openDoc(d)
+      })
+    })
+
+    // 3. Pending requirements
+    workspaceRequirements.filter(r => r.status === 'open' || r.status === 'needs revision').forEach(r => {
+      actions.push({
+        label: `Information Needed: Project Requirement`,
+        actionText: `Please submit details/files for: "${r.title}".`,
+        type: 'requirement',
+        onClick: () => {
+          setActiveTab('projects')
+          setSelectedProjectId(r.project_id)
+        }
+      })
+    })
+
+    return actions
+  }, [docs, workspaceRequirements])
   
   // UI Interaction States
   const [search, setSearch] = useState('')
@@ -137,6 +181,201 @@ export default function ClientDashboardPage() {
   const [savedDrawData, setSavedDrawData] = useState<string | null>(null)
   const [selectedFont, setSelectedFont] = useState('DancingScript')
   const [typeSaved, setTypeSaved] = useState(false)
+
+  const documentColumns = useMemo(() => [
+    {
+      header: 'Document Number',
+      accessor: 'docId',
+      sortable: true,
+      cell: (doc: ClientDoc) => (
+        <span className="font-mono text-primary font-semibold">{doc.docId}</span>
+      )
+    },
+    {
+      header: 'Title',
+      accessor: 'title',
+      sortable: true,
+      cell: (doc: ClientDoc) => (
+        <span className="font-semibold text-foreground">{doc.title}</span>
+      )
+    },
+    {
+      header: 'Version',
+      accessor: 'published_version',
+      sortable: true,
+      cell: (doc: ClientDoc) => (
+        <span className="text-muted-foreground">V{doc.published_version}</span>
+      )
+    },
+    {
+      header: 'Date Shared',
+      accessor: 'date',
+      sortable: true,
+      cell: (doc: ClientDoc) => (
+        <span className="text-muted-foreground">{formatDate(doc.date)}</span>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (doc: ClientDoc) => getStatusBadgeStyled(doc.status)
+    },
+    {
+      header: 'Value / Amount',
+      accessor: 'amount',
+      sortable: true,
+      className: 'text-right',
+      cell: (doc: ClientDoc) => (
+        <span className="font-bold text-primary">
+          {doc.type === 'Marketing' ? '—' : (doc.amount > 0 ? formatCurrency(doc.amount) : '—')}
+        </span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (doc: ClientDoc) => (
+        <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+          <Button onClick={() => openDoc(doc)} variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">
+            View
+          </Button>
+          <Button onClick={() => handleDownloadPdf(doc)} variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10">
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )
+    }
+  ], [])
+
+  const combinedFilesAndLinks = useMemo(() => {
+    if (!selectedProjectId) return []
+    const f = workspaceFiles
+      .filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client')
+      .map(file => ({ ...file, id: `file-${file.id}` }))
+    const l = workspaceLinks
+      .filter(link => link.project_id === selectedProjectId && link.visibility === 'Published to Client')
+      .map(link => ({
+        ...link,
+        id: `link-${link.id}`,
+        name: link.title,
+        uploaded_by: 'Admin Team',
+        uploaded_at: link.published_at
+      }))
+    return [...f, ...l]
+  }, [workspaceFiles, workspaceLinks, selectedProjectId])
+
+  const filesColumns = useMemo(() => [
+    {
+      header: 'Name',
+      accessor: 'name',
+      sortable: true,
+      cell: (row: any) => (
+        <span className="font-semibold text-foreground truncate max-w-[180px] block">
+          {row.name}
+        </span>
+      )
+    },
+    {
+      header: 'Category',
+      accessor: 'category',
+      sortable: true,
+      cell: (row: any) => (
+        <span className={row.url ? 'text-primary font-bold' : ''}>
+          {row.url ? `${row.category} Link` : row.category}
+        </span>
+      )
+    },
+    {
+      header: 'Uploaded By',
+      accessor: 'uploaded_by',
+      sortable: true,
+      cell: (row: any) => (
+        <span className="text-muted-foreground">{row.uploaded_by || 'Admin Team'}</span>
+      )
+    },
+    {
+      header: 'Upload Date',
+      accessor: 'uploaded_at',
+      sortable: true,
+      cell: (row: any) => (
+        <span className="text-muted-foreground">{formatDate(row.uploaded_at)}</span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (row: any) => {
+        if (row.url) {
+          return (
+            <a href={row.url} target="_blank" rel="noopener noreferrer" className="inline-block" onClick={e => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </a>
+          )
+        }
+        return (
+          <a href={row.file_path} target="_blank" rel="noopener noreferrer" download className="inline-block" onClick={e => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10">
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          </a>
+        )
+      }
+    }
+  ], [])
+
+  const reportsColumns = useMemo(() => [
+    {
+      header: 'Report Title',
+      accessor: 'title',
+      sortable: true,
+      cell: (rep: any) => (
+        <span className="font-semibold text-foreground">{rep.title}</span>
+      )
+    },
+    {
+      header: 'Report Type',
+      accessor: 'report_type',
+      sortable: true,
+      cell: (rep: any) => (
+        <Badge className="bg-primary/10 text-primary border border-gold/20 text-[9px] capitalize">
+          {rep.report_type}
+        </Badge>
+      )
+    },
+    {
+      header: 'Version',
+      accessor: 'version',
+      sortable: true,
+      cell: (rep: any) => (
+        <span className="text-muted-foreground">V{rep.version}</span>
+      )
+    },
+    {
+      header: 'Publication Date',
+      accessor: 'uploaded_at',
+      sortable: true,
+      cell: (rep: any) => (
+        <span className="text-muted-foreground">{formatDate(rep.uploaded_at)}</span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (rep: any) => (
+        <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download className="inline-block" onClick={e => e.stopPropagation()}>
+          <Button variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">
+            Download PDF
+          </Button>
+        </a>
+      )
+    }
+  ], [])
 
   const fonts = [
     { name: 'Dancing Script', value: 'DancingScript', family: 'Dancing Script, cursive' },
@@ -989,19 +1228,17 @@ export default function ClientDashboardPage() {
     { id: 'profile', label: 'Company Profile', icon: User }
   ]
 
-  // Filtered documents for specific tabs
-  const tabDocs = docs.filter(d => {
-    if (activeTab === 'quotations') return d.type === 'Quotation'
-    if (activeTab === 'sow') return d.type === 'SOW'
-    if (activeTab === 'agreements') return d.type === 'Agreement'
-    if (activeTab === 'invoices') return d.type === 'Invoice'
-    if (activeTab === 'marketing') return d.type === 'Marketing'
-    if (activeTab === 'documents') return true
-    return false
-  }).filter(d =>
-    d.title.toLowerCase().includes(search.toLowerCase()) ||
-    d.docId.toLowerCase().includes(search.toLowerCase())
-  )
+  const tabDocs = useMemo(() => {
+    return docs.filter(d => {
+      if (activeTab === 'quotations') return d.type === 'Quotation'
+      if (activeTab === 'sow') return d.type === 'SOW'
+      if (activeTab === 'agreements') return d.type === 'Agreement'
+      if (activeTab === 'invoices') return d.type === 'Invoice'
+      if (activeTab === 'marketing') return d.type === 'Marketing'
+      if (activeTab === 'documents') return true
+      return false
+    })
+  }, [docs, activeTab])
 
   const clientSupportTickets = notifications.filter(n => n.type === 'support')
 
@@ -1046,14 +1283,14 @@ export default function ClientDashboardPage() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-card flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-64 md:w-16' : 'w-64'}`}>
-        <div className="p-5 flex items-center justify-between border-b border-border">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <img src="/logo.png" className="h-9 w-9 rounded-xl shrink-0 object-contain shadow-sm" alt="Netgain Logo" />
+      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+        <div className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
             {!sidebarCollapsed && (
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-foreground tracking-wide whitespace-nowrap">NETGAIN PORTAL</p>
-                <p className="text-[9px] text-primary tracking-widest -mt-0.5 whitespace-nowrap">SECURE CLIENT SUITE</p>
+                <p className="text-[9px] text-primary tracking-widest -mt-0.5 whitespace-nowrap font-semibold">SECURE CLIENT SUITE</p>
               </div>
             )}
           </div>
@@ -1065,19 +1302,7 @@ export default function ClientDashboardPage() {
           </button>
         </div>
 
-        {/* Company/Rep Overview card */}
-        {!sidebarCollapsed && (
-          <div className="mx-4 my-4 p-3 bg-accent/20 border border-border/60 rounded-xl">
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Account Company</p>
-            <p className="text-xs font-semibold text-primary mt-0.5 truncate">{session?.company}</p>
-            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
-              <User className="h-3 w-3 text-primary" />
-              <span className="truncate">{session?.name}</span>
-            </div>
-          </div>
-        )}
-
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
           {navigationItems.map(item => {
             const Icon = item.icon
             const active = activeTab === item.id
@@ -1085,15 +1310,22 @@ export default function ClientDashboardPage() {
               <button
                 key={item.id}
                 onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setMobileMenuOpen(false) }}
-                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${active ? 'bg-primary text-black shadow-lg font-bold' : 'text-muted-foreground hover:bg-accent hover:text-foreground'} ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                className={cn(
+                  'sidebar-item w-full',
+                  active ? 'active' : 'text-muted-foreground hover:text-foreground',
+                  sidebarCollapsed && 'justify-center px-0 py-2'
+                )}
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className="h-4 w-4 shrink-0" />
+                  <Icon className={cn('shrink-0', sidebarCollapsed ? 'h-5 w-5' : 'h-4 w-4')} />
                   {!sidebarCollapsed && <span>{item.label}</span>}
                 </div>
                 {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${active ? 'bg-black text-primary' : 'bg-primary/10 text-primary border border-primary/20'}`}>
+                  <span className={cn(
+                    'px-2 py-0.5 rounded-full text-[9px] font-bold',
+                    active ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary border border-primary/20'
+                  )}>
                     {item.badge}
                   </span>
                 )}
@@ -1106,17 +1338,39 @@ export default function ClientDashboardPage() {
           {/* Collapse Toggle */}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`hidden md:flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-all ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={cn(
+              "hidden md:flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-all",
+              sidebarCollapsed && "justify-center px-0"
+            )}
             title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
             {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-primary" />}
             {!sidebarCollapsed && <span>Collapse Sidebar</span>}
           </button>
 
+          <div className={cn("flex items-center gap-2 rounded p-2 hover:bg-accent transition-colors cursor-pointer", sidebarCollapsed && "justify-center")}>
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-bold">
+                {session ? getInitials(session.name) : 'C'}
+              </AvatarFallback>
+            </Avatar>
+            {!sidebarCollapsed && (
+              <div className="overflow-hidden flex-1">
+                <p className="text-xs font-semibold text-foreground whitespace-nowrap font-sans truncate">
+                  {session?.name || 'Client'}
+                </p>
+                <p className="text-[10px] text-muted-foreground whitespace-nowrap font-sans truncate">{session?.company}</p>
+              </div>
+            )}
+          </div>
+
           <Button 
             onClick={handleLogout} 
             variant="outline" 
-            className={`w-full h-9 text-xs border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10 bg-transparent gap-2 ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={cn(
+              "w-full h-9 text-xs border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10 bg-transparent gap-2",
+              sidebarCollapsed && "justify-center px-0"
+            )}
             title={sidebarCollapsed ? "Log Out Portal" : undefined}
           >
             <LogOut className="h-3.5 w-3.5 shrink-0" />
@@ -1127,7 +1381,7 @@ export default function ClientDashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-background relative">
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(true)}
@@ -1137,6 +1391,11 @@ export default function ClientDashboardPage() {
             </button>
             <Building2 className="h-4 w-4 text-primary shrink-0" />
             <span className="text-xs text-muted-foreground font-semibold truncate max-w-[150px] sm:max-w-xs">{session?.company} Dashboard Suite</span>
+          </div>
+
+          {/* Client portal search */}
+          <div className="flex-1 max-w-xs mx-6 hidden md:block">
+            <GlobalSearch />
           </div>
 
           <div className="flex items-center gap-3">
@@ -1161,7 +1420,7 @@ export default function ClientDashboardPage() {
           <div className="p-6 space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-2xl font-black text-foreground tracking-tight">Welcome, {session?.name}</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome, {session?.name}</h1>
                 <p className="text-xs text-muted-foreground mt-1">Here is a summary of your shared assets, approvals, and invoices with Netgain.</p>
               </div>
             </div>
@@ -1174,76 +1433,226 @@ export default function ClientDashboardPage() {
                 { label: 'Unpaid Invoices', val: statsSummary.unpaidInvoices, col: 'text-rose-600 dark:text-rose-400', desc: 'Awaiting payment process' },
                 { label: 'Active Projects', val: statsSummary.activeProjects, col: 'text-emerald-600 dark:text-emerald-400', desc: 'Currently in execution' }
               ].map(card => (
-                <Card key={card.label} className="bg-card border-border/80 text-foreground shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary/40" />
-                  <CardContent className="p-4">
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{card.label}</p>
-                    <p className={`text-2xl font-bold mt-1 ${card.col}`}>{card.val}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">{card.desc}</p>
-                  </CardContent>
-                </Card>
+                <div key={card.label} className="stat-card">
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{card.label}</p>
+                  <p className={`text-2xl font-bold mt-1.5 ${card.col}`}>{card.val}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{card.desc}</p>
+                </div>
               ))}
             </div>
+
+            {/* Quick Actions Bar */}
+            <div className="flex flex-wrap gap-2 p-3 bg-muted/5 rounded-xl border border-border/50">
+              <p className="w-full text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Quick Actions</p>
+              <button onClick={() => setActiveTab('invoices')} className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all font-medium">
+                <Coins className="h-3.5 w-3.5 text-amber-400" />View Invoices
+              </button>
+              <button onClick={() => setActiveTab('documents')} className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all font-medium">
+                <FolderOpen className="h-3.5 w-3.5 text-blue-400" />Document Vault
+              </button>
+              <button onClick={() => setActiveTab('projects')} className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all font-medium">
+                <Briefcase className="h-3.5 w-3.5 text-emerald-400" />My Projects
+              </button>
+              <button onClick={() => setActiveTab('support')} className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all font-medium">
+                <HelpCircle className="h-3.5 w-3.5 text-purple-400" />Raise Support Ticket
+              </button>
+              <button onClick={() => setActiveTab('notifications')} className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 transition-all font-medium">
+                <Bell className="h-3.5 w-3.5 text-gold" />Notifications {statsSummary.latestNotifications > 0 && <span className="bg-gold text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">{statsSummary.latestNotifications}</span>}
+              </button>
+            </div>
+
+            {/* Project Health Panel */}
+            {projects.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Project Health</h3>
+                  <button onClick={() => setActiveTab('projects')} className="text-xs text-primary/80 hover:text-primary flex items-center gap-1">
+                    View All <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {projects.slice(0, 4).map(proj => {
+                    const pct = proj.progress || 0
+                    const completed = (proj.milestones || []).filter(m => m.endsWith(' ✅')).length
+                    const total = (proj.milestones || []).length
+                    const healthColor = pct >= 80 ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' : pct >= 50 ? 'text-amber-400 border-amber-500/20 bg-amber-500/5' : 'text-red-400 border-red-500/20 bg-red-500/5'
+                    const healthLabel = pct >= 80 ? 'On Track' : pct >= 50 ? 'In Progress' : 'Needs Attention'
+                    
+                    // Circular Progress Ring SVG metrics
+                    const radius = 18
+                    const strokeWidth = 3
+                    const circumference = 2 * Math.PI * radius
+                    const strokeDashoffset = circumference - (pct / 100) * circumference
+
+                    return (
+                      <Card key={proj.id} className="bg-card border-border/60 hover:border-primary/30 transition-all cursor-pointer" onClick={() => setActiveTab('projects')}>
+                        <CardContent className="p-4 flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <p className="text-xs font-bold text-slate-200 truncate">{proj.title}</p>
+                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold capitalize', healthColor)}>{healthLabel}</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">PM: {proj.pm || 'Netgain Team'}</p>
+                            {proj.currentStage && (
+                              <p className="text-[10px] text-primary/80 mt-1">📍 {proj.currentStage}</p>
+                            )}
+                            {total > 0 && (
+                              <p className="text-[10px] text-muted-foreground mt-1.5">
+                                {completed} of {total} milestones completed
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Circular Progress Ring */}
+                          <div className="relative h-12 w-12 shrink-0 flex items-center justify-center">
+                            <svg className="h-full w-full -rotate-90">
+                              <circle
+                                cx="24"
+                                cy="24"
+                                r={radius}
+                                stroke="rgba(255,255,255,0.05)"
+                                strokeWidth={strokeWidth}
+                                fill="transparent"
+                              />
+                              <circle
+                                cx="24"
+                                cy="24"
+                                r={radius}
+                                stroke="url(#goldRingGrad)"
+                                strokeWidth={strokeWidth}
+                                strokeDasharray={circumference}
+                                strokeDashoffset={strokeDashoffset}
+                                strokeLinecap="round"
+                                fill="transparent"
+                              />
+                            </svg>
+                            <svg className="w-0 h-0 absolute">
+                              <defs>
+                                <linearGradient id="goldRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                  <stop offset="0%" stopColor="#D4AF37" />
+                                  <stop offset="100%" stopColor="#aa8410" />
+                                </linearGradient>
+                              </defs>
+                            </svg>
+                            <span className="absolute text-[10px] font-bold text-slate-300">{pct}%</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Quick Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              {/* Recent Published Documents */}
-              <div className="lg:col-span-2 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Recent Shared Documents</h3>
-                  <button onClick={() => setActiveTab('documents')} className="text-xs text-primary/80 hover:text-primary flex items-center gap-1">
-                    View Vault <ChevronRight className="h-3 w-3" />
-                  </button>
-                </div>
-                <Card className="bg-card border-border/80">
-                  <CardContent className="p-0">
-                    <div className="divide-y divide-border">
-                      {docs.slice(0, 5).map(doc => (
-                        <div key={doc.id} onClick={() => openDoc(doc)} className="p-4 flex items-center justify-between hover:bg-accent/45 cursor-pointer transition-colors group">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 text-primary">
-                              <FileText className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">{doc.title}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[9px] font-mono text-muted-foreground">{doc.docId}</span>
-                                <span className="w-1 h-1 rounded-full bg-slate-700" />
-                                <span className="text-[9px] text-muted-foreground capitalize">{doc.type} · V{doc.published_version}</span>
+              {/* Left Column: Pending Actions & Recent Shared Documents */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* Pending Actions Widget */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-gold flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-gold" />
+                    Pending Actions
+                  </h3>
+                  <Card className="bg-gold/[0.01] border-gold/20">
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-border">
+                        {pendingActions.map((act, i) => (
+                          <div key={i} onClick={act.onClick} className="p-3.5 flex items-center justify-between hover:bg-gold/5 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-gold/10 text-gold border border-gold/20 shrink-0">
+                                {act.type === 'esign' ? <FileSignature className="h-4 w-4" /> : act.type === 'payment' ? <Coins className="h-4 w-4" /> : <HelpCircle className="h-4 w-4" />}
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-foreground group-hover:text-gold transition-colors">{act.label}</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{act.actionText}</p>
                               </div>
                             </div>
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] border-gold/30 text-gold hover:bg-gold/10 shrink-0 ml-2">Resolve</Button>
                           </div>
-                          <div className="flex items-center gap-3">
-                            {getStatusBadgeStyled(doc.status)}
-                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-all" />
+                        ))}
+                        {pendingActions.length === 0 && (
+                          <div className="p-6 text-center text-muted-foreground text-xs flex items-center justify-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                            All caught up! No pending actions at this time.
                           </div>
-                        </div>
-                      ))}
-                      {docs.length === 0 && (
-                        <div className="p-8 text-center text-muted-foreground text-xs">No documents published yet.</div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Shared Documents */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Recent Shared Documents</h3>
+                    <button onClick={() => setActiveTab('documents')} className="text-xs text-primary/80 hover:text-primary flex items-center gap-1">
+                      View Vault <ChevronRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <Card className="bg-card border-border/80">
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-border">
+                        {docs.slice(0, 5).map(doc => (
+                          <div key={doc.id} onClick={() => openDoc(doc)} className="p-4 flex items-center justify-between hover:bg-accent/45 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 text-primary">
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">{doc.title}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[9px] font-mono text-muted-foreground">{doc.docId}</span>
+                                  <span className="w-1 h-1 rounded-full bg-slate-700" />
+                                  <span className="text-[9px] text-muted-foreground capitalize">{doc.type} · V{doc.published_version}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {getStatusBadgeStyled(doc.status)}
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-all" />
+                            </div>
+                          </div>
+                        ))}
+                        {docs.length === 0 && (
+                          <div className="p-8 text-center text-muted-foreground text-xs">No documents published yet.</div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
 
-              {/* Side activity / updates feed */}
+              {/* Account Timeline */}
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Recent Activity</h3>
+                <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Account Timeline</h3>
                 <Card className="bg-card border-border/80">
-                  <CardContent className="p-4 space-y-4 max-h-[360px] overflow-y-auto">
-                    {docs.flatMap(d => (d.raw.history || []).map((h: any) => ({ ...h, doc: d }))).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6).map((act, i) => (
-                      <div key={i} className="flex gap-3 text-xs">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
-                        <div>
-                          <p className="text-foreground/90 leading-snug">{act.action}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{act.doc?.docId} · {formatDate(act.date)}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {docs.length === 0 && (
-                      <div className="text-center text-muted-foreground text-xs py-4">No recent activity logs.</div>
+                  <CardContent className="p-4">
+                    <UniversalTimeline
+                      entries={[
+                        ...docs.flatMap(d =>
+                          (d.raw.history || []).map((h: any) => ({
+                            action: `${d.type}: ${h.action}`,
+                            actionType: 'doc' as const,
+                            by: d.raw.client_name || session?.name || 'Client',
+                            date: h.date,
+                            comment: d.docId
+                          }))
+                        ),
+                        ...notifications.slice(0, 8).map(n => ({
+                          action: n.title,
+                          actionType: 'note' as const,
+                          by: 'Netgain Team',
+                          date: n.created_at,
+                          comment: n.message
+                        }))
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 12)}
+                      compact
+                    />
+                    {docs.length === 0 && notifications.length === 0 && (
+                      <div className="text-center text-muted-foreground text-xs py-4">No account activity yet.</div>
                     )}
                   </CardContent>
                 </Card>
@@ -1261,67 +1670,14 @@ export default function ClientDashboardPage() {
               <p className="text-xs text-muted-foreground mt-1">Search and manage all shared {activeTab} files.</p>
             </div>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search by keyword, project, ID..."
-                className="pl-9 bg-card border-border text-foreground focus-visible:ring-[#D4AF37] h-9 text-xs"
-              />
-            </div>
-
-            <Card className="bg-card border-border/80">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px]">
-                      <th className="text-left py-3 px-4 font-semibold">Document Number</th>
-                      <th className="text-left py-3 px-4 font-semibold">Title</th>
-                      <th className="text-left py-3 px-4 font-semibold">Version</th>
-                      <th className="text-left py-3 px-4 font-semibold">Date Shared</th>
-                      <th className="text-left py-3 px-4 font-semibold">Status</th>
-                      {activeTab !== 'marketing' && <th className="text-left py-3 px-4 font-semibold">Value / Amount</th>}
-                      <th className="text-right py-3 px-4 font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tabDocs.map(doc => (
-                      <tr key={doc.id} className="border-b border-border/40 hover:bg-accent/20 transition-colors">
-                        <td className="py-3.5 px-4 font-mono text-primary">{doc.docId}</td>
-                        <td className="py-3.5 px-4 font-semibold text-foreground">{doc.title}</td>
-                        <td className="py-3.5 px-4 text-muted-foreground">V{doc.published_version}</td>
-                        <td className="py-3.5 px-4 text-muted-foreground">{formatDate(doc.date)}</td>
-                        <td className="py-3.5 px-4">{getStatusBadgeStyled(doc.status)}</td>
-                        {activeTab !== 'marketing' && (
-                          <td className="py-3.5 px-4 font-bold text-primary">
-                            {doc.amount > 0 ? formatCurrency(doc.amount) : '—'}
-                          </td>
-                        )}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <Button onClick={() => openDoc(doc)} variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">
-                              View
-                            </Button>
-                            <Button onClick={() => handleDownloadPdf(doc)} variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10">
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {tabDocs.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                          <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                          <p>No documents found matching your filter.</p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+            <DataTable
+              data={tabDocs}
+              columns={documentColumns}
+              searchPlaceholder="Search documents by ID or Title..."
+              searchKeys={['docId', 'title']}
+              exportFileName={`client_${activeTab}`}
+              onRowClick={openDoc}
+            />
           </div>
         )}
 
@@ -1684,62 +2040,13 @@ export default function ClientDashboardPage() {
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Shared Assets & Files</h3>
-                  <div className="border border-border rounded-xl overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/10">
-                            <th className="text-left py-2.5 px-4 font-semibold">Name</th>
-                            <th className="text-left py-2.5 px-4 font-semibold">Category</th>
-                            <th className="text-left py-2.5 px-4 font-semibold">Uploaded By</th>
-                            <th className="text-left py-2.5 px-4 font-semibold">Upload Date</th>
-                            <th className="text-right py-2.5 px-4 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workspaceFiles
-                            .filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client')
-                            .map((file: any) => (
-                              <tr key={file.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
-                                <td className="py-3 px-4 font-semibold text-foreground truncate max-w-[180px]">{file.name}</td>
-                                <td className="py-3 px-4">{file.category}</td>
-                                <td className="py-3 px-4 text-muted-foreground">{file.uploaded_by}</td>
-                                <td className="py-3 px-4 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
-                                <td className="py-3 px-4 text-right">
-                                  <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10"><Download className="h-3.5 w-3.5" /></Button>
-                                  </a>
-                                </td>
-                              </tr>
-                            ))}
-
-                          {workspaceLinks
-                            .filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client')
-                            .map((link: any) => (
-                              <tr key={link.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
-                                <td className="py-3 px-4 font-semibold text-foreground truncate max-w-[180px]">
-                                  <p>{link.title}</p>
-                                  {link.description && <p className="text-[10px] text-muted-foreground font-normal">{link.description}</p>}
-                                </td>
-                                <td className="py-3 px-4"><span className="text-primary font-bold">{link.category} Link</span></td>
-                                <td className="py-3 px-4 text-muted-foreground">Admin Team</td>
-                                <td className="py-3 px-4 text-muted-foreground">{formatDate(link.published_at)}</td>
-                                <td className="py-3 px-4 text-right">
-                                  <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                                  </a>
-                                </td>
-                              </tr>
-                            ))}
-
-                          {workspaceFiles.filter(file => file.project_id === selectedProjectId && file.visibility === 'Published to Client').length === 0 &&
-                           workspaceLinks.filter(l => l.project_id === selectedProjectId && l.visibility === 'Published to Client').length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No shared files or resource links in this project.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <DataTable
+                    data={combinedFilesAndLinks}
+                    columns={filesColumns}
+                    searchPlaceholder="Search files by name..."
+                    searchKeys={['name', 'category']}
+                    exportFileName="project_assets"
+                  />
                 </div>
               </div>
             ) : (
@@ -1767,47 +2074,13 @@ export default function ClientDashboardPage() {
             </div>
 
             {selectedProjectId ? (
-              <div className="border border-border rounded-xl overflow-hidden bg-card">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-muted/10">
-                        <th className="text-left py-2.5 px-4 font-semibold">Report Title</th>
-                        <th className="text-left py-2.5 px-4 font-semibold">Report Type</th>
-                        <th className="text-left py-2.5 px-4 font-semibold">Version</th>
-                        <th className="text-left py-2.5 px-4 font-semibold">Publication Date</th>
-                        <th className="text-right py-2.5 px-4 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {workspaceReports
-                        .filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client')
-                        .map((rep: any) => (
-                          <tr key={rep.id} className="border-b border-border/30 hover:bg-accent/10 text-foreground/90">
-                            <td className="py-3.5 px-4 font-semibold text-foreground">{rep.title}</td>
-                            <td className="py-3.5 px-4"><Badge className="bg-primary/10 text-primary border border-gold/20 text-[9px] capitalize">{rep.report_type}</Badge></td>
-                            <td className="py-3.5 px-4 text-muted-foreground">V{rep.version}</td>
-                            <td className="py-3.5 px-4 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
-                            <td className="py-3.5 px-4 text-right">
-                              <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
-                                <Button variant="outline" size="sm" className="h-7 text-[10px] border-border bg-transparent text-foreground/90">Download PDF</Button>
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      {workspaceReports.filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client').length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                            <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30 text-primary" />
-                            <p className="font-semibold">No performance reports published yet</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Once SEO audits or performance sprints compile, they will appear here.</p>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <DataTable
+                data={workspaceReports.filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client')}
+                columns={reportsColumns}
+                searchPlaceholder="Search reports by title..."
+                searchKeys={['title', 'report_type']}
+                exportFileName="performance_reports"
+              />
             ) : (
               <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
             )}

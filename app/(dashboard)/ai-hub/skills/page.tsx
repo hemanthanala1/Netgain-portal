@@ -20,6 +20,7 @@ import { formatFileSize, SKILL_CATEGORIES } from '@/lib/ai-utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useUser } from '@/components/user-provider'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { Skill, SkillVersion } from '@/lib/ai-types'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 
@@ -368,15 +369,16 @@ export default function SkillsLibraryPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <Card className="ai-card">
-          <CardContent className="p-12 text-center">
-            <Sparkles className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm font-medium">No skills found</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isFounder ? 'Upload your first Claude Skill to get started.' : 'No skills have been published yet.'}
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Sparkles}
+          title="No AI Skills Found"
+          description={isFounder ? 'Upload your first Claude Skill to configure AI capabilities.' : 'No custom AI skills have been published yet.'}
+          action={isFounder ? {
+            label: "Create Skill",
+            onClick: () => { setForm({ name: '', description: '', category: 'General', compatible_ai: 'Claude 3.5 Sonnet', compatible_version: '1.0', release_notes: '' }); setUploadedFiles([]); setShowCreate(true) },
+            icon: Plus
+          } : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(skill => (
@@ -416,12 +418,12 @@ export default function SkillsLibraryPage() {
                   <Button variant="gold" size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={() => handleDownload(skill)}>
                     <Download className="h-3 w-3" />Download
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => loadVersions(skill)} title="Version History">
+                  <Button variant="ghost" size="icon" aria-label="Version History" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => loadVersions(skill)} title="Version History">
                     <History className="h-3.5 w-3.5" />
                   </Button>
                   {isFounder && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => { 
+                      <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => { 
                         setForm({ 
                           name: skill.name, 
                           description: skill.description || '', 
@@ -437,7 +439,7 @@ export default function SkillsLibraryPage() {
                       }} title="Edit">
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteId(skill.id)} title="Delete">
+                      <Button variant="ghost" size="icon" aria-label="Delete" className="h-8 w-8 text-red-400 hover:text-red-400" onClick={() => setDeleteId(skill.id)} title="Delete">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>

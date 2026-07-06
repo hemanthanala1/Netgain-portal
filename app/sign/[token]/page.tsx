@@ -17,6 +17,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
   const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState(false)
   const [signedRecord, setSignedRecord] = useState<any>(null)
+  const [pdfVersion, setPdfVersion] = useState(1)  // bumped after signing to force iframe reload
   
   // Document details states
   const [docToken, setDocToken] = useState<any>(null)
@@ -314,6 +315,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       }
 
       setSignedRecord(data)
+      setPdfVersion(v => v + 1)  // force iframe + download links to reload with signed PDF
       toast({ title: '🎉 Document Signed!', description: 'Your digital signature has been certified.' })
       // Reload details
       loadDocumentData()
@@ -451,7 +453,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                 variant="outline"
                 className="h-8 text-xs gap-1 border-[#1E3A2F] text-slate-300 hover:bg-white/5 bg-transparent"
               >
-                <a href={`/api/document-pdf?token=${token}`} target="_blank" rel="noreferrer">
+                <a href={`/api/document-pdf?token=${token}&v=${pdfVersion}`} target="_blank" rel="noreferrer">
                   <Download className="h-3 w-3" /> Download PDF
                 </a>
               </Button>
@@ -459,7 +461,8 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
             <CardContent className="p-0">
               <div className="relative aspect-[3/4] sm:aspect-[1/1.4] w-full bg-[#0A1612]">
                 <iframe
-                  src={`/api/document-pdf?token=${token}`}
+                  key={pdfVersion}
+                  src={`/api/document-pdf?token=${token}&v=${pdfVersion}`}
                   className="w-full h-full border-none rounded-b-lg"
                   title="Document PDF Preview"
                 />
@@ -495,7 +498,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                     asChild
                     className="w-full h-10 gold-gradient text-black hover:opacity-90 font-bold gap-2 text-sm"
                   >
-                    <a href={`/api/document-pdf?token=${token}`} download>
+                    <a href={`/api/document-pdf?token=${token}&v=${pdfVersion}`} download>
                       <Download className="h-4 w-4" /> Download Signed Copy
                     </a>
                   </Button>

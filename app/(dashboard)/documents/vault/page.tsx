@@ -1,12 +1,15 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataTable } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/ui/skeletons'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Download, Archive, Copy, FolderOpen, FileText, Receipt, ClipboardList, HandshakeIcon, FolderKanban, ArchiveRestore, Loader2 } from 'lucide-react'
+import { Search, Download, Archive, Copy, FolderOpen, FileText, Receipt, ClipboardList, HandshakeIcon, FolderKanban, ArchiveRestore, Loader2, Trash2, Tag, Database, Plus, Eye, Expand, HardDrive } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buildPdfPayload } from '@/lib/pdf-payload-builder'
@@ -27,15 +30,6 @@ interface VaultDoc {
   tags: string[]
   raw: any
 }
-
-const mockDocs: VaultDoc[] = [
-  { id: 'd1', docId: 'NG-QUO-2024-1123', type: 'Quotation', client: 'Urban Edge Co.', title: 'E-Commerce + SEO Package', amount: 47998, status: 'sent', date: '2024-06-04', tags: ['quotation', 'ecommerce'], raw: null },
-  { id: 'd2', docId: 'NG-INV-2024-0891', type: 'Invoice', client: 'FashionHub India', title: 'Monthly Retainer Invoice', amount: 29997, status: 'paid', date: '2024-05-30', tags: ['invoice', 'paid'], raw: null },
-  { id: 'd3', docId: 'NG-SOW-2024-0034', type: 'SOW', client: 'TechCore Solutions', title: 'Custom SaaS Platform Build SOW', amount: 149999, status: 'signed', date: '2024-05-28', tags: ['sow', 'development'], raw: null },
-  { id: 'd4', docId: 'NG-AGR-2024-0021', type: 'Agreement', client: 'TechCore Solutions', title: 'Service Level Agreement', amount: 149999, status: 'signed', date: '2024-05-28', tags: ['agreement'], raw: null },
-  { id: 'd5', docId: 'NG-QUO-2024-1098', type: 'Quotation', client: 'FashionHub India', title: 'Full Digital Marketing Bundle', amount: 29997, status: 'approved', date: '2024-05-28', tags: ['quotation', 'marketing'], raw: null },
-  { id: 'd6', docId: 'NG-INV-2024-0892', type: 'Invoice', client: 'TechCore Solutions', title: 'Web Development Invoice', amount: 149999, status: 'sent', date: '2024-06-01', tags: ['invoice'], raw: null },
-]
 
 const typeIcon: Record<string, any> = {
   Quotation: FileText, Invoice: Receipt, SOW: ClipboardList, Agreement: HandshakeIcon, PRD: FolderKanban, Marketing: FileText
@@ -133,7 +127,10 @@ const mapMarketing = (m: any): VaultDoc => {
   }
 }
 
-export default function VaultPage() {
+function VaultListContent() {
+  const { toast } = useToast()
+  const { user } = useUser()
+  const searchParams = useSearchParams()
   const [docs, setDocs] = useState<VaultDoc[]>([])
   const [services, setServices] = useState<any[]>([])
   const [paymentSchedules, setPaymentSchedules] = useState<any[]>([])
@@ -144,10 +141,116 @@ export default function VaultPage() {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
-  const { toast } = useToast()
+
+  const columns = useMemo(() => [
+    {
+      header: 'Document ID & Title',
+      accessor: 'title',
+      sortable: true,
+      sticky: true,
+      cell: (doc: VaultDoc) => {
+        const Icon = typeIcon[doc.type] || FileText
+        const colors = typeColors[doc.type] || 'text-muted-foreground bg-muted'
+        return (
+          <div className="flex items-center gap-3">
+            <div className={`rounded-lg p-2 shrink-0 ${colors}`}><Icon className="h-4 w-4" /></div>
+            <div>
+              <p className="font-semibold text-sm text-foreground leading-tight">{doc.title}</p>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{doc.docId}</p>
+            </div>
+          </div>
+        )
+      }
+    },
+    {
+      header: 'Client',
+      accessor: 'client',
+      sortable: true,
+      cell: (doc: VaultDoc) => (
+        <span className="text-xs font-medium text-slate-300">{doc.client}</span>
+      )
+    },
+    {
+      header: 'Type',
+      accessor: 'type',
+      sortable: true,
+      cell: (doc: VaultDoc) => (
+        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-border bg-muted/30">
+          {doc.type}
+        </span>
+      )
+    },
+    {
+      header: 'Amount',
+      accessor: 'amount',
+      sortable: true,
+      className: 'text-right',
+      cell: (doc: VaultDoc) => (
+        <span className="font-semibold text-gold">
+          {doc.amount > 0 ? formatCurrency(doc.amount) : '—'}
+        </span>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (doc: VaultDoc) => (
+        <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
+          {doc.status}
+        </Badge>
+      )
+    },
+    {
+      header: 'Date',
+      accessor: 'date',
+      sortable: true,
+      cell: (doc: VaultDoc) => (
+        <span className="text-xs text-muted-foreground">{formatDate(doc.date)}</span>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (doc: VaultDoc) => (
+        <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-gold hover:bg-gold/10" 
+            onClick={() => handleDownload(doc)}
+            disabled={downloadingId === doc.id}
+          >
+            {downloadingId === doc.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-gold" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-slate-400 hover:text-white" 
+            onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-slate-400 hover:text-white" 
+            onClick={() => doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc)} 
+            title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}
+          >
+            {doc.status === 'archived' ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+      )
+    }
+  ], [downloadingId])
 
   // Custom approvals/e-sign state
-  const { user } = useUser()
   const isFounder = user?.role === 'Founder' || user?.role === 'Admin'
 
   const [selectedDoc, setSelectedDoc] = useState<VaultDoc | null>(null)
@@ -168,6 +271,29 @@ export default function VaultPage() {
   const [revisionNotes, setRevisionNotes] = useState('')
 
   const [copiedLink, setCopiedLink] = useState(false)
+
+  // File Vault Enhancements
+  const [selectedFolder, setSelectedFolder] = useState('all')
+  const [previewDoc, setPreviewDoc] = useState<VaultDoc | null>(null)
+  const [customTags, setCustomTags] = useState<Record<string, string[]>>({})
+  const [newTag, setNewTag] = useState('')
+
+  const handleAddTag = (docId: string) => {
+    if (!newTag.trim()) return
+    setCustomTags(prev => {
+      const current = prev[docId] || []
+      const tagStr = newTag.trim().toLowerCase()
+      if (current.includes(tagStr)) return prev
+      return { ...prev, [docId]: [...current, tagStr] }
+    })
+    setNewTag('')
+  }
+  const handleRemoveTag = (docId: string, tag: string) => {
+    setCustomTags(prev => {
+      const current = prev[docId] || []
+      return { ...prev, [docId]: current.filter(t => t !== tag) }
+    })
+  }
 
   const fetchDocDetails = async (doc: VaultDoc) => {
     if (!isSupabaseConfigured()) return
@@ -377,7 +503,7 @@ export default function VaultPage() {
 
   const fetchDocuments = async () => {
     if (!isSupabaseConfigured()) {
-      setDocs(mockDocs)
+      setDocs([])
       setLoading(false)
       return
     }
@@ -993,138 +1119,155 @@ export default function VaultPage() {
     toast({ title: 'Document Restored', description: 'Moved from archive to draft.' })
   }
 
-  const filtered = docs.filter(d => {
-    const matchSearch = d.client.toLowerCase().includes(search.toLowerCase()) || d.title.toLowerCase().includes(search.toLowerCase()) || d.docId.toLowerCase().includes(search.toLowerCase())
-    const matchType = filterType === 'all' || d.type === filterType
-    const matchStatus = filterStatus === 'all' || d.status === filterStatus
-    return matchSearch && matchType && matchStatus
-  })
-
-  const stats = { 
-    total: docs.length, 
-    quotations: docs.filter(d => d.type === 'Quotation').length, 
-    invoices: docs.filter(d => d.type === 'Invoice').length, 
-    agreements: docs.filter(d => d.type === 'Agreement' || d.type === 'SOW').length 
+  const handleBulkAction = async (action: string, selectedRows: VaultDoc[]) => {
+    if (action === 'archive') {
+      const newStatus = 'archived'
+      if (isSupabaseConfigured()) {
+        try {
+          // Group by type so we can update each table
+          const byType = selectedRows.reduce((acc: Record<string, string[]>, d) => {
+            const tbl = getTableNameForDocType(d.type)
+            if (tbl) { acc[tbl] = acc[tbl] || []; acc[tbl].push(d.id) }
+            return acc
+          }, {})
+          for (const [tbl, ids] of Object.entries(byType)) {
+            const { error } = await supabase.from(tbl).update({ status: newStatus }).in('id', ids)
+            if (error) toast({ title: `Error archiving ${tbl}`, description: error.message, variant: 'destructive' })
+          }
+        } catch (e: any) {
+          toast({ title: 'Error', description: e.message, variant: 'destructive' })
+          return
+        }
+      }
+      const idSet = new Set(selectedRows.map(d => d.id))
+      setDocs(prev => prev.map(d => idSet.has(d.id) ? { ...d, status: 'archived' } : d))
+      toast({ title: 'Documents Archived', description: `${selectedRows.length} documents have been archived.` })
+    } else if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to permanently delete ${selectedRows.length} documents? This cannot be undone.`)) return
+      if (isSupabaseConfigured()) {
+        try {
+          const byType = selectedRows.reduce((acc: Record<string, string[]>, d) => {
+            const tbl = getTableNameForDocType(d.type)
+            if (tbl) { acc[tbl] = acc[tbl] || []; acc[tbl].push(d.id) }
+            return acc
+          }, {})
+          for (const [tbl, ids] of Object.entries(byType)) {
+            const { error } = await supabase.from(tbl).delete().in('id', ids)
+            if (error) toast({ title: `Error deleting from ${tbl}`, description: error.message, variant: 'destructive' })
+          }
+        } catch (e: any) {
+          toast({ title: 'Error', description: e.message, variant: 'destructive' })
+          return
+        }
+      }
+      const idSet = new Set(selectedRows.map(d => d.id))
+      setDocs(prev => prev.filter(d => !idSet.has(d.id)))
+      toast({ title: 'Documents Deleted', description: `${selectedRows.length} documents permanently deleted.` })
+    }
   }
+
+  const activeDocs = docs.filter(d => selectedFolder === 'all' || d.type === selectedFolder)
+  const folders = [
+    { id: 'all', label: 'All Files', icon: FolderOpen },
+    { id: 'Quotation', label: 'Quotations', icon: FileText },
+    { id: 'Invoice', label: 'Invoices', icon: Receipt },
+    { id: 'SOW', label: 'SOWs', icon: ClipboardList },
+    { id: 'Agreement', label: 'Agreements', icon: HandshakeIcon },
+    { id: 'PRD', label: 'PRDs', icon: FolderKanban },
+    { id: 'Marketing', label: 'Marketing', icon: FileText },
+  ]
+
+  // Mock Storage calculation
+  const totalStorageMB = 2048 // 2 GB
+  const usedStorageMB = docs.length * 3.4 // approx 3.4 MB per doc
+  const storagePercentage = Math.min((usedStorageMB / totalStorageMB) * 100, 100)
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Document Vault</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Centralized repository for all Netgain business documents.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Document Vault</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Centralized repository for all Netgain business documents.</p>
+        </div>
+        
+        {/* Storage Summary */}
+        <div className="bg-[#0A1612] border border-[#1E3A2F] rounded-xl p-3 flex items-center gap-4 min-w-[280px]">
+          <div className="p-2 bg-[#D4AF37]/10 rounded-lg text-[#D4AF37]">
+            <HardDrive className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-400 font-medium">Vault Storage</span>
+              <span className="text-[#D4AF37] font-mono">{usedStorageMB.toFixed(1)} MB / 2 GB</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full gold-gradient rounded-full" style={{ width: `${storagePercentage}%` }} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex flex-col justify-center items-center py-24 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-gold" />
-          <p className="text-sm text-muted-foreground">Synchronizing files in real-time...</p>
-        </div>
+        <TableSkeleton rows={8} cols={6} />
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[{ label: 'Total Documents', value: stats.total }, { label: 'Quotations', value: stats.quotations }, { label: 'Invoices', value: stats.invoices }, { label: 'Agreements', value: stats.agreements }].map(s => (
-              <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></CardContent></Card>
-            ))}
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Search documents..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Type" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {['Quotation', 'Invoice', 'SOW', 'Agreement', 'PRD', 'Marketing'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {['draft', 'sent', 'paid', 'approved', 'signed', 'archived'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(doc => {
-              const Icon = typeIcon[doc.type] || FileText
-              const colors = typeColors[doc.type] || 'text-muted-foreground bg-muted'
+          {/* Folder Grouping Tabs */}
+          <div className="flex overflow-x-auto pb-2 scrollbar-hide gap-2">
+            {folders.map(folder => {
+              const Icon = folder.icon
+              const isActive = selectedFolder === folder.id
+              const count = folder.id === 'all' ? docs.length : docs.filter(d => d.type === folder.id).length
               return (
-                <Card key={doc.id} onClick={() => handleOpenDetails(doc)} className="group hover:shadow-md hover:border-gold/20 transition-all cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`rounded-lg p-2 shrink-0 ${colors}`}><Icon className="h-5 w-5" /></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-sm leading-tight truncate">{doc.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">{doc.client}</p>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] shrink-0 capitalize">{doc.status}</Badge>
-                        </div>
-                        <div className="flex items-center justify-between mt-3">
-                          <div>
-                            <p className="text-xs font-mono text-gold/70">{doc.docId}</p>
-                            <p className="text-xs text-muted-foreground">{formatDate(doc.date)}</p>
-                          </div>
-                          <p className="font-semibold text-sm text-gold">
-                            {doc.amount > 0 ? formatCurrency(doc.amount) : '—'}
-                          </p>
-                        </div>
-                        <div className="flex gap-1 mt-2 flex-wrap">
-                          {doc.tags.map(t => <span key={t} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">#{t}</span>)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 mt-3 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-7 text-xs gap-1 flex-1" 
-                        onClick={(e) => { e.stopPropagation(); handleDownload(doc); }}
-                        disabled={downloadingId === doc.id}
-                      >
-                        {downloadingId === doc.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin text-gold" />
-                        ) : (
-                          <Download className="h-3 w-3" />
-                        )}
-                        {downloadingId === doc.id ? 'Downloading...' : 'Download'}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="h-7 w-7" 
-                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="h-7 w-7" 
-                        onClick={(e) => { e.stopPropagation(); doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc); }} 
-                        title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}
-                      >
-                        {doc.status === 'archived' ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <button
+                  key={folder.id}
+                  onClick={() => setSelectedFolder(folder.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
+                    isActive 
+                      ? 'bg-[#12241D] border-[#D4AF37]/40 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]' 
+                      : 'bg-[#0A1612] border-[#1E3A2F] text-slate-400 hover:text-slate-200 hover:bg-[#1E3A2F]/40'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {folder.label}
+                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-slate-800 text-slate-400'}`}>
+                    {count}
+                  </span>
+                </button>
               )
             })}
           </div>
 
-          {filtered.length === 0 && (
-            <div className="text-center py-16 border border-dashed border-[#1E3A2F]/60 rounded-xl bg-[#12241D]/10">
-              <FolderOpen className="h-10 w-10 mx-auto text-slate-600 mb-2" />
-              <p className="text-sm font-semibold text-slate-400">No documents found</p>
-              <p className="text-xs text-slate-500 mt-1">Refine your search parameters or check back later.</p>
-            </div>
-          )}
+          <DataTable
+            data={activeDocs}
+            columns={columns}
+            searchPlaceholder="Search documents by ID, client, title..."
+            searchKeys={['docId', 'client', 'title']}
+            exportFileName="documents_vault"
+            onRowClick={handleOpenDetails}
+            initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+            savedFiltersKey="vault"
+            enableBulkSelect={true}
+            bulkActions={[
+              { label: 'Archive Selected', action: 'archive', icon: Archive },
+              { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 }
+            ]}
+            onBulkAction={handleBulkAction}
+            filterDefs={[
+              {
+                key: 'type',
+                label: 'Doc Type',
+                options: ['Quotation', 'Invoice', 'SOW', 'Agreement', 'PRD', 'Marketing'].map(t => ({ label: t, value: t }))
+              },
+              {
+                key: 'status',
+                label: 'Doc Status',
+                options: ['draft', 'sent', 'paid', 'approved', 'signed', 'archived'].map(s => ({ label: s.toUpperCase(), value: s }))
+              }
+            ]}
+            emptyTitle="No documents found"
+            emptyDescription="Create documents in their respective modules to see them here."
+            emptyIcon={Archive}
+          />
         </>
       )}
 
@@ -1156,7 +1299,7 @@ export default function VaultPage() {
                   <Badge variant="outline" className="text-[10px] border-[#D4AF37]/30 text-[#D4AF37] capitalize">
                     {selectedDoc.status}
                   </Badge>
-                  <Button variant="outline" size="icon" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowDetails(false)}>
+                  <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowDetails(false)}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1164,6 +1307,46 @@ export default function VaultPage() {
 
               {/* Drawer Body */}
               <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                
+                {/* 0. Tags & Quick Actions */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <Tag className="h-3.5 w-3.5 text-slate-500 mr-1" />
+                      {Array.from(new Set([...(selectedDoc.tags || []), ...(customTags[selectedDoc.id] || [])])).map(tag => (
+                        <Badge key={tag} variant="secondary" className="bg-[#12241D] text-emerald-400 hover:bg-[#1E3A2F] border border-emerald-900/30 text-[9px] capitalize pr-1 flex items-center gap-1">
+                          {tag}
+                          <X className="h-3 w-3 cursor-pointer hover:text-white" onClick={() => handleRemoveTag(selectedDoc.id, tag)} />
+                        </Badge>
+                      ))}
+                      <div className="flex items-center gap-1 ml-1 bg-[#0A1612] border border-[#1E3A2F] rounded-full px-2 py-0.5 focus-within:border-[#D4AF37]/50 transition-colors">
+                        <input
+                          type="text"
+                          placeholder="Add tag..."
+                          value={newTag}
+                          onChange={e => setNewTag(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddTag(selectedDoc.id);
+                            }
+                          }}
+                          className="bg-transparent text-[10px] text-white w-16 outline-none placeholder:text-slate-600"
+                        />
+                        <Plus className="h-3 w-3 text-slate-500 cursor-pointer hover:text-[#D4AF37]" onClick={() => handleAddTag(selectedDoc.id)} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-8 text-xs border-[#1E3A2F] text-slate-300 hover:text-white hover:bg-[#1E3A2F]/50 gap-2"
+                    onClick={() => setPreviewDoc(selectedDoc)}
+                  >
+                    <Expand className="h-3.5 w-3.5" /> Open Full Preview
+                  </Button>
+                </div>
+
                 {/* 1. Document Lifecycle Progress Tracker */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">Workflow Status</h3>
@@ -1447,7 +1630,7 @@ export default function VaultPage() {
                   Comparing Version {compVer1} vs. Version {compVer2}
                 </CardDescription>
               </div>
-              <Button variant="outline" size="icon" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowCompare(false)}>
+              <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowCompare(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -1528,6 +1711,73 @@ export default function VaultPage() {
           </Card>
         </div>
       )}
+
+      {/* File Preview Modal Overlay */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-[#07110E] border border-[#1E3A2F] rounded-xl overflow-hidden shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-4 border-b border-[#1E3A2F] bg-[#0A1612]">
+              <div className="flex items-center gap-3">
+                <div className="rounded p-2 bg-emerald-500/10 text-emerald-400">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">{previewDoc.title}</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{previewDoc.docId}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-8 gap-2 bg-[#12241D] text-slate-300 border-[#1E3A2F] hover:text-white" onClick={() => handleDownload(previewDoc)}>
+                  <Download className="h-4 w-4" /> Download PDF
+                </Button>
+                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setPreviewDoc(null)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+            {/* Modal Body / iframe Placeholder */}
+            <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center p-8 relative overflow-hidden">
+              {/* Fake PDF Toolbar */}
+              <div className="absolute top-0 left-0 right-0 h-12 bg-[#2D2D2D] border-b border-[#3D3D3D] flex items-center justify-between px-4 text-xs text-[#9CA3AF]">
+                <div className="flex items-center gap-4">
+                  <span>Page 1 of 4</span>
+                  <div className="w-px h-4 bg-[#4B5563]" />
+                  <span>{previewDoc.amount > 0 ? formatCurrency(previewDoc.amount) : 'Standard'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
+                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
+                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
+                </div>
+              </div>
+              <div className="w-full max-w-2xl bg-white h-full max-h-[600px] mt-12 shadow-2xl rounded-sm p-8 flex flex-col items-center justify-center opacity-80 border border-slate-300">
+                <div className="w-24 h-24 mb-6 rounded-full bg-slate-100 flex items-center justify-center">
+                  <Eye className="h-10 w-10 text-slate-300" />
+                </div>
+                <h4 className="text-xl font-bold text-slate-800 mb-2 font-serif">{previewDoc.title}</h4>
+                <p className="text-slate-500 font-medium mb-6">Generated on {formatDate(previewDoc.date)} for {previewDoc.client}</p>
+                <div className="w-3/4 space-y-4">
+                  <div className="h-3 bg-slate-100 rounded w-full" />
+                  <div className="h-3 bg-slate-100 rounded w-5/6" />
+                  <div className="h-3 bg-slate-100 rounded w-4/6" />
+                </div>
+                <div className="mt-8 px-4 py-2 bg-slate-100 rounded text-slate-500 text-xs font-mono">
+                  Protected Document View
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+export default function VaultPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><div className="h-6 w-6 rounded-full border-2 border-gold/30 border-t-gold animate-spin" /></div>}>
+      <VaultListContent />
+    </Suspense>
   )
 }

@@ -14,7 +14,7 @@ import { PromptViewer } from '@/components/ui/prompt-viewer'
 import { ApprovalBadge } from '@/components/ui/approval-badge'
 import { WorkflowSteps } from '@/components/ui/workflow-steps'
 import { FileUpload } from '@/components/ui/file-upload'
-import { VersionTimeline } from '@/components/ui/version-timeline'
+import { VersionTimeline, UniversalTimeline } from '@/components/ui/version-timeline'
 import {
   Plus, FileCode2, Download, Cpu, Layers, Database, Code, Edit, Trash2,
   History, Loader2, Search, Sparkles, ExternalLink, Eye, FileText, Shield,
@@ -342,9 +342,9 @@ export default function BlueprintEnginePage() {
                 <div className="flex flex-col gap-2 items-end">
                   <ApprovalBadge status={p.approvalStatus || 'draft'} />
                   <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (p.blueprintDetails) setForm(p.blueprintDetails); else setForm({...emptyForm, productName: p.title, techStack: p.stack}); setEditId(p.id) }}><Edit className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openDetail(p)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { if (p.blueprintDetails) setForm(p.blueprintDetails); else setForm({...emptyForm, productName: p.title, techStack: p.stack}); setEditId(p.id) }}><Edit className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               </div>
@@ -489,7 +489,7 @@ export default function BlueprintEnginePage() {
                         <a href={h.downloadUrl || h.file_path} target="_blank" rel="noopener noreferrer" download>
                           <Button 
                             variant="ghost" 
-                            size="icon" 
+                            size="icon" aria-label="Action" 
                             className="h-8 w-8 text-muted-foreground hover:text-gold"
                           >
                             <Download className="h-4 w-4" />
@@ -509,18 +509,23 @@ export default function BlueprintEnginePage() {
                 <ApprovalBadge status={detailPrd?.approvalStatus || 'draft'} size="md" />
               </div>
             </TabsContent>
-            <TabsContent value="activity" className="mt-4">
-              <VersionTimeline 
-                versions={(detailPrd?.history || []).map((h, i) => ({ 
-                  version: i + 1, 
-                  date: h.date, 
-                  action: h.action, 
+             <TabsContent value="activity" className="mt-4">
+              <UniversalTimeline 
+                enableFilters={true}
+                entries={(detailPrd?.history || []).map((h, i) => ({ 
+                  action: h.action,
+                  actionType: h.canDownload ? 'uploaded' : 'updated',
+                  by: h.by || 'System',
+                  date: h.date,
+                  version: i + 1,
                   canDownload: h.canDownload,
-                  downloadUrl: h.downloadUrl || h.file_path
+                  module: 'Requirements',
+                  meta: { downloadUrl: h.downloadUrl || h.file_path || '' }
                 }))}
-                onDownload={(v: any) => {
-                  if (v.downloadUrl) {
-                    window.open(v.downloadUrl, '_blank')
+                onDownload={(e: any) => {
+                  const url = e.meta?.downloadUrl
+                  if (url) {
+                    window.open(url, '_blank')
                   } else {
                     toast({ title: 'No download URL available' })
                   }
@@ -528,18 +533,22 @@ export default function BlueprintEnginePage() {
               />
             </TabsContent>
             <TabsContent value="versions" className="mt-4">
-              <VersionTimeline 
-                versions={(detailPrd?.history || []).filter(h => h.canDownload).map((h, i) => ({ 
-                  version: i + 1, 
-                  date: h.date, 
-                  action: h.action, 
-                  canDownload: true, 
-                  canRestore: false,
-                  downloadUrl: h.downloadUrl || h.file_path
+              <UniversalTimeline 
+                enableFilters={true}
+                entries={(detailPrd?.history || []).filter(h => h.canDownload).map((h, i) => ({ 
+                  action: h.action,
+                  actionType: 'uploaded',
+                  by: h.by || 'System',
+                  date: h.date,
+                  version: i + 1,
+                  canDownload: true,
+                  module: 'Requirements',
+                  meta: { downloadUrl: h.downloadUrl || h.file_path || '' }
                 }))}
-                onDownload={(v: any) => {
-                  if (v.downloadUrl) {
-                    window.open(v.downloadUrl, '_blank')
+                onDownload={(e: any) => {
+                  const url = e.meta?.downloadUrl
+                  if (url) {
+                    window.open(url, '_blank')
                   } else {
                     toast({ title: 'No download URL available' })
                   }
@@ -603,7 +612,7 @@ export default function BlueprintEnginePage() {
                   {type !== 'Web App' && (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon" aria-label="Action"
                       className="h-7 w-7 text-red-400 hover:text-red-400"
                       onClick={() => handleDeleteProjectType(type)}
                       title="Delete Project Type"
@@ -646,7 +655,7 @@ export default function BlueprintEnginePage() {
                   {platform !== 'Web' && (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon" aria-label="Action"
                       className="h-7 w-7 text-red-400 hover:text-red-400"
                       onClick={() => handleDeletePlatform(platform)}
                       title="Delete Platform"

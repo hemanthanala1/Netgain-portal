@@ -18,6 +18,7 @@ import { copyToClipboard, downloadAsTextFile, PROMPT_CATEGORIES } from '@/lib/ai
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useUser } from '@/components/user-provider'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { Prompt } from '@/lib/ai-types'
 import { getCachedData, setCachedData } from '@/lib/data-cache'
 
@@ -211,11 +212,16 @@ export default function PromptLibraryPage() {
 
       {/* Prompts Grid */}
       {filtered.length === 0 ? (
-        <Card className="ai-card"><CardContent className="p-12 text-center">
-          <BookOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm font-medium">No prompts found</p>
-          <p className="text-xs text-muted-foreground mt-1">{isFounder ? 'Create your first reusable prompt.' : 'No prompts available yet.'}</p>
-        </CardContent></Card>
+        <EmptyState
+          icon={BookOpen}
+          title="No AI Prompts Found"
+          description={isFounder ? 'Create your first reusable system prompt template.' : 'No prompts are available in the repository yet.'}
+          action={isFounder ? {
+            label: "Create Prompt",
+            onClick: () => { setForm({ title: '', description: '', content: '', category: 'General', tags: '' }); setShowCreate(true) },
+            icon: Plus
+          } : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(prompt => (
@@ -262,15 +268,15 @@ export default function PromptLibraryPage() {
                   <Button variant="ghost" size="sm" className="h-7 flex-1 text-xs gap-1.5" onClick={() => downloadAsTextFile(prompt.content, `${prompt.title.replace(/\s+/g, '_')}.txt`)}>
                     <Download className="h-3 w-3" />Download
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setPreviewPrompt(prompt)} title="Preview">
+                  <Button variant="ghost" size="icon" aria-label="Preview" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setPreviewPrompt(prompt)} title="Preview">
                     <Eye className="h-3.5 w-3.5" />
                   </Button>
                   {isFounder && (
                     <>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm({ title: prompt.title, description: prompt.description, category: prompt.category, content: prompt.content, tags: prompt.tags?.join(', ') || '' }); setEditPrompt(prompt) }} title="Edit">
+                      <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => { setForm({ title: prompt.title, description: prompt.description, category: prompt.category, content: prompt.content, tags: prompt.tags?.join(', ') || '' }); setEditPrompt(prompt) }} title="Edit">
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(prompt.id)} title="Delete">
+                      <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteId(prompt.id)} title="Delete">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>

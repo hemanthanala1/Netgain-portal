@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Calendar, RefreshCw, ExternalLink, Clock, Video, Mail, Phone, ChevronRight, AlertCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
+import { PageHeader } from '@/components/ui/page-header'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface Meeting {
   id: string
@@ -29,7 +32,7 @@ interface Meeting {
   created_at: string
 }
 
-export default function MeetingsDashboard() {
+function MeetingsListContent() {
   const { toast } = useToast()
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +42,12 @@ export default function MeetingsDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [timeFilter, setTimeFilter] = useState<string>('all') // all, today, week, future
+
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('client')
+    if (q) setSearchQuery(q)
+  }, [searchParams])
 
   const fetchMeetings = useCallback(async () => {
     try {
@@ -195,26 +204,20 @@ export default function MeetingsDashboard() {
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Meetings & Communications</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Centralize your client meetings, sync Google Calendar appointments, and manage multi-channel follow-ups.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncGoogle}
-            disabled={syncing || loading}
-            className="gap-1.5 h-9"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync Calendar'}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Meetings & Communications"
+        description="Centralize your client meetings, sync Google Calendar appointments, and manage multi-channel follow-ups."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Meetings' }
+        ]}
+        primaryAction={{
+          label: syncing ? 'Syncing...' : 'Sync Calendar',
+          onClick: handleSyncGoogle,
+          icon: RefreshCw,
+          disabled: syncing || loading
+        }}
+      />
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -318,10 +321,17 @@ export default function MeetingsDashboard() {
               <span>Loading meetings...</span>
             </div>
           ) : filteredMeetings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-2">
-              <AlertCircle className="h-8 w-8 text-muted-foreground/60" />
-              <p className="font-medium text-sm">No meetings found</p>
-              <p className="text-xs text-muted-foreground/80">Try adjusting your filters or sync Google Calendar.</p>
+            <div className="p-8">
+              <EmptyState
+                icon={Calendar}
+                title="No meetings found"
+                description="Try adjusting your filters or sync Google Calendar to pull your slots."
+                action={{
+                  label: "Sync Calendar",
+                  onClick: handleSyncGoogle,
+                  icon: RefreshCw
+                }}
+              />
             </div>
           ) : (
             <div className="divide-y divide-border/40">
@@ -404,5 +414,13 @@ export default function MeetingsDashboard() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function MeetingsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><div className="h-6 w-6 rounded-full border-2 border-gold/30 border-t-gold animate-spin" /></div>}>
+      <MeetingsListContent />
+    </Suspense>
   )
 }

@@ -32,11 +32,21 @@ export default function LoginPage() {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) {
+          await supabase.from('system_activities').insert({
+            user_name: email || 'unknown',
+            action: `Failed login attempt: ${error.message}`,
+            module: 'auth'
+          })
           toast({ title: 'Login Failed', description: error.message, variant: 'destructive' })
           setLoading(false)
           return
         }
         if (data.session) {
+          await supabase.from('system_activities').insert({
+            user_name: email,
+            action: 'User logged in successfully',
+            module: 'auth'
+          })
           // Set access cookies for middleware
           document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in}`
           document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${data.session.expires_in}`

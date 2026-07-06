@@ -14,12 +14,18 @@ export function formatCurrency(amount: number): string {
 }
 
 
-export function formatDate(date: string | Date): string {
-  return format(new Date(date), 'dd MMM yyyy')
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return 'N/A'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return 'N/A'
+  return format(d, 'dd MMM yyyy')
 }
 
-export function formatDateTime(date: string | Date): string {
-  return format(new Date(date), 'dd MMM yyyy, hh:mm a')
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return 'N/A'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return 'N/A'
+  return format(d, 'dd MMM yyyy, hh:mm a')
 }
 
 export function generateDocId(prefix: string): string {

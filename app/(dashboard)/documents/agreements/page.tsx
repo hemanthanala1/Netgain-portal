@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataTable } from '@/components/ui/data-table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,12 +10,16 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
+import { UniversalTimeline } from '@/components/ui/version-timeline'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
@@ -76,7 +82,7 @@ function blank(companyDocs?: any): Omit<Agreement, 'id' | 'docId' | 'created' | 
   return { client: '', contact: '', phone: '', email: '', type: 'Service Agreement', value: 0, duration: '', services: '', ip: 'All intellectual property created during this engagement transfers to the Client upon receipt of final payment.', cancellation: '30 days written notice required from either party to terminate this agreement.', jurisdiction: 'Hyderabad, Telangana, India', status: 'draft', customTerms: compileDefaultAgreementTerms(companyDocs), items: [] }
 }
 
-export default function AgreementsPage() {
+function AgreementsPageContent() {
   const { user } = useUser()
   const [agreements, setAgreements] = useState<Agreement[]>([])
   const [sourceDocs, setSourceDocs] = useState<any[]>([])
@@ -95,11 +101,11 @@ export default function AgreementsPage() {
   const [companyDocs, setCompanyDocs] = useState<any>(null)
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const clientId = params.get('clientId') || params.get('prefill_client_id')
-    const autoOpen = params.get('autoOpen') || params.get('prefill')
+    const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
+    const autoOpen = searchParams.get('autoOpen') || searchParams.get('prefill')
 
     if (clientId && autoOpen === 'true') {
       const fetchClient = async () => {
@@ -125,7 +131,12 @@ export default function AgreementsPage() {
       }
       fetchClient()
     }
-  }, [agreements])
+  }, [searchParams])
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('client')
+    if (q) setSearch(q)
+  }, [searchParams])
 
   function resetForm(agr?: Agreement | null, docs?: any) {
     if (agr) {
@@ -713,10 +724,21 @@ export default function AgreementsPage() {
   
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">Client Agreements</h1><p className="text-muted-foreground text-sm mt-0.5">Generate legally structured client agreements.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { resetForm(null, companyDocs); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Agreement</Button>
-      </div>
+      <PageHeader
+        title="Client Agreements"
+        description="Generate legally structured client agreements."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Documents', href: '/documents' },
+          { label: 'Client Agreements' }
+        ]}
+        primaryAction={{
+          label: 'New Agreement',
+          onClick: () => { resetForm(null, companyDocs); setShowCreate(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total', v: agreements.length }, { l: 'Signed', v: agreements.filter(a => a.status === 'signed').length }, { l: 'Draft', v: agreements.filter(a => a.status === 'draft').length }, { l: 'Sent', v: agreements.filter(a => a.status === 'sent').length }].map(s => (
@@ -731,7 +753,18 @@ export default function AgreementsPage() {
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border">{['Doc ID','Client','Type','Value','Status','Date','Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
             <tbody>
-              {agreements.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><HandshakeIcon className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No agreements yet</p></td></tr>}
+              {agreements.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-8">
+                    <EmptyState
+                      icon={HandshakeIcon}
+                      title="No agreements found"
+                      description="Create your first client agreement."
+                      action={{ label: 'New Agreement', onClick: () => { resetForm(null, companyDocs); setShowCreate(true) }, icon: Plus }}
+                    />
+                  </td>
+                </tr>
+              )}
               {agreements.filter(a => a.client.toLowerCase().includes(search.toLowerCase())).map(a => (
                 <tr key={a.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${a.status === 'needs revision' ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
                   <td className="py-3 px-4">
@@ -755,7 +788,7 @@ export default function AgreementsPage() {
                       </div>
                     )}
                   </td>
-                  <td className="py-3 px-4"><p className="font-medium">{a.client}</p><p className="text-xs text-muted-foreground">{a.contact}</p></td>
+                  <td className="py-3 px-4"><a href={`/crm?search=${encodeURIComponent(a.client)}`} className="font-medium hover:text-gold transition-colors hover:underline decoration-dotted">{a.client}</a><p className="text-xs text-muted-foreground">{a.contact}</p></td>
                   <td className="py-3 px-4 text-xs text-muted-foreground">{a.type}</td>
                   <td className="py-3 px-4 font-semibold text-gold">{a.value > 0 ? formatCurrency(a.value) : '—'}</td>
                   <td className="py-3 px-4">
@@ -767,20 +800,20 @@ export default function AgreementsPage() {
                   <td className="py-3 px-4 text-xs text-muted-foreground">{formatDate(a.created)}</td>
                   <td className="py-3 px-4">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(a)}><History className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
+                      <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(a)}><History className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
                         {downloadingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs) }}>
+                      <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs) }}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
+                      <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
                         <Globe className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}>
+                      <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}>
                         <Send className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(a.id)}>
+                      <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(a.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -792,9 +825,19 @@ export default function AgreementsPage() {
         </div>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); if (!v) setForm(blank()) }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Generate Client Agreement</DialogTitle></DialogHeader>
+      <Drawer
+        isOpen={showCreate}
+        onClose={() => { setShowCreate(false); setForm(blank()) }}
+        title="Generate Client Agreement"
+        description="Configure client details, agreement type, duration, services covered, and legal clauses."
+        widthClass="max-w-2xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blank()) }}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating...</> : 'Generate Agreement PDF'}</Button>
+          </>
+        }
+      >
           <div className="space-y-5 py-2">
             {!editItem && sourceDocs.length > 0 && (
               <div className="bg-muted/30 p-4 rounded-lg border border-border">
@@ -896,16 +939,21 @@ export default function AgreementsPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blank()) }}>Cancel</Button>
-            <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : 'Generate Agreement PDF'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Drawer>
 
-      <Dialog open={!!editItem} onOpenChange={v => { if (!v) { setEditItem(null); setForm(blank()) } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Agreement — {editItem?.docId}</DialogTitle></DialogHeader>
+      <Drawer
+        isOpen={!!editItem}
+        onClose={() => { setEditItem(null); setForm(blank()) }}
+        title={`Edit Agreement — ${editItem?.docId}`}
+        description="Modify client details, agreement type, duration, services covered, and legal clauses."
+        widthClass="max-w-2xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setEditItem(null); setForm(blank()) }}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleSaveEdit}>Save Changes</Button>
+          </>
+        }
+      >
           <div className="space-y-5 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Agreement Details</p>
@@ -988,19 +1036,17 @@ export default function AgreementsPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditItem(null); setForm(blank()) }}>Cancel</Button>
-            <Button variant="gold" onClick={handleSaveEdit}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Drawer>
 
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Agreement?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete Agreement?"
+        description="This action cannot be undone. This will permanently delete the agreement reference."
+        confirmLabel="Delete Agreement"
+        onConfirm={handleDelete}
+      />
 
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
@@ -1020,27 +1066,16 @@ export default function AgreementsPage() {
                 </div>
               ) : null
             })()}
-            {historyDoc?.history.slice().reverse().map((h, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
-                onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
-              >
-                <div className="flex-1 flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">{h.action}</p>
-                    <p className="text-xs text-muted-foreground">{h.date}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
-                  disabled={downloadingId === historyDoc?.id}
-                  onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
-                  title="Download document version"
-                >
-                  {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-            ))}
+            <UniversalTimeline
+              entries={historyDoc?.history.slice().reverse().map(h => ({
+                action: h.action,
+                by: 'System',
+                date: h.date,
+                canDownload: h.canDownload,
+                module: 'Billing'
+              })) || []}
+              onDownload={() => { if (historyDoc) handleDownload(historyDoc) }}
+            />
           </div>
           <DialogFooter className="border-t border-white/10 pt-3">
             <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
@@ -1166,5 +1201,13 @@ export default function AgreementsPage() {
         onAction={handlePublishAction}
       />
     </div>
+  )
+}
+
+export default function AgreementsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgreementsPageContent />
+    </Suspense>
   )
 }

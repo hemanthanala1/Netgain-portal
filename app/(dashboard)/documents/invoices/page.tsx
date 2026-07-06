@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataTable } from '@/components/ui/data-table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,12 +10,15 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { Search, Plus, Download, Trash2, Pencil, Loader2, Receipt, Send, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
+import { UniversalTimeline } from '@/components/ui/version-timeline'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
@@ -124,7 +129,7 @@ function blankForm(initialDocs?: any) {
   }
 }
 
-export default function InvoicesPage() {
+function InvoicesPageContent() {
   const { user } = useUser()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
@@ -135,9 +140,164 @@ export default function InvoicesPage() {
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
-  const { toast } = useToast()
-  const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  const columns = useMemo(() => [
+    {
+      header: 'Invoice ID',
+      accessor: 'docId',
+      sortable: true,
+      sticky: true,
+      cell: (inv: Invoice) => (
+        <div>
+          <span className="font-mono text-xs text-gold font-bold">{inv.docId}</span>
+          {inv.published ? (
+            <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+              <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${inv.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={inv.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                <Globe className="h-2.5 w-2.5" />
+                {inv.visibility_status === 'hidden' ? 'Hidden' : `V${inv.published_version || 1}`}
+              </span>
+              {inv.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(inv.viewed_at)}`}>Viewed</span>}
+              {inv.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(inv.downloaded_at)}`}>DL</span>}
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Client',
+      accessor: 'client',
+      sortable: true,
+      cell: (inv: Invoice) => (
+        <div>
+          <a href={`/crm?search=${encodeURIComponent(inv.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+            {inv.client}
+          </a>
+          <p className="text-[10px] text-muted-foreground">{inv.contact}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Services',
+      accessor: 'serviceIds',
+      cell: (inv: Invoice) => (
+        <div className="flex gap-1 flex-wrap max-w-[180px]">
+          {servicesData.filter(s => inv.serviceIds?.includes(s.id)).slice(0,2).map(s => (
+            <Badge key={s.id} variant="outline" className="text-[9px]">
+              {s.name.slice(0,18)}
+            </Badge>
+          ))}
+          {inv.serviceIds?.length > 2 && (
+            <Badge variant="outline" className="text-[9px]">
+              +{inv.serviceIds.length-2}
+            </Badge>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Amount',
+      accessor: 'amount',
+      sortable: true,
+      cell: (inv: Invoice) => <span className="font-semibold text-gold text-xs whitespace-nowrap">{formatCurrency(inv.amount)}</span>
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (inv: Invoice) => (
+        <div onClick={e => e.stopPropagation()}>
+          <Select value={inv.status} onValueChange={v => updateStatus(inv.id, v)}>
+            <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(inv.status)}`}><SelectValue /></SelectTrigger>
+            <SelectContent>{STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs">{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )
+    },
+    {
+      header: 'Due Date',
+      accessor: 'due',
+      sortable: true,
+      cell: (inv: Invoice) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(inv.due)}</span>
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (inv: Invoice) => (
+        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(inv)}><History className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}>
+            {downloadingId === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => openEdit(inv)}><Pencil className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${inv.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(inv)}>
+            <Globe className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: inv.id, title: `${inv.docId} - ${inv.client}` })}><Send className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(inv.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+        </div>
+      )
+    }
+  ], [servicesData, downloadingId])
+
+  const handleBulkAction = async (action: string, selectedRows: Invoice[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} invoices?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('invoices').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting invoices', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = invoices.filter(i => !idsSet.has(i.id))
+      setInvoices(updatedList)
+      setCachedData('invoices', { invoices: updatedList, servicesData, paymentSchedules, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Invoices Deleted', description: `${selectedRows.length} invoices have been deleted.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('invoices').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = invoices.map(i => idsSet.has(i.id) ? { ...i, status: newStatus } : i)
+      setInvoices(updatedList)
+      setCachedData('invoices', { invoices: updatedList, servicesData, paymentSchedules, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Status Updated', description: `${selectedRows.length} invoices marked as ${STATUS_LABELS[newStatus] || newStatus}.` })
+      setLoading(false)
+    }
+  }
+  const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
   const [publishDoc, setPublishDoc] = useState<Invoice | null>(null)
@@ -203,11 +363,11 @@ export default function InvoicesPage() {
 
   const [form, setForm] = useState(() => blankForm())
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const clientId = params.get('clientId') || params.get('prefill_client_id')
-    const autoOpen = params.get('autoOpen') || params.get('prefill')
+    const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
+    const autoOpen = searchParams.get('autoOpen') || searchParams.get('prefill')
 
     if (clientId && autoOpen === 'true') {
       const fetchClient = async () => {
@@ -235,7 +395,7 @@ export default function InvoicesPage() {
       }
       fetchClient()
     }
-  }, [invoices])
+  }, [searchParams])
 
   useEffect(() => {
     const cached = getCachedData<{ invoices: Invoice[], servicesData: any[], paymentSchedules?: any[], companyDocs?: any }>('invoices')
@@ -1117,10 +1277,21 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">Invoices</h1><p className="text-muted-foreground text-sm mt-0.5">Create and manage tax invoices for clients.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm(companyDocs)); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Invoice</Button>
-      </div>
+      <PageHeader
+        title="Invoices"
+        description="Create and manage tax invoices for clients."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Documents', href: '/documents' },
+          { label: 'Invoices' }
+        ]}
+        primaryAction={{
+          label: 'New Invoice',
+          onClick: () => { setForm(blankForm(companyDocs)); setShowCreate(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total Billed', v: formatCurrency(totals.total) }, { l: 'Paid', v: formatCurrency(totals.paid), c: 'text-emerald-400' }, { l: 'Pending', v: formatCurrency(totals.pending) }, { l: 'Overdue', v: formatCurrency(totals.overdue), c: 'text-red-400' }].map(s => (
@@ -1128,378 +1299,49 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search invoices..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Status</SelectItem>{STATUS_OPTS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+      <DataTable
+        data={invoices}
+        columns={columns}
+        searchPlaceholder="Search invoices by client or ID..."
+        searchKeys={['client', 'docId']}
+        exportFileName="invoices"
+        initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+        savedFiltersKey="invoices"
+        enableBulkSelect={true}
+        bulkActions={[
+          { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+          { label: 'Mark Paid', action: 'status_paid', icon: Receipt },
+          { label: 'Mark Overdue', action: 'status_overdue', icon: Receipt }
+        ]}
+        onBulkAction={handleBulkAction}
+        filterDefs={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: STATUS_OPTS.map(s => ({ label: STATUS_LABELS[s], value: s }))
+          }
+        ]}
+        emptyTitle="No invoices found"
+        emptyDescription="Create your first invoice or adjust your filters."
+        emptyIcon={Receipt}
+        emptyAction={{ label: 'New Invoice', onClick: () => { setForm(blankForm(companyDocs)); setShowCreate(true) }, icon: Plus }}
+      />
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">{['Invoice ID','Client','Services','Amount','Status','Due Date','Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><Receipt className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No invoices found</p></td></tr>}
-              {filtered.map(inv => (
-                <tr key={inv.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4">
-                    <span className="font-mono text-xs text-gold">{inv.docId}</span>
-                    {inv.published ? (
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
-                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${inv.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={inv.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
-                          <Globe className="h-2.5 w-2.5" />
-                          {inv.visibility_status === 'hidden' ? 'Hidden' : `V${inv.published_version || 1}`}
-                        </span>
-                        {inv.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(inv.viewed_at)}`}>Viewed</span>}
-                        {inv.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(inv.downloaded_at)}`}>DL</span>}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4"><p className="font-medium">{inv.client}</p><p className="text-xs text-muted-foreground">{inv.contact}</p></td>
-                  <td className="py-3 px-4"><div className="flex gap-1 flex-wrap max-w-[180px]">{servicesData.filter(s => inv.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px]">{s.name.slice(0,18)}</Badge>)}{inv.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{inv.serviceIds.length-2}</Badge>}</div></td>
-                  <td className="py-3 px-4 font-semibold text-gold whitespace-nowrap">{formatCurrency(inv.amount)}</td>
-                  <td className="py-3 px-4">
-                    <Select value={inv.status} onValueChange={v => updateStatus(inv.id, v)}>
-                      <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(inv.status)}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>{STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs">{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{formatDate(inv.due)}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(inv)}><History className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Download" onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}>
-                        {downloadingId === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => openEdit(inv)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${inv.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(inv)}>
-                        <Globe className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: inv.id, title: `${inv.docId} - ${inv.client}` })}><Send className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(inv.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Dialog open={showCreate} onOpenChange={v => { setShowCreate(v); setServiceSearch(''); if (!v) setForm(blankForm(companyDocs)) }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Create New Invoice</DialogTitle></DialogHeader>
-          <div className="space-y-6 py-2">
-            <div>
-              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Company Name *</Label>
-                  <ClientAutocomplete
-                    placeholder="Client company"
-                    value={form.client}
-                    onChange={v => setForm({ ...form, client: v })}
-                    onSelect={client => setForm({
-                      ...form,
-                      client: client.business || client.name,
-                      contact: client.name,
-                      email: client.email || '',
-                      phone: client.phone || '',
-                      businessType: client.type || form.businessType,
-                      gst: client.gst || form.gst
-                    })}
-                  />
-                </div>
-                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-                <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                <div className="space-y-1">
-                  <Label>Business Type</Label>
-                  <Input 
-                    value={form.businessType || ''} 
-                    readOnly 
-                    className="bg-muted/50 cursor-not-allowed opacity-80" 
-                    placeholder="Auto-populated from CRM"
-                  />
-                </div>
-                <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-                <div className="space-y-1">
-                  <Label>Due Date *</Label>
-                  <Input type="date" value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} />
-                </div>
-              </div>
-            </div>
-            <div>
-              <LineItemsTable
-                variant="simple"
-                items={form.items || []}
-                onChange={(items) => {
-                  setForm({
-                    ...form,
-                    items,
-                    selectedIds: items.map(i => i.service_id).filter(Boolean) as string[]
-                  })
-                }}
-              />
-            </div>
-
-            {selSvcs.some(s => s.catId === '3') && (
-              <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
-                <p className="text-xs font-semibold text-gold uppercase tracking-wide flex items-center gap-1.5">
-                  💰 Paid Advertising Settings
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Monthly Ad Budget (INR) *</Label>
-                    <Input 
-                      type="number" 
-                      placeholder="e.g. 100000" 
-                      value={form.adBudget || ''} 
-                      onChange={e => {
-                        const val = Number(e.target.value);
-                        setForm({ ...form, adBudget: val });
-                      }} 
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Service Fee Model</Label>
-                    <div className="flex gap-1 bg-muted/40 p-1 rounded-md border border-border">
-                      {[10, 15, 20].map(pct => (
-                        <Button 
-                          key={pct} 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setForm({ ...form, adBudgetOverride: false, adBudgetPct: pct })} 
-                          className={`flex-1 h-7 text-xs ${(!form.adBudgetOverride && form.adBudgetPct === pct) ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
-                        >
-                          {pct}%
-                        </Button>
-                      ))}
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => setForm({ ...form, adBudgetOverride: true })} 
-                        className={`flex-1 h-7 text-xs ${form.adBudgetOverride ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
-                      >
-                        Custom Fee
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {form.adBudgetOverride ? (
-                  <div className="space-y-1 max-w-sm">
-                    <Label>Custom Service Fee (INR)</Label>
-                    <Input 
-                      type="number" 
-                      placeholder="e.g. 15000" 
-                      value={form.adBudgetFixed || ''} 
-                      onChange={e => setForm({ ...form, adBudgetFixed: Number(e.target.value) })} 
-                    />
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">
-                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between border-t border-border/50 pt-3">
-                  <div>
-                    <Label className="text-sm font-medium">Bill Ad Budget through Netgain</Label>
-                    <p className="text-xs text-muted-foreground">Include the ad spend itself in the total payable invoice amount.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, adBudgetBillThrough: !form.adBudgetBillThrough })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${form.adBudgetBillThrough ? 'bg-gold' : 'bg-muted-foreground/30'}`}
-                  >
-                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${form.adBudgetBillThrough ? 'translate-x-4' : 'translate-x-0'}`} />
-                  </button>
-                </div>
-              </div>
-            )}
-            {(form.items?.length ?? 0) > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="col-span-1 sm:col-span-2 space-y-1">
-                    <Label>Discount Type</Label>
-                    <div className="flex bg-muted/30 p-1 rounded-md border border-border">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
-                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Base Subtotal</span>
-                      {hasRange ? (
-                        <div className="flex items-center gap-2">
-                          <Input 
-                            type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
-                            min={totalMinPrice} 
-                            max={totalMaxPrice} 
-                            value={form.customSubtotal ?? computedSubStandard} 
-                            onChange={e => {
-                              const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
-                            }}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            (Range: {formatCurrency(totalMinPrice)} - {formatCurrency(totalMaxPrice)})
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Input 
-                            type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
-                            value={form.customSubtotal ?? computedSubStandard} 
-                            onChange={e => {
-                              const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    {hasRange && (
-                      <div className="pt-1">
-                        <input 
-                          type="range" 
-                          min={totalMinPrice} 
-                          max={totalMaxPrice} 
-                          value={form.customSubtotal ?? computedSubStandard} 
-                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
-                          className="w-full accent-gold bg-[#0b1b15]" 
-                        />
-                      </div>
-                    )}
-                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Ad Spend (Bill-through)</span>
-                        <span>{formatCurrency(form.adBudget)}</span>
-                      </div>
-                    )}
-                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
-                      <div className="flex justify-between font-semibold border-t border-border/50 pt-1">
-                        <span>Subtotal</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                    )}
-                  </div>
-                  {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
-                  {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
-                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
-                    <span>Total Payable</span>
-                    <div className="text-right">
-                      <span>{formatCurrency(invoiceAmount)}</span>
-                      {selectedMilestone && (
-                        <p className="text-[10px] text-muted-foreground font-normal">
-                          ({selectedMilestone.label} - {selectedMilestone.pct}% of {formatCurrency(grandTotal)} project total)
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {paymentSchedules && paymentSchedules.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Schedule Type</Label>
-                    <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v, paymentSchedulePointIndex: 'none' })}>
-                      <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None (Full Payment)</SelectItem>
-                        {paymentSchedules.map(ps => (
-                          <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">Milestone / Installment *</Label>
-                      <Select value={form.paymentSchedulePointIndex} onValueChange={v => setForm({ ...form, paymentSchedulePointIndex: v })}>
-                        <SelectTrigger><SelectValue placeholder="Select milestone..." /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Full Amount (100%)</SelectItem>
-                          {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
-                            <SelectItem key={i} value={String(i)}>{pt.label} ({pt.pct}%)</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-
-                {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
-                  <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
-                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => {
-                      const isSelected = form.paymentSchedulePointIndex === String(i)
-                      return (
-                        <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
-                          <span>{pt.label} ({pt.pct}%)</span>
-                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Terms & Conditions Overrides</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/10 p-3 rounded-lg border border-border/50">
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Payment Instructions</Label>
-                  <Textarea className="resize-none h-16" placeholder="Account Name, Bank, IFSC, UPI ID..." value={form.invoicePaymentInstructions} onChange={e => setForm({ ...form, invoicePaymentInstructions: e.target.value })} />
-                </div>
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Terms & Conditions (One per line)</Label>
-                  <Textarea className="h-32 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
-                </div>
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Footer Text</Label>
-                  <Textarea className="resize-none h-16" placeholder="Company contact details, GST, Address..." value={form.invoiceFooter} onChange={e => setForm({ ...form, invoiceFooter: e.target.value })} />
-                </div>
-                <div className="col-span-1 sm:col-span-2 space-y-1">
-                  <Label>Additional Text</Label>
-                  <Textarea className="resize-none h-16" placeholder="Any extra information..." value={form.invoiceAdditionalText} onChange={e => setForm({ ...form, invoiceAdditionalText: e.target.value })} />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
-            <Button variant="gold" onClick={handleGenerate} disabled={generating || (form.items?.length ?? 0) === 0}>
-              {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />Generating...</> : `Generate Invoice${invoiceAmount > 0 ? ` (${formatCurrency(invoiceAmount)})` : ''}`}
+      <Drawer
+        isOpen={showCreate}
+        onClose={() => { setShowCreate(false); setServiceSearch(''); setForm(blankForm(companyDocs)) }}
+        title="Create New Invoice"
+        description="Configure billing details, items, discounts, GST, and payment schedule."
+        widthClass="max-w-3xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating || (form.items?.length ?? 0) === 0}>
+              {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating...</> : `Generate Invoice${invoiceAmount > 0 ? ` (${formatCurrency(invoiceAmount)})` : ''}`}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editInvoice} onOpenChange={v => { setServiceSearch(''); if (!v) { setEditInvoice(null); setForm(blankForm(companyDocs)) } }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Invoice — {editInvoice?.docId}</DialogTitle></DialogHeader>
+          </>
+        }
+      >
           <div className="space-y-6 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
@@ -1795,27 +1637,329 @@ export default function InvoicesPage() {
 
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditInvoice(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
-            <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
+      </Drawer>
+
+      <Drawer
+        isOpen={!!editInvoice}
+        onClose={() => { setEditInvoice(null); setServiceSearch(''); setForm(blankForm(companyDocs)) }}
+        title={`Edit Invoice — ${editInvoice?.docId}`}
+        description="Modify billing details, items, discounts, GST, and payment schedule."
+        widthClass="max-w-3xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setEditInvoice(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleSaveEdit} disabled={generating} className="gap-2">
               {generating ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+          <div className="space-y-6 py-2">
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Company Name *</Label>
+                  <ClientAutocomplete
+                    placeholder="Client company"
+                    value={form.client}
+                    onChange={v => setForm({ ...form, client: v })}
+                    onSelect={client => setForm({
+                      ...form,
+                      client: client.business || client.name,
+                      contact: client.name,
+                      email: client.email || '',
+                      phone: client.phone || '',
+                      businessType: client.type || form.businessType,
+                      gst: client.gst || form.gst
+                    })}
+                  />
+                </div>
+                <div className="space-y-1"><Label>Contact Person</Label><Input placeholder="Representative" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Business Type</Label>
+                  <Input 
+                    value={form.businessType || ''} 
+                    readOnly 
+                    className="bg-muted/50 cursor-not-allowed opacity-80" 
+                    placeholder="Auto-populated from CRM"
+                  />
+                </div>
+                <div className="space-y-1"><Label>GST Number</Label><Input placeholder="Optional" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
+                <div className="space-y-1">
+                  <Label>Due Date *</Label>
+                  <Input type="date" value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div>
+              <LineItemsTable
+                variant="simple"
+                items={form.items || []}
+                onChange={(items) => {
+                  setForm({
+                    ...form,
+                    items,
+                    selectedIds: items.map(i => i.service_id).filter(Boolean) as string[]
+                  })
+                }}
+              />
+            </div>
 
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Invoice?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            {selSvcs.some(s => s.catId === '3') && (
+              <div className="border border-gold/30 rounded-lg p-4 bg-gold/5 space-y-4">
+                <p className="text-xs font-semibold text-gold uppercase tracking-wide flex items-center gap-1.5">
+                  💰 Paid Advertising Settings
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Monthly Ad Budget (INR) *</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 100000" 
+                      value={form.adBudget || ''} 
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        setForm({ ...form, adBudget: val });
+                      }} 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Service Fee Model</Label>
+                    <div className="flex gap-1 bg-muted/40 p-1 rounded-md border border-border">
+                      {[10, 15, 20].map(pct => (
+                        <Button 
+                          key={pct} 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setForm({ ...form, adBudgetOverride: false, adBudgetPct: pct })} 
+                          className={`flex-1 h-7 text-xs ${(!form.adBudgetOverride && form.adBudgetPct === pct) ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                        >
+                          {pct}%
+                        </Button>
+                      ))}
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setForm({ ...form, adBudgetOverride: true })} 
+                        className={`flex-1 h-7 text-xs ${form.adBudgetOverride ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}
+                      >
+                        Custom Fee
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {form.adBudgetOverride ? (
+                  <div className="space-y-1 max-w-sm">
+                    <Label>Custom Service Fee (INR)</Label>
+                    <Input 
+                      type="number" 
+                      placeholder="e.g. 15000" 
+                      value={form.adBudgetFixed || ''} 
+                      onChange={e => setForm({ ...form, adBudgetFixed: Number(e.target.value) })} 
+                    />
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                  <div>
+                    <Label className="text-sm font-medium">Bill Ad Budget through Netgain</Label>
+                    <p className="text-xs text-muted-foreground">Include the ad spend itself in the total payable invoice amount.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, adBudgetBillThrough: !form.adBudgetBillThrough })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${form.adBudgetBillThrough ? 'bg-gold' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${form.adBudgetBillThrough ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {(form.items?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
+                    <Label>Discount Type</Label>
+                    <div className="flex bg-muted/30 p-1 rounded-md border border-border">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Base Subtotal</span>
+                      {hasRange ? (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            min={totalMinPrice} 
+                            max={totalMaxPrice} 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            (Range: {formatCurrency(totalMinPrice)} - {formatCurrency(totalMaxPrice)})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            type="number" 
+                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              setForm({ ...form, customSubtotal: val })
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {hasRange && (
+                      <div className="pt-1">
+                        <input 
+                          type="range" 
+                          min={totalMinPrice} 
+                          max={totalMaxPrice} 
+                          value={form.customSubtotal ?? computedSubStandard} 
+                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
+                          className="w-full accent-gold bg-[#0b1b15]" 
+                        />
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Ad Spend (Bill-through)</span>
+                        <span>{formatCurrency(form.adBudget)}</span>
+                      </div>
+                    )}
+                    {form.adBudgetBillThrough && (form.adBudget || 0) > 0 && (
+                      <div className="flex justify-between font-semibold border-t border-border/50 pt-1">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                    )}
+                  </div>
+                  {discAmt > 0 && <div className="flex justify-between text-emerald-400"><span>Discount</span><span>−{formatCurrency(discAmt)}</span></div>}
+                  {form.gstPct > 0 && <div className="flex justify-between text-muted-foreground"><span>GST ({form.gstPct}%)</span><span>+{formatCurrency(gstAmt)}</span></div>}
+                  <div className="flex justify-between font-bold text-gold border-t border-border pt-2 text-base">
+                    <span>Total Payable</span>
+                    <div className="text-right">
+                      <span>{formatCurrency(invoiceAmount)}</span>
+                      {selectedMilestone && (
+                        <p className="text-[10px] text-muted-foreground font-normal">
+                          ({selectedMilestone.label} - {selectedMilestone.pct}% of {formatCurrency(grandTotal)} project total)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {paymentSchedules && paymentSchedules.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Payment Schedule</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Schedule Type</Label>
+                    <Select value={form.paymentScheduleId} onValueChange={v => setForm({ ...form, paymentScheduleId: v, paymentSchedulePointIndex: 'none' })}>
+                      <SelectTrigger><SelectValue placeholder="Select a payment schedule..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (Full Payment)</SelectItem>
+                        {paymentSchedules.map(ps => (
+                          <SelectItem key={ps.id} value={ps.id}>{ps.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Milestone / Installment *</Label>
+                      <Select value={form.paymentSchedulePointIndex} onValueChange={v => setForm({ ...form, paymentSchedulePointIndex: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select milestone..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Full Amount (100%)</SelectItem>
+                          {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
+                            <SelectItem key={i} value={String(i)}>{pt.label} ({pt.pct}%)</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {form.paymentScheduleId && form.paymentScheduleId !== 'none' && paymentSchedules.find(p => p.id === form.paymentScheduleId) && (
+                  <div className="mt-3 space-y-2 border border-border/50 rounded-lg p-3 bg-muted/10">
+                    {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => {
+                      const isSelected = form.paymentSchedulePointIndex === String(i)
+                      return (
+                        <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
+                          <span>{pt.label} ({pt.pct}%)</span>
+                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Terms & Conditions Overrides</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/10 p-3 rounded-lg border border-border/50">
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Payment Instructions</Label>
+                  <Textarea className="resize-none h-16" placeholder="Account Name, Bank, IFSC, UPI ID..." value={form.invoicePaymentInstructions} onChange={e => setForm({ ...form, invoicePaymentInstructions: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Terms & Conditions (One per line)</Label>
+                  <Textarea className="h-32 font-mono text-xs" placeholder="Enter each term on a new line..." value={form.customTerms} onChange={e => setForm({ ...form, customTerms: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Footer Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Company contact details, GST, Address..." value={form.invoiceFooter} onChange={e => setForm({ ...form, invoiceFooter: e.target.value })} />
+                </div>
+                <div className="col-span-1 sm:col-span-2 space-y-1">
+                  <Label>Additional Text</Label>
+                  <Textarea className="resize-none h-16" placeholder="Any extra information..." value={form.invoiceAdditionalText} onChange={e => setForm({ ...form, invoiceAdditionalText: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+          </div>
+      </Drawer>
+
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete Invoice?"
+        description="This action cannot be undone. This will permanently delete the invoice reference."
+        confirmLabel="Delete Invoice"
+        onConfirm={handleDelete}
+      />
 
       {/* Manage Business Types Dialog */}
       <Dialog open={showManageBusinessTypes} onOpenChange={setShowManageBusinessTypes}>
@@ -1891,28 +2035,17 @@ export default function InvoicesPage() {
             <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
-          <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
-            {historyDoc?.history.slice().reverse().map((h, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
-                onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
-              >
-                <div className="flex-1 flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">{h.action}</p>
-                    <p className="text-xs text-muted-foreground">{h.date}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
-                  disabled={downloadingId === historyDoc?.id}
-                  onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
-                  title="Download document version"
-                >
-                  {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-            ))}
+          <div className="py-4 max-h-[50vh] overflow-y-auto">
+            <UniversalTimeline
+              entries={historyDoc?.history.slice().reverse().map(h => ({
+                action: h.action,
+                by: 'System',
+                date: h.date,
+                canDownload: h.canDownload,
+                module: 'Billing'
+              })) || []}
+              onDownload={() => { if (historyDoc) handleDownload(historyDoc) }}
+            />
           </div>
           <DialogFooter className="border-t border-white/10 pt-3">
             <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
@@ -2140,5 +2273,13 @@ export default function InvoicesPage() {
         onAction={handlePublishAction}
       />
     </div>
+  )
+}
+
+export default function InvoicesPage() {
+  return (
+    <Suspense fallback={null}>
+      <InvoicesPageContent />
+    </Suspense>
   )
 }

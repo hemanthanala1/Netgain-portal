@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit, Loader2, KeyRound, UserCheck, UserX, Copy, ExternalLink, ShieldCheck, MonitorSmartphone, Trash2, History } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Building2, Globe, MapPin, Calendar, FileText, Receipt, MessageSquare, ClipboardList, Edit, Loader2, KeyRound, UserCheck, UserX, Copy, ExternalLink, ShieldCheck, MonitorSmartphone, Trash2, History, Briefcase, LifeBuoy, FolderOpen, Activity, Paperclip, CheckCircle2, AlertCircle, Download, Printer, RotateCcw, Zap, Search, Plus, ChevronDown, Clock, Lock, Unlock, Send } from 'lucide-react'
 import Link from 'next/link'
 import { getInitials, formatDate, formatCurrency, getLeadStatusColor } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -17,6 +17,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { invalidateCache } from '@/lib/data-cache'
+import { ShareDialog } from '@/components/ui/share-dialog'
+import { PublishDialog } from '@/components/ui/publish-dialog'
+import { UniversalTimeline } from '@/components/ui/version-timeline'
 
 const LEAD_STATUSES = ['new', 'contacted', 'proposal_sent', 'quotation_sent', 'negotiation', 'won', 'lost', 'active']
 const statusLabels: Record<string, string> = {
@@ -65,6 +68,15 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [historyNoteId, setHistoryNoteId] = useState<string | null>(null)
   const [noteHistory, setNoteHistory] = useState<any[]>([])
   const [loadingNoteHistory, setLoadingNoteHistory] = useState(false)
+
+  // New tab state variables
+  const [clientProjects, setClientProjects] = useState<any[]>([])
+  const [clientRequirements, setClientRequirements] = useState<any[]>([])
+  const [clientFiles, setClientFiles] = useState<any[]>([])
+  const [clientSupport, setClientSupport] = useState<any[]>([])
+  const [docTimeline, setDocTimeline] = useState<any[]>([])
+  const [loadingTimeline, setLoadingTimeline] = useState(false)
+  const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
 
   const fetchNoteHistory = async (noteId: string) => {
     setHistoryNoteId(noteId)
@@ -182,34 +194,58 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   }
 
   async function fetchDocumentsAndMeetings(clientInfo: any) {
-    if (!isSupabaseConfigured() || !clientInfo) return
+    if (!clientInfo) return
     try {
-      const { data: quotes } = await supabase.from('quotations').select('*')
-      const filteredQuotes = quotes?.filter(q => q.client === clientInfo.name || q.client === clientInfo.business) || []
-      const { data: invs } = await supabase.from('invoices').select('*')
-      const filteredInvs = invs?.filter(i => i.client === clientInfo.name || i.client === clientInfo.business) || []
-      const { data: sws } = await supabase.from('sows').select('*')
-      const filteredSws = sws?.filter(s => s.client === clientInfo.name || s.client === clientInfo.business || s.project?.includes(clientInfo.business)) || []
-      const { data: agrs } = await supabase.from('agreements').select('*')
-      const filteredAgrs = agrs?.filter(a => a.client === clientInfo.name || a.client === clientInfo.business) || []
+      const [quotes, invs, sws, agrs, projs, meets, support] = await Promise.all([
+        isSupabaseConfigured() ? supabase.from('quotations').select('*') : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() ? supabase.from('invoices').select('*') : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() ? supabase.from('sows').select('*') : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() ? supabase.from('agreements').select('*') : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() ? supabase.from('projects').select('*') : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() && clientInfo.email ? supabase.from('meetings').select('*').eq('client_email', clientInfo.email).order('meeting_date', { ascending: false }) : Promise.resolve({ data: [] }),
+        isSupabaseConfigured() ? supabase.from('client_notifications').select('*').or(`client_id.eq."${clientInfo.business}",client_id.eq."${clientInfo.email}",client_id.eq."${clientInfo.id}"`).order('created_at', { ascending: false }) : Promise.resolve({ data: [] })
+      ])
+
+      const filteredQuotes = quotes.data?.filter((q: any) => q.client === clientInfo.name || q.client === clientInfo.business) || []
+      const filteredInvs = invs.data?.filter((i: any) => i.client === clientInfo.name || i.client === clientInfo.business) || []
+      const filteredSws = sws.data?.filter((s: any) => s.client === clientInfo.name || s.client === clientInfo.business || s.project?.includes(clientInfo.business)) || []
+      const filteredAgrs = agrs.data?.filter((a: any) => a.client === clientInfo.name || a.client === clientInfo.business) || []
 
       const allDocs: any[] = [
-        ...filteredQuotes.map(q => ({ id: q.id, doc_id: q.doc_id, type: 'Quotation', amount: q.amount, status: q.status, date: q.created || q.created_at?.slice(0, 10) })),
-        ...filteredInvs.map(i => ({ id: i.id, doc_id: i.doc_id, type: 'Invoice', amount: i.amount, status: i.status, date: i.created || i.created_at?.slice(0, 10) })),
-        ...filteredSws.map(s => ({ id: s.id, doc_id: s.doc_id, type: 'SOW', amount: s.value, status: s.status, date: s.created || s.created_at?.slice(0, 10) })),
-        ...filteredAgrs.map(a => ({ id: a.id, doc_id: a.doc_id, type: 'Agreement', amount: a.value, status: a.status, date: a.created || a.created_at?.slice(0, 10) }))
+        ...filteredQuotes.map((q: any) => ({ ...q, type: 'Quotation', date: q.created || q.created_at?.slice(0, 10) })),
+        ...filteredInvs.map((i: any) => ({ ...i, type: 'Invoice', date: i.created || i.created_at?.slice(0, 10) })),
+        ...filteredSws.map((s: any) => ({ ...s, type: 'SOW', amount: s.value, date: s.created || s.created_at?.slice(0, 10) })),
+        ...filteredAgrs.map((a: any) => ({ ...a, type: 'Agreement', amount: a.value, date: a.created || a.created_at?.slice(0, 10) }))
       ]
       setDocuments(allDocs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
 
-      if (clientInfo.email) {
-        const { data: meets } = await supabase
-          .from('meetings').select('*')
-          .eq('client_email', clientInfo.email)
-          .order('meeting_date', { ascending: false })
-        if (meets) setMeetings(meets)
+      if (meets.data) setMeetings(meets.data)
+      if (support.data) setClientSupport(support.data)
+
+      const filteredProjs = projs.data?.filter((p: any) => p.client?.toLowerCase().trim() === clientInfo.business?.toLowerCase().trim() || p.client?.toLowerCase().trim() === clientInfo.name?.toLowerCase().trim()) || []
+      const mappedProjs = filteredProjs.map((p: any) => {
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], startDate: p.created, pm: 'Strategy Team', currentStage: '', sprintGoal: '', prompt: '', approvalStatus: 'draft', businessDetails: undefined }
+        if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
+        return {
+          id: p.id, title: p.title, client: p.client, type: extra.type, budget: Number(extra.budget) || 0, spent: Number(extra.spent) || 0, timeline: extra.timeline, status: p.status, progress: Number(extra.progress) || 0, milestones: Array.isArray(extra.milestones) ? extra.milestones : [], startDate: extra.startDate || p.created, pm: extra.pm, currentStage: extra.currentStage || '', sprintGoal: extra.sprintGoal || '', history: Array.isArray(p.history) ? p.history : [], prompt: extra.prompt || '', approvalStatus: extra.approvalStatus || 'draft', businessDetails: extra.businessDetails || undefined
+        }
+      })
+      setClientProjects(mappedProjs)
+
+      if (filteredProjs.length > 0) {
+        const projIds = filteredProjs.map((p: any) => p.id)
+        const [reqs, files] = await Promise.all([
+          isSupabaseConfigured() ? supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
+          isSupabaseConfigured() ? supabase.from('project_files').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }) : Promise.resolve({ data: [] })
+        ])
+        if (reqs.data) setClientRequirements(reqs.data)
+        if (files.data) setClientFiles(files.data)
+      } else {
+        setClientRequirements([])
+        setClientFiles([])
       }
     } catch (err) {
-      console.error('Error fetching documents/meetings:', err)
+      console.error('Error fetching documents/meetings/projects:', err)
     }
   }
 
@@ -311,7 +347,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           .subscribe()
       }
 
-      const tables = ['quotations', 'invoices', 'sows', 'agreements']
+      const tables = ['quotations', 'invoices', 'sows', 'agreements', 'projects', 'project_requirements', 'project_files', 'client_notifications']
       tables.forEach(table => {
         const channel = supabase.channel(`crm_docs_${table}_${params.id}`)
           .on('postgres_changes', { event: '*', schema: 'public', table }, () => { if (active) fetchDocumentsAndMeetings(client) })
@@ -409,28 +445,47 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setPreviewDoc(doc)
     setVersions([])
     setLoadingVersions(true)
+    setDocTimeline([])
+    setLoadingTimeline(true)
+
     if (isSupabaseConfigured()) {
       try {
-        const res = await fetch('/api/document-actions', {
+        const resVersions = await fetch('/api/document-actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'get_versions', id: doc.id, type: doc.type })
         })
-        if (res.ok) {
-          const data = await res.json()
+        if (resVersions.ok) {
+          const data = await resVersions.json()
           if (data && data.versions) {
             setVersions(data.versions)
           }
         }
+
+        const resTimeline = await fetch('/api/document-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_timeline', id: doc.id, type: doc.type })
+        })
+        if (resTimeline.ok) {
+          const data = await resTimeline.json()
+          if (data && data.timeline) {
+            setDocTimeline(data.timeline)
+          }
+        }
       } catch (err) {
-        console.error('Error fetching versions:', err)
+        console.error('Error fetching document preview details:', err)
       }
     } else {
       setVersions([
         { version: 1, created_at: new Date().toISOString(), created_by: 'Staff Member', action: 'Created initial draft' }
       ])
+      setDocTimeline([
+        { action: 'Document Created', date: new Date().toISOString(), user_name: 'Staff Member' }
+      ])
     }
     setLoadingVersions(false)
+    setLoadingTimeline(false)
   }
 
   const handleAddActivity = async () => {
@@ -517,7 +572,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/crm"><Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <Link href="/crm"><Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 shrink-0"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{client.business}</h1>
@@ -582,6 +637,35 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             </CardContent>
           </Card>
 
+          {/* Related Records Links */}
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5 text-gold"><ExternalLink className="h-4 w-4" /> Related Records</h3>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <Link href={`/projects?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
+                  <Briefcase className="h-3.5 w-3.5 text-gold" />
+                  <span>Projects</span>
+                </Link>
+                <Link href={`/documents/invoices?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
+                  <Receipt className="h-3.5 w-3.5 text-gold" />
+                  <span>Invoices</span>
+                </Link>
+                <Link href={`/meetings?client=${encodeURIComponent(client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
+                  <Calendar className="h-3.5 w-3.5 text-gold" />
+                  <span>Meetings</span>
+                </Link>
+                <Link href={`/support?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
+                  <LifeBuoy className="h-3.5 w-3.5 text-gold" />
+                  <span>Support</span>
+                </Link>
+                <Link href={`/documents/vault?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors col-span-2 justify-center">
+                  <FolderOpen className="h-3.5 w-3.5 text-gold" />
+                  <span>Files & Documents (Vault)</span>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Portal Access Card — Founder & Admin only */}
           {isPrivileged && (
             <Card className="border-[#1E3A2F]/60">
@@ -622,14 +706,14 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       <div className="flex-1 bg-muted/40 rounded-lg px-3 py-2 text-xs font-mono truncate text-muted-foreground">
                         /client/login
                       </div>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => {
+                      <Button size="icon" aria-label="Action" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => {
                         navigator.clipboard.writeText(portalUrl)
                         toast({ title: 'Link Copied!', description: 'Portal login URL copied to clipboard.' })
                       }}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <Link href="/client/login" target="_blank">
-                        <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0">
+                        <Button size="icon" aria-label="Action" variant="ghost" className="h-8 w-8 shrink-0">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
                       </Link>
@@ -670,13 +754,360 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         </div>
 
         <div className="lg:col-span-2">
-          <Tabs defaultValue="timeline">
-            <TabsList><TabsTrigger value="timeline">Timeline</TabsTrigger><TabsTrigger value="documents">Documents</TabsTrigger><TabsTrigger value="notes">Notes</TabsTrigger></TabsList>
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="flex flex-wrap gap-1 bg-muted/40 p-1 mb-6 h-auto w-full justify-start border border-border/40 rounded-xl">
+              <TabsTrigger value="overview" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Overview</TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Documents</TabsTrigger>
+              <TabsTrigger value="projects" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Projects</TabsTrigger>
+              <TabsTrigger value="meetings" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Meetings</TabsTrigger>
+              <TabsTrigger value="invoices" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Invoices</TabsTrigger>
+              <TabsTrigger value="quotations" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Quotations</TabsTrigger>
+              <TabsTrigger value="agreements" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Agreements</TabsTrigger>
+              <TabsTrigger value="files" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Files</TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Notes</TabsTrigger>
+              <TabsTrigger value="timeline" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Activity</TabsTrigger>
+              <TabsTrigger value="support" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Support</TabsTrigger>
+              <TabsTrigger value="requirements" className="text-xs py-1.5 px-3 rounded-lg data-[state=active]:bg-background data-[state=active]:text-gold">Requirements</TabsTrigger>
+            </TabsList>
 
-            <TabsContent value="timeline" className="space-y-3 mt-4">
+            {/* 1. Overview Tab */}
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold text-gold flex items-center gap-1.5"><MapPin className="h-4 w-4" />Address</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    {client.address ? (
+                      <div className="space-y-2">
+                        <p className="text-muted-foreground whitespace-pre-wrap">{client.address}</p>
+                        {client.city && <p className="text-muted-foreground"><span className="font-medium text-foreground">City:</span> {client.city}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground italic">No address provided.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gold">Tax & Financial Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm">
+                  <div>
+                    <span className="text-muted-foreground block text-xs">GSTIN Status</span>
+                    <span className="font-mono font-medium">{client.gst || 'Not Registered'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Actions Panel */}
+              <Card className="border border-gold/20 bg-gold/[0.02]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gold flex items-center gap-1.5"><Zap className="h-4 w-4 text-gold" />Quick Document & Project Generators</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground mb-4">Instantly generate client paperwork pre-filled with company details, active contacts, and TAX settings.</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline" className="min-w-[160px] flex-1 sm:flex-initial border-gold/30 hover:border-gold hover:bg-gold/10 text-xs h-9 justify-start gap-1.5 text-left" onClick={() => window.location.href = `/documents/quotations?clientId=${client.id}&autoOpen=true`}>
+                      <Plus className="h-3.5 w-3.5" />New Quotation
+                    </Button>
+                    <Button variant="outline" className="min-w-[160px] flex-1 sm:flex-initial border-gold/30 hover:border-gold hover:bg-gold/10 text-xs h-9 justify-start gap-1.5 text-left" onClick={() => window.location.href = `/documents/invoices?clientId=${client.id}&autoOpen=true`}>
+                      <Plus className="h-3.5 w-3.5" />New Invoice
+                    </Button>
+                    <Button variant="outline" className="min-w-[160px] flex-1 sm:flex-initial border-gold/30 hover:border-gold hover:bg-gold/10 text-xs h-9 justify-start gap-1.5 text-left" onClick={() => window.location.href = `/documents/sow?clientId=${client.id}&autoOpen=true`}>
+                      <Plus className="h-3.5 w-3.5" />New SOW
+                    </Button>
+                    <Button variant="outline" className="min-w-[160px] flex-1 sm:flex-initial border-gold/30 hover:border-gold hover:bg-gold/10 text-xs h-9 justify-start gap-1.5 text-left" onClick={() => window.location.href = `/documents/agreements?clientId=${client.id}&autoOpen=true`}>
+                      <Plus className="h-3.5 w-3.5" />New Agreement
+                    </Button>
+                    <Button variant="outline" className="min-w-[160px] flex-1 sm:flex-initial border-gold/30 hover:border-gold hover:bg-gold/10 text-xs h-9 justify-start gap-1.5 text-left" onClick={() => window.location.href = `/projects?clientId=${client.id}&autoOpen=true`}>
+                      <Plus className="h-3.5 w-3.5" />New Project
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 2. Documents Tab */}
+            <TabsContent value="documents">
+              {documents.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No documents generated yet.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {documents.map((d, i) => (
+                    <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0"><FileText className="h-5 w-5" /></div>
+                          <div><h4 className="font-semibold text-sm">{d.doc_id}</h4><p className="text-xs text-muted-foreground">{d.type} · {formatDate(d.date)}</p></div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
+                          <Badge variant={d.status === 'paid' || d.status === 'signed' || d.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
+                          <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 3. Projects Tab */}
+            <TabsContent value="projects">
+              {clientProjects.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No active projects found for this client.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {clientProjects.map((p) => (
+                    <Card key={p.id} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-5 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-bold text-base text-foreground">{p.title}</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">PM: {p.pm || 'Unassigned'} · Tech: {p.stack || 'General'}</p>
+                          </div>
+                          <Badge className="capitalize">{p.status}</Badge>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Project Progress</span>
+                            <span>{p.progress || 0}%</span>
+                          </div>
+                          <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
+                            <div className="bg-gold h-full rounded-full transition-all" style={{ width: `${p.progress || 0}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs border-t border-border/40 pt-3">
+                          <div>
+                            <span className="text-muted-foreground block">Total Budget</span>
+                            <span className="font-semibold text-gold">{formatCurrency(p.budget)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block">Spent Budget</span>
+                            <span className="font-semibold text-muted-foreground">{formatCurrency(p.spent)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block">Timeline</span>
+                            <span className="font-medium text-foreground">{p.timeline}</span>
+                          </div>
+                          <Button variant="outline" size="sm" className="h-8 text-xs self-center" onClick={() => window.location.href = `/projects?projectId=${p.id}`}>
+                            Workspace <ExternalLink className="h-3 w-3 ml-1" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 4. Meetings Tab */}
+            <TabsContent value="meetings">
+              {meetings.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No meetings scheduled.</CardContent></Card>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs font-semibold text-muted-foreground uppercase">
+                        <th className="py-2 px-3">Date</th>
+                        <th className="py-2 px-3">Time</th>
+                        <th className="py-2 px-3">Topic / Event</th>
+                        <th className="py-2 px-3">Duration</th>
+                        <th className="py-2 px-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {meetings.map((m, idx) => (
+                        <tr key={m.id || idx} className="border-b border-border/50 hover:bg-muted/10">
+                          <td className="py-3 px-3 font-medium">{m.meeting_date}</td>
+                          <td className="py-3 px-3 font-mono text-xs">{m.meeting_time || 'N/A'}</td>
+                          <td className="py-3 px-3">
+                            <p className="font-semibold">{m.event_type || 'General Sync'}</p>
+                            {m.notes && <p className="text-xs text-muted-foreground mt-0.5">{m.notes}</p>}
+                          </td>
+                          <td className="py-3 px-3 text-xs text-muted-foreground">{m.duration || '30 mins'}</td>
+                          <td className="py-3 px-3">
+                            <Badge variant="outline" className="capitalize text-[10px]">{m.status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 5. Invoices Tab */}
+            <TabsContent value="invoices">
+              {documents.filter(d => d.type === 'Invoice').length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No invoices found for this client.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {documents.filter(d => d.type === 'Invoice').map((d, i) => (
+                    <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0"><Receipt className="h-5 w-5" /></div>
+                          <div><h4 className="font-semibold text-sm">{d.doc_id}</h4><p className="text-xs text-muted-foreground">Due: {d.due || 'N/A'} · Created: {formatDate(d.date)}</p></div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
+                          <Badge variant={d.status === 'paid' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
+                          <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 6. Quotations Tab */}
+            <TabsContent value="quotations">
+              {documents.filter(d => d.type === 'Quotation').length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No quotations found for this client.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {documents.filter(d => d.type === 'Quotation').map((d, i) => (
+                    <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0"><FileText className="h-5 w-5" /></div>
+                          <div><h4 className="font-semibold text-sm">{d.doc_id}</h4><p className="text-xs text-muted-foreground">Validity: {d.valid || d.validityDays || '14'} Days · Created: {formatDate(d.date)}</p></div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
+                          <Badge variant={d.status === 'approved' || d.status === 'signed' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
+                          <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 7. Agreements Tab */}
+            <TabsContent value="agreements">
+              {documents.filter(d => d.type === 'Agreement' || d.type === 'SOW').length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No agreements or SOWs generated yet.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {documents.filter(d => d.type === 'Agreement' || d.type === 'SOW').map((d, i) => (
+                    <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0"><ClipboardList className="h-5 w-5" /></div>
+                          <div><h4 className="font-semibold text-sm">{d.doc_id}</h4><p className="text-xs text-muted-foreground">{d.type} · Created: {formatDate(d.date)}</p></div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
+                          <Badge variant={d.status === 'signed' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
+                          <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 8. Files Tab */}
+            <TabsContent value="files">
+              {clientFiles.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No uploaded files for this client.</CardContent></Card>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-xs text-muted-foreground font-semibold uppercase">
+                        <th className="py-2 px-3">File Name</th>
+                        <th className="py-2 px-3">Category</th>
+                        <th className="py-2 px-3">Version</th>
+                        <th className="py-2 px-3">Uploaded</th>
+                        <th className="py-2 px-3">Visibility</th>
+                        <th className="py-2 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientFiles.map((file, idx) => (
+                        <tr key={file.id || idx} className="border-b border-border/40 hover:bg-muted/10 text-xs">
+                          <td className="py-3 px-3 font-semibold text-foreground flex items-center gap-2"><Paperclip className="h-3.5 w-3.5 text-gold shrink-0" />{file.file_name}</td>
+                          <td className="py-3 px-3 text-muted-foreground">{file.category}</td>
+                          <td className="py-3 px-3 font-mono">v{file.version || '1'}</td>
+                          <td className="py-3 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
+                          <td className="py-3 px-3"><Badge variant="outline" className="text-[9px]">{file.visibility}</Badge></td>
+                          <td className="py-3 px-3 text-right">
+                            {file.file_path && (
+                              <a href={file.file_path} target="_blank" rel="noreferrer">
+                                <Button variant="ghost" size="icon" aria-label="Download" className="h-6 w-6"><Download className="h-3 w-3" /></Button>
+                              </a>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* 9. Notes Tab */}
+            <TabsContent value="notes" className="space-y-4">
+              <div className="space-y-3">
+                <Textarea placeholder="Type a new client note here..." value={newNote} onChange={e => setNewNote(e.target.value)} className="min-h-[100px] resize-none" />
+                <Button variant="gold" onClick={handleAddNote} disabled={submitting || !newNote.trim()}>Add Note</Button>
+              </div>
+              <div className="space-y-3 mt-6">
+                <h4 className="text-sm font-semibold text-gold">Previous Notes</h4>
+                {notes.length === 0 ? (
+                  <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No notes yet.</CardContent></Card>
+                ) : (
+                  <div className="space-y-3">
+                    {notes.map((n, i) => (
+                      <Card key={n.id || i}>
+                        <CardContent className="p-4 space-y-1">
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <div className="flex flex-col sm:flex-row sm:gap-2">
+                              <span>Added by {n.author}</span>
+                              <span className="hidden sm:inline">·</span>
+                              <span>{formatDate(n.created_at)}</span>
+                              {n.last_modified && n.last_modified !== n.created_at && (
+                                <span className="text-muted-foreground/75 italic">
+                                  (Edited: {formatDate(n.last_modified)})
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" aria-label="View Edit History" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => fetchNoteHistory(n.id)} title="View Edit History">
+                                <History className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" aria-label="Action" className="h-6 w-6 text-blue-400 hover:text-blue-300" onClick={() => { setEditingNoteId(n.id); setEditNoteContent(n.content) }}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" aria-label="Action" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => setDeletingNoteId(n.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed mt-1 text-foreground/90">{n.content}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* 10. Activity Tab */}
+            <TabsContent value="timeline" className="space-y-3">
               <Card className="mb-4">
                 <CardContent className="p-4 space-y-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Log Activity</h4>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gold flex items-center gap-1.5"><Activity className="h-4 w-4" />Log Activity Log</h4>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Select value={newActivityType} onValueChange={setNewActivityType}>
                       <SelectTrigger className="w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
@@ -696,116 +1127,88 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 </CardContent>
               </Card>
 
-              <div className="mt-6 space-y-1">
-                {getTimelineItems().length === 0 ? (
-                  <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No activities recorded yet.</CardContent></Card>
-                ) : (
-                  getTimelineItems().map((t, i) => (
-                    <div key={i} className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className="h-7 w-7 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">{getTimelineIcon(t.type)}</div>
-                        {i < getTimelineItems().length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
-                      </div>
-                      <div className="pb-6 flex-1 pt-1">
-                        <p className="text-sm font-medium">{t.event}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(t.date)}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="mt-6">
+                <UniversalTimeline
+                  enableFilters={true}
+                  entries={getTimelineItems().map(t => {
+                    let actionType: any = 'custom'
+                    if (t.type === 'new') actionType = 'created'
+                    else if (t.type === 'email') actionType = 'sent'
+                    else if (t.type === 'note') actionType = 'note'
+                    else if (['quotation', 'invoice', 'sow', 'agreement'].includes(t.type)) actionType = 'created'
+
+                    let linkedRecord = undefined
+                    if (['quotation', 'invoice', 'sow', 'agreement'].includes(t.type)) {
+                      const typePath = t.type === 'sow' ? 'sow' : t.type === 'invoice' ? 'invoices' : t.type === 'quotation' ? 'quotations' : 'agreements'
+                      linkedRecord = { label: `View Document`, href: `/documents/${typePath}` }
+                    } else if (t.type === 'meeting') {
+                      linkedRecord = { label: `View Meetings`, href: `/meetings` }
+                    }
+
+                    return {
+                      action: t.event,
+                      actionType,
+                      date: t.date,
+                      by: t.type === 'note' ? 'Staff Member' : undefined,
+                      linkedRecord,
+                      module: 'CRM'
+                    }
+                  })}
+                />
               </div>
             </TabsContent>
 
-            <TabsContent value="documents" className="mt-4">
-              {documents.length === 0 ? (
-                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No documents yet. Generate a quotation or invoice to see them here.</CardContent></Card>
+            {/* 11. Support Tab */}
+            <TabsContent value="support">
+              {clientSupport.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No support tickets reported.</CardContent></Card>
               ) : (
                 <div className="grid grid-cols-1 gap-3">
-                  {documents.map((d, i) => {
-                    const docLink = d.type === 'Quotation' ? '/documents/quotations' : d.type === 'Invoice' ? '/documents/invoices' : d.type === 'SOW' ? '/documents/sow' : '/documents/agreements'
-                    return (
-                      <Card key={d.id || i} className="hover:border-gold/30 transition-colors">
-                        <CardContent className="p-4 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-gold/10 text-gold rounded-lg shrink-0"><FileText className="h-5 w-5" /></div>
-                            <div><h4 className="font-semibold text-sm">{d.doc_id}</h4><p className="text-xs text-muted-foreground">{d.type} · {formatDate(d.date)}</p></div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-gold">{formatCurrency(d.amount)}</span>
-                            <Badge variant={d.status === 'paid' || d.status === 'signed' || d.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">{d.status}</Badge>
-                            <Button variant="ghost" size="sm" className="h-8" onClick={() => handlePreviewDoc(d)}>View</Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+                  {clientSupport.map((ticket, i) => (
+                    <Card key={ticket.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5"><LifeBuoy className="h-4 w-4 text-gold" />{ticket.title}</h4>
+                          <span className="text-[10px] text-muted-foreground">{formatDate(ticket.created_at)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{ticket.message}</p>
+                        <div className="flex justify-between items-center text-[10px] pt-1">
+                          <span className="text-muted-foreground">Type: <span className="font-semibold text-gold capitalize">{ticket.type}</span></span>
+                          <Badge variant={ticket.read ? 'outline' : 'default'} className="text-[9px]">{ticket.read ? 'Read' : 'Unread'}</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="notes" className="space-y-4 mt-4">
-              <div className="space-y-3">
-                <Textarea placeholder="Type a new client note here..." value={newNote} onChange={e => setNewNote(e.target.value)} className="min-h-[100px] resize-none" />
-                <Button variant="gold" onClick={handleAddNote} disabled={submitting || !newNote.trim()}>Add Note</Button>
-              </div>
-              <div className="space-y-3 mt-6">
-                <h4 className="text-sm font-semibold">Previous Notes</h4>
-                {notes.length === 0 ? (
-                  <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No notes yet.</CardContent></Card>
-                ) : (
-                  <div className="space-y-3">
-                    {notes.map((n, i) => (
-                      <Card key={n.id || i}>
-                        <CardContent className="p-4 space-y-1">
-                          <div className="flex justify-between items-center text-xs text-muted-foreground">
-                            <div className="flex flex-col sm:flex-row sm:gap-2">
-                              <span>Added by {n.author}</span>
-                              <span className="hidden sm:inline">·</span>
-                              <span>{formatDate(n.created_at)}</span>
-                              {n.last_modified && n.last_modified !== n.created_at && (
-                                <span className="text-muted-foreground/75 italic">
-                                  (Edited: {formatDate(n.last_modified)})
-                                </span>
-                              )}
-                            </div>
-                              <div className="flex items-center gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                  onClick={() => fetchNoteHistory(n.id)}
-                                  title="View Edit History"
-                                >
-                                  <History className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6 text-blue-400 hover:text-blue-300"
-                                  onClick={() => {
-                                    setEditingNoteId(n.id)
-                                    setEditNoteContent(n.content)
-                                  }}
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6 text-red-400 hover:text-red-300"
-                                  onClick={() => setDeletingNoteId(n.id)}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
+            {/* 12. Requirements Tab */}
+            <TabsContent value="requirements">
+              {clientRequirements.length === 0 ? (
+                <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No requirements logged for this client's active projects.</CardContent></Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {clientRequirements.map((req, i) => (
+                    <Card key={req.id || i} className="hover:border-gold/30 transition-colors">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-bold text-sm text-foreground">{req.title}</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">Category: {req.category} · Priority: <span className="capitalize font-medium">{req.priority}</span></p>
                           </div>
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed mt-1 text-foreground/90">{n.content}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+                          <Badge variant={req.status === 'completed' || req.status === 'approved' ? 'default' : 'secondary'} className="capitalize text-[10px]">{req.status}</Badge>
+                        </div>
+                        {req.description && <p className="text-xs text-muted-foreground">{req.description}</p>}
+                        <div className="flex justify-between items-center text-[10px] border-t border-border/30 pt-2 text-muted-foreground">
+                          <span>Due: {req.due_date ? formatDate(req.due_date) : 'N/A'}</span>
+                          {req.is_required && <span className="text-red-400 font-semibold uppercase tracking-wide text-[8px] border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">Required</span>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -891,106 +1294,211 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       </Dialog>
 
 
-      {/* Document Preview Modal */}
+      {/* Document Preview Drawer */}
       <Dialog open={!!previewDoc} onOpenChange={v => !v && setPreviewDoc(null)}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 flex flex-col md:flex-row overflow-hidden bg-[#050e0c] border-[#1E3A2F]/30">
-          {previewDoc && (
-            <>
-              {/* Left Side: PDF IFrame Preview */}
-              <div className="flex-1 h-full bg-[#030807] border-r border-[#1E3A2F]/20 relative">
-                <iframe
-                  src={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
-                  className="w-full h-full border-0 rounded-l-lg"
-                  title={`Preview of ${previewDoc.doc_id}`}
-                />
-              </div>
+        <DialogContent className="fixed right-0 top-0 left-auto top-auto translate-x-0 translate-y-0 h-screen w-full max-w-5xl p-0 flex flex-col md:flex-row overflow-hidden bg-background border-l border-border shadow-2xl rounded-l-2xl animate-in slide-in-from-right duration-300 !left-auto !top-auto !translate-x-0 !translate-y-0 !right-0 !top-0 h-screen w-[95vw] max-w-5xl">
+          {previewDoc && (() => {
+            const isLocked = previewDoc.is_locked || previewDoc.status === 'signed' || previewDoc.status === 'completed' || previewDoc.status === 'paid';
+            const isSigned = previewDoc.status === 'signed' || previewDoc.signed_at;
 
-              {/* Right Side: Document Details & Version History */}
-              <div className="w-full md:w-80 h-full p-6 flex flex-col justify-between overflow-y-auto shrink-0 space-y-6">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-gold">{previewDoc.doc_id}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{previewDoc.type}</p>
+            return (
+              <>
+                {/* Left Side: PDF IFrame Preview */}
+                <div className="flex-1 h-full bg-black/40 border-r border-border relative font-sans">
+                  <iframe
+                    id="preview-doc-iframe"
+                    src={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
+                    className="w-full h-full border-0 rounded-l-2xl"
+                    title={`Preview of ${previewDoc.doc_id}`}
+                  />
+                </div>
+
+                {/* Right Side: Document Details, Audit Logs & Actions */}
+                <div className="w-full md:w-[380px] h-full p-6 flex flex-col justify-between overflow-y-auto shrink-0 bg-background/95 space-y-6">
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-bold text-gold">{previewDoc.doc_id}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{previewDoc.type}</p>
+                    </div>
+
+                    {/* Lock Status & Signature Badge */}
+                    <div className="space-y-2 border-y border-border/40 py-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Lock Status:</span>
+                        <Badge variant={isLocked ? "default" : "outline"} className={`flex items-center gap-1 text-[10px] ${isLocked ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                          {isLocked ? <Lock className="h-2.5 w-2.5" /> : <Unlock className="h-2.5 w-2.5" />}
+                          {isLocked ? 'Locked (Read-Only)' : 'Unlocked'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Sign Status:</span>
+                        <Badge variant={isSigned ? "default" : "outline"} className={`flex items-center gap-1 text-[10px] ${isSigned ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          {isSigned ? 'Signed' : 'Awaiting Signatures'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Metadata Card */}
+                    <div className="space-y-2 bg-muted/20 p-4 rounded-xl border border-border/30 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Amount:</span>
+                        <span className="font-semibold text-gold">{formatCurrency(previewDoc.amount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Date:</span>
+                        <span>{formatDate(previewDoc.date)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Status:</span>
+                        <Badge variant={previewDoc.status === 'paid' || previewDoc.status === 'signed' || previewDoc.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[9px] h-5">
+                          {previewDoc.status}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Quick Operations Actions */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Actions</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a
+                          href={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
+                          download={`Document_${previewDoc.doc_id}.pdf`}
+                          className="w-full col-span-2"
+                        >
+                          <Button variant="gold" className="w-full gap-1.5 gold-gradient text-white border-0 text-xs h-8">
+                            <Download className="h-3.5 w-3.5" /> Download PDF
+                          </Button>
+                        </a>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            const iframe = document.getElementById('preview-doc-iframe') as HTMLIFrameElement
+                            if (iframe && iframe.contentWindow) {
+                              iframe.contentWindow.focus()
+                              iframe.contentWindow.print()
+                            }
+                          }}
+                          className="w-full text-xs h-8 gap-1.5"
+                        >
+                          <Printer className="h-3.5 w-3.5" /> Print
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShareDoc({ id: previewDoc.id, title: `${previewDoc.doc_id} - ${client?.business || client?.name}` })}
+                          className="w-full text-xs h-8 gap-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/5"
+                        >
+                          <Send className="h-3.5 w-3.5" /> Send Document
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Version History */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Version History</h4>
+                      {loadingVersions ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                          <Loader2 className="h-3 w-3 animate-spin text-gold" /> Loading versions...
+                        </div>
+                      ) : versions.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No other versions recorded.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          {versions.map((v, i) => (
+                            <div key={v.id || i} className="text-xs border border-border/40 rounded p-2 space-y-0.5 bg-muted/10">
+                              <div className="flex justify-between font-medium text-foreground">
+                                <span>Version {v.version}</span>
+                                <span className="text-muted-foreground text-[10px]">{formatDate(v.created_at)}</span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">Saved by {v.created_by || 'System'}</p>
+                              {v.document_data?.history && v.document_data.history.length > 0 && (
+                                <p className="text-[10px] text-gold/80 italic mt-0.5">
+                                  "{v.document_data.history[v.document_data.history.length - 1]?.action}"
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Audit Timeline / Log */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Audit Timeline</h4>
+                      {loadingTimeline ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                          <Loader2 className="h-3 w-3 animate-spin text-gold" /> Loading audit logs...
+                        </div>
+                      ) : docTimeline.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No logs recorded.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          {docTimeline.map((item: any, idx: number) => (
+                            <div key={idx} className="text-xs border border-border/30 rounded p-2 bg-muted/5 space-y-0.5">
+                              <div className="flex justify-between font-medium text-foreground">
+                                <span>{item.action}</span>
+                                <span className="text-muted-foreground text-[9px]">{formatDate(item.date)}</span>
+                              </div>
+                              {item.user_name && <p className="text-[9px] text-muted-foreground/75">by {item.user_name}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="space-y-3 bg-muted/20 p-4 rounded-lg border border-[#1E3A2F]/10 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount:</span>
-                      <span className="font-semibold text-gold">{formatCurrency(previewDoc.amount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date:</span>
-                      <span>{formatDate(previewDoc.date)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Status:</span>
-                      <Badge variant={previewDoc.status === 'paid' || previewDoc.status === 'signed' || previewDoc.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[10px]">
-                        {previewDoc.status}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2">
-                    <a
-                      href={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
-                      download={`Document_${previewDoc.doc_id}.pdf`}
-                      className="w-full"
-                    >
-                      <Button variant="gold" className="w-full gap-1.5 gold-gradient text-white border-0">
-                        Download PDF
-                      </Button>
-                    </a>
+                  <div className="pt-4 border-t border-border/40 flex gap-2">
                     <a
                       href={previewDoc.type === 'Quotation' ? `/documents/quotations` : previewDoc.type === 'Invoice' ? `/documents/invoices` : previewDoc.type === 'SOW' ? `/documents/sow` : `/documents/agreements`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full"
+                      className="flex-1"
                     >
-                      <Button variant="outline" className="w-full gap-1.5">
-                        Open original page
+                      <Button variant="outline" className="w-full text-xs h-9 gap-1">
+                        Open original <ExternalLink className="h-3 w-3" />
                       </Button>
                     </a>
-                  </div>
-
-                  {/* Version History */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Version History</h4>
-                    {loadingVersions ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                        <Loader2 className="h-3 w-3 animate-spin text-gold" /> Loading versions...
-                      </div>
-                    ) : versions.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No other versions recorded.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                        {versions.map((v, i) => (
-                          <div key={v.id || i} className="text-xs border border-[#1E3A2F]/10 rounded p-2 space-y-0.5 bg-[#081713]/40">
-                            <div className="flex justify-between font-medium text-foreground">
-                              <span>Version {v.version}</span>
-                              <span className="text-muted-foreground text-[10px]">{formatDate(v.created_at)}</span>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground">Saved by {v.created_by || 'System'}</p>
-                            {v.document_data?.history && v.document_data.history.length > 0 && (
-                              <p className="text-[10px] text-gold/80 italic mt-0.5">
-                                "{v.document_data.history[v.document_data.history.length - 1]?.action}"
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <Button variant="ghost" onClick={() => setPreviewDoc(null)} className="flex-1 text-xs h-9">
+                      Close Drawer
+                    </Button>
                   </div>
                 </div>
-
-                <Button variant="ghost" onClick={() => setPreviewDoc(null)} className="w-full">
-                  Close Preview
-                </Button>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
+
+      {shareDoc && previewDoc && (
+        <ShareDialog
+          open={!!shareDoc}
+          onOpenChange={(open) => !open && setShareDoc(null)}
+          title={shareDoc.title}
+          initialEmail={client?.email || ''}
+          initialSubject={`Document Shared: ${shareDoc.title}`}
+          initialMessage={`Dear Client,\n\nPlease find the document ${shareDoc.title} attached for your review and action.\n\nRegards,\nNetgain Team`}
+          onSend={async (methods, emailDetails) => {
+            if (isSupabaseConfigured()) {
+              const res = await fetch('/api/document-actions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'send',
+                  id: shareDoc.id,
+                  type: previewDoc.type,
+                  methods,
+                  emailDetails
+                })
+              })
+              if (!res.ok) {
+                const err = await res.json()
+                throw new Error(err.error || 'Failed to send')
+              }
+              await fetchDocumentsAndMeetings(client)
+            }
+          }}
+        />
+      )}
 
       {/* Edit Client Dialog */}
       <Dialog open={!!editClient} onOpenChange={(open) => !open && setEditClient(null)}>

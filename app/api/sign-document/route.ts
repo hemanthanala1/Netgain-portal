@@ -238,23 +238,38 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Update status and lock the document
+    const signedAt = new Date().toISOString()
     const updatedHistory = [
       ...(docRecord.history || []),
-      { date: new Date().toISOString().split('T')[0], action: `Client signed via Netgain E-Sign (${verificationId})` },
-      { date: new Date().toISOString().split('T')[0], action: 'Status changed to completed' }
+      { date: signedAt.split('T')[0], action: `Client signed via Netgain E-Sign (${verificationId})` },
+      { date: signedAt.split('T')[0], action: 'Status changed to signed' }
     ]
 
     const { error: updateDocError } = await supabase
       .from(tableName)
       .update({
-        status: 'completed',
+        status: 'signed',
+        signed_at: signedAt,
+        signed_by: clientName,
         is_locked: true,
         history: updatedHistory
       })
       .eq('id', docId)
 
     if (updateDocError) {
-      throw new Error(`Failed to update document status: ${updateDocError.message}`)
+      // Fallback: try without signed_by if column doesn't exist
+      const { error: fallbackErr } = await supabase
+        .from(tableName)
+        .update({
+          status: 'signed',
+          signed_at: signedAt,
+          is_locked: true,
+          history: updatedHistory
+        })
+        .eq('id', docId)
+      if (fallbackErr) {
+        throw new Error(`Failed to update document status: ${fallbackErr.message}`)
+      }
     }
 
     // 8. Invalidate / mark the signing token as used

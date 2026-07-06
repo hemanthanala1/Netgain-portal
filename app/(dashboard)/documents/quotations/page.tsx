@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataTable } from '@/components/ui/data-table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,15 +10,16 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { PageHeader } from '@/components/ui/page-header'
+import { Drawer } from '@/components/ui/drawer'
+import { DeleteDialog } from '@/components/ui/dialog-variants'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
+import { UniversalTimeline } from '@/components/ui/version-timeline'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
@@ -360,7 +363,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
   )
 }
 
-export default function QuotationsPage() {
+function QuotationsPageContent() {
   const { user } = useUser()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [servicesData, setServicesData] = useState<any[]>([])
@@ -371,9 +374,176 @@ export default function QuotationsPage() {
   const [editQuote, setEditQuote] = useState<Quote | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
-  const { toast } = useToast()
-  const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  const columns = useMemo(() => [
+    {
+      header: 'Quote ID',
+      accessor: 'docId',
+      sortable: true,
+      sticky: true,
+      cell: (q: Quote) => (
+        <div>
+          <span className="font-mono text-xs text-gold font-bold">{q.docId}</span>
+          {q.published ? (
+            <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+              <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${q.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={q.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                <Globe className="h-2.5 w-2.5" />
+                {q.visibility_status === 'hidden' ? 'Hidden' : `V${q.published_version || 1}`}
+              </span>
+              {q.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(q.viewed_at)}`}>Viewed</span>}
+              {q.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(q.downloaded_at)}`}>DL</span>}
+              {q.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(q.signed_at)}`}>Signed</span>}
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+          )}
+          {q.status === 'needs revision' && (
+            <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
+              ⚠ Client requested changes
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Client',
+      accessor: 'client',
+      sortable: true,
+      cell: (q: Quote) => (
+        <div>
+          <a href={`/crm?search=${encodeURIComponent(q.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+            {q.client}
+          </a>
+          <p className="text-[10px] text-muted-foreground">{q.contact}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Services',
+      accessor: 'serviceIds',
+      cell: (q: Quote) => (
+        <div className="flex gap-1 flex-wrap max-w-[220px]">
+          {servicesData.filter(s => q.serviceIds?.includes(s.id)).slice(0,2).map(s => (
+            <Badge key={s.id} variant="outline" className="text-[9px] whitespace-nowrap">
+              {s.name.split('(')[0].trim().slice(0,22)}
+            </Badge>
+          ))}
+          {q.serviceIds?.length > 2 && (
+            <Badge variant="outline" className="text-[9px]">
+              +{q.serviceIds.length-2}
+            </Badge>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Amount',
+      accessor: 'amount',
+      sortable: true,
+      cell: (q: Quote) => <span className="font-semibold text-gold text-xs whitespace-nowrap">{formatCurrency(q.amount)}</span>
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (q: Quote) => (
+        <div onClick={e => e.stopPropagation()}>
+          <Select value={q.status} onValueChange={v => updateStatus(q.id, v)}>
+            <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(q.status)}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs">{STATUS_LABELS[s]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )
+    },
+    {
+      header: 'Valid Until',
+      accessor: 'valid',
+      sortable: true,
+      cell: (q: Quote) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(q.valid)}</span>
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (q: Quote) => (
+        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(q)}>
+            <History className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Download PDF" className="h-7 w-7" title="Download PDF" onClick={() => handleDownload(q)} disabled={downloadingId === q.id}>
+            {downloadingId === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => openEdit(q)}><Pencil className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${q.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(q)}>
+            <Globe className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: q.id, title: `${q.docId} - ${q.client}` })}><Send className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(q.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+        </div>
+      )
+    }
+  ], [servicesData, downloadingId])
+
+  const handleBulkAction = async (action: string, selectedRows: Quote[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} quotations?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('quotations').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting quotations', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = quotes.filter(q => !idsSet.has(q.id))
+      setQuotes(updatedList)
+      setCachedData('quotations', { quotes: updatedList, servicesData, paymentSchedules, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Quotations Deleted', description: `${selectedRows.length} quotations have been deleted.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('quotations').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = quotes.map(q => idsSet.has(q.id) ? { ...q, status: newStatus } : q)
+      setQuotes(updatedList)
+      setCachedData('quotations', { quotes: updatedList, servicesData, paymentSchedules, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Status Updated', description: `${selectedRows.length} quotations marked as ${STATUS_LABELS[newStatus] || newStatus}.` })
+      setLoading(false)
+    }
+  }
+  const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Quote | null>(null)
   const [publishDoc, setPublishDoc] = useState<Quote | null>(null)
@@ -381,11 +551,11 @@ export default function QuotationsPage() {
 
   const [form, setForm] = useState(() => blankForm())
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const clientId = params.get('clientId') || params.get('prefill_client_id')
-    const autoOpen = params.get('autoOpen') || params.get('prefill')
+    const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
+    const autoOpen = searchParams.get('autoOpen') || searchParams.get('prefill')
 
     if (clientId && autoOpen === 'true') {
       const fetchClient = async () => {
@@ -413,7 +583,7 @@ export default function QuotationsPage() {
       }
       fetchClient()
     }
-  }, [quotes])
+  }, [searchParams])
 
   useEffect(() => {
     const cached = getCachedData<{ quotes: Quote[], servicesData: any[], paymentSchedules: any[], companyDocs?: any }>('quotations')
@@ -1151,10 +1321,21 @@ export default function QuotationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-bold tracking-tight">Quotations</h1><p className="text-muted-foreground text-sm mt-0.5">Generate and manage client quotation proposals.</p></div>
-        <Button variant="gold" size="sm" onClick={() => { setForm(blankForm(companyDocs)); setShowCreate(true) }} className="gap-1.5 w-full sm:w-auto"><Plus className="h-4 w-4" />New Quotation</Button>
-      </div>
+      <PageHeader
+        title="Quotations"
+        description="Generate and manage client quotation proposals."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Documents', href: '/documents' },
+          { label: 'Quotations' }
+        ]}
+        primaryAction={{
+          label: 'New Quotation',
+          onClick: () => { setForm(blankForm(companyDocs)); setShowCreate(true) },
+          icon: Plus,
+          variant: 'gold'
+        }}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total', v: quotes.length }, { l: 'Draft', v: quotes.filter(q=>q.status==='draft').length }, { l: 'Sent', v: quotes.filter(q=>q.status==='sent').length }, { l: 'Approved', v: quotes.filter(q=>q.status==='approved').length }].map(s => (
@@ -1162,131 +1343,81 @@ export default function QuotationsPage() {
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search by client, contact, or quote ID..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {STATUS_OPTS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <DataTable
+        data={quotes}
+        columns={columns}
+        searchPlaceholder="Search quotations by client, contact, or ID..."
+        searchKeys={['client', 'contact', 'docId']}
+        exportFileName="quotations"
+        initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+        savedFiltersKey="quotations"
+        enableBulkSelect={true}
+        bulkActions={[
+          { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+          { label: 'Mark Approved', action: 'status_approved', icon: FileText },
+          { label: 'Mark Signed', action: 'status_signed', icon: FileText }
+        ]}
+        onBulkAction={handleBulkAction}
+        filterDefs={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: STATUS_OPTS.map(s => ({ label: STATUS_LABELS[s], value: s }))
+          }
+        ]}
+        emptyTitle="No quotations found"
+        emptyDescription="Create your first quotation or adjust your filters."
+        emptyIcon={FileText}
+        emptyAction={{ label: 'New Quotation', onClick: () => { setForm(blankForm(companyDocs)); setShowCreate(true) }, icon: Plus }}
+      />
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">{['Quote ID','Client','Services','Amount','Status','Valid Until','Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={7} className="py-12 text-center text-muted-foreground"><FileText className="h-8 w-8 mx-auto mb-2 opacity-30" /><p>No quotations found</p></td></tr>
-              )}
-              {filtered.map(q => (
-                <tr key={q.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${q.status === 'needs revision' ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
-                  <td className="py-3 px-4">
-                    <span className="font-mono text-xs text-gold">{q.docId}</span>
-                    {q.published ? (
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
-                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${q.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={q.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
-                          <Globe className="h-2.5 w-2.5" />
-                          {q.visibility_status === 'hidden' ? 'Hidden' : `V${q.published_version || 1}`}
-                        </span>
-                        {q.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(q.viewed_at)}`}>Viewed</span>}
-                        {q.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(q.downloaded_at)}`}>DL</span>}
-                        {q.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(q.signed_at)}`}>Signed</span>}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
-                    )}
-                    {q.status === 'needs revision' && (
-                      <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
-                        ⚠ Client requested changes
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4"><p className="font-medium">{q.client}</p><p className="text-xs text-muted-foreground">{q.contact}</p></td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-1 flex-wrap max-w-[220px]">
-                      {servicesData.filter(s => q.serviceIds.includes(s.id)).slice(0,2).map(s => <Badge key={s.id} variant="outline" className="text-[10px] whitespace-nowrap">{s.name.split('(')[0].trim().slice(0,22)}</Badge>)}
-                      {q.serviceIds.length > 2 && <Badge variant="outline" className="text-[10px]">+{q.serviceIds.length-2}</Badge>}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-gold whitespace-nowrap">{formatCurrency(q.amount)}</td>
-                  <td className="py-3 px-4">
-                    <Select value={q.status} onValueChange={v => updateStatus(q.id, v)}>
-                      <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(q.status)}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs">{STATUS_LABELS[s]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">{formatDate(q.valid)}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(q)}>
-                        <History className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Download PDF"
-                        onClick={() => handleDownload(q)} disabled={downloadingId === q.id}>
-                        {downloadingId === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit"
-                        onClick={() => openEdit(q)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${q.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(q)}>
-                        <Globe className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: q.id, title: `${q.docId} - ${q.client}` })}>
-                        <Send className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(q.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Create Drawer */}
+      <Drawer
+        isOpen={showCreate}
+        onClose={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}
+        title="Create New Quotation"
+        description="Configure client details, service selections, discounts, taxes, and validity terms."
+        widthClass="max-w-3xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Generating...</> : 'Generate PDF'}
+            </Button>
+          </>
+        }
+      >
+        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
+      </Drawer>
 
-      <Dialog open={showCreate} onOpenChange={v => { if (!v) { setShowCreate(false); setForm(blankForm(companyDocs)) } }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Create New Quotation</DialogTitle></DialogHeader>
-          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
-            <Button variant="gold" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generating...</> : 'Generate PDF'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editQuote} onOpenChange={v => { if (!v) { setEditQuote(null); setForm(blankForm(companyDocs)) } }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Quotation {editQuote?.docId}</DialogTitle></DialogHeader>
-          <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditQuote(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
-            <Button variant="gold" onClick={handleSaveEdit} disabled={generating} className="gap-2">
+      {/* Edit Drawer */}
+      <Drawer
+        isOpen={!!editQuote}
+        onClose={() => { setEditQuote(null); setForm(blankForm(companyDocs)) }}
+        title={`Edit Quotation ${editQuote?.docId}`}
+        description="Update service breakdown, pricing details, validity, and notes."
+        widthClass="max-w-3xl"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setEditQuote(null); setForm(blankForm(companyDocs)) }} disabled={generating}>Cancel</Button>
+            <Button variant="gold" size="sm" onClick={handleSaveEdit} disabled={generating} className="gap-1.5">
               {generating ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : 'Save Changes'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
+      </Drawer>
 
-      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Quotation?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Confirmation */}
+      <DeleteDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Delete Quotation?"
+        description="This action cannot be undone. This will permanently delete the quotation reference."
+        confirmLabel="Delete Quotation"
+        onConfirm={handleDelete}
+      />
 
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
@@ -1306,27 +1437,16 @@ export default function QuotationsPage() {
                 </div>
               ) : null
             })()}
-            {historyDoc?.history.slice().reverse().map((h, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
-                onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
-              >
-                <div className="flex-1 flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">{h.action}</p>
-                    <p className="text-xs text-muted-foreground">{h.date}</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
-                  disabled={downloadingId === historyDoc?.id}
-                  onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
-                  title="Download document version"
-                >
-                  {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-            ))}
+            <UniversalTimeline
+              entries={historyDoc?.history.slice().reverse().map(h => ({
+                action: h.action,
+                by: 'System',
+                date: h.date,
+                canDownload: h.canDownload,
+                module: 'Billing'
+              })) || []}
+              onDownload={() => { if (historyDoc) handleDownload(historyDoc) }}
+            />
           </div>
           <DialogFooter className="border-t border-white/10 pt-3">
             <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
@@ -1569,4 +1689,12 @@ function buildContentBody(q: Quote, svcs: any[]) {
   }
 
   return parts.join('\n\n')
+}
+
+export default function QuotationsPage() {
+  return (
+    <Suspense fallback={null}>
+      <QuotationsPageContent />
+    </Suspense>
+  )
 }

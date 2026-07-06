@@ -17,6 +17,7 @@ import {
 import { formatCurrency } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { EmptyState } from '@/components/ui/empty-state'
 
 // ΓöÇΓöÇ Categories ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 const DEFAULT_CATEGORIES = [
@@ -587,7 +588,7 @@ export default function ServicesPage() {
             <Trash2 className="h-4 w-4 mr-2" /> Delete ({selectedSvcs.length})
           </Button>
         )}
-        <Button variant="outline" size="icon" onClick={() => setGridView(!gridView)}>
+        <Button variant="outline" size="icon" aria-label="Toggle View" onClick={() => setGridView(!gridView)}>
           {gridView ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
         </Button>
       </div>
@@ -601,9 +602,21 @@ export default function ServicesPage() {
       ) : (
         <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
           {filtered.length === 0 && (
-            <div className="py-16 text-center text-muted-foreground">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
-              <p>No services found</p>
+            <div className="col-span-full py-6">
+              <EmptyState
+                icon={FileText}
+                title="No Services Found"
+                description="Your services library is currently empty. Add services manually or import packages."
+                action={{
+                  label: "Add Service",
+                  onClick: () => {
+                    setForm(blankSvc());
+                    setEditItem(null);
+                    setShowAdd(true);
+                  },
+                  icon: Plus
+                }}
+              />
             </div>
           )}
           {filtered.map(svc => (
@@ -658,14 +671,14 @@ export default function ServicesPage() {
                   {/* Action buttons — always visible */}
                   <div className="flex gap-1 shrink-0">
                     <Button
-                      variant="ghost" size="icon" className="h-7 w-7 text-blue-400 hover:text-blue-400 hover:bg-blue-400/10"
+                      variant="ghost" size="icon" aria-label="Action" className="h-7 w-7 text-blue-400 hover:text-blue-400 hover:bg-blue-400/10"
                       title="Edit service"
                       onClick={() => openEdit(svc)}
                     >
                       <Edit className="h-3.5 w-3.5" />
                     </Button>
                     <Button
-                      variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-400/10"
+                      variant="ghost" size="icon" aria-label="Action" className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-400/10"
                       title="Delete service"
                       onClick={() => setDeleteId(svc.id)}
                     >
@@ -1066,7 +1079,7 @@ export default function ServicesPage() {
                 <Input className="flex-1 h-8" value={cat.name} onChange={e => {
                   const n = [...catDrafts]; n[idx].name = e.target.value; setCatDrafts(n)
                 }} placeholder="Category Name" />
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-400 shrink-0" onClick={() => {
+                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-red-400 hover:text-red-400 shrink-0" onClick={() => {
                   const n = [...catDrafts]; n.splice(idx, 1); setCatDrafts(n)
                 }}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
