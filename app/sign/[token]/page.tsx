@@ -370,9 +370,8 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A1612] text-white flex flex-col justify-center items-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37] mb-4" />
-        <p className="text-sm text-slate-400">Loading secure client signing portal...</p>
+      <div className="min-h-screen bg-background dark:bg-background text-foreground flex flex-col justify-center items-center">
+        <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
       </div>
     )
   }
@@ -380,14 +379,14 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
   // Error state for expired or cancelled token
   if (!docToken || docToken.error) {
     return (
-      <div className="min-h-screen bg-[#0A1612] text-white flex flex-col justify-center items-center p-4">
-        <Card className="max-w-md w-full border-red-500/20 bg-[#12241D]/90 text-white">
+      <div className="min-h-screen bg-background text-white flex flex-col justify-center items-center p-4">
+        <Card className="max-w-md w-full border-red-500/20 bg-card text-white">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
               <AlertTriangle className="h-6 w-6" />
             </div>
             <CardTitle className="text-xl font-bold">Signing Link Inactive</CardTitle>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               {docToken?.error || 'This secure link is invalid or expired. Please contact Netgain Studio to request a new signing link.'}
             </p>
             <div className="pt-4">
@@ -400,24 +399,24 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
   }
 
   return (
-    <div className="min-h-screen bg-[#0A1612] text-slate-100 pb-16 font-sans">
+    <div className="min-h-screen bg-background text-foreground pb-16 font-sans">
       {/* Cursive Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Dancing+Script&family=Sacramento&display=swap" rel="stylesheet" />
 
       {/* Header bar */}
-      <div className="border-b border-[#1E3A2F] bg-[#0A1612]/80 backdrop-blur sticky top-0 z-50">
+      <div className="border-b border-border bg-background/85 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-white shadow-md">N</div>
             <div>
-              <p className="text-sm font-bold text-white tracking-wide">NETGAIN STUDIO</p>
+              <p className="text-sm font-bold text-foreground tracking-wide">NETGAIN STUDIO</p>
               <p className="text-[9px] text-[#D4AF37]/80 tracking-widest -mt-0.5">BUSINESS OS</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="h-8 text-xs border-[#1E3A2F] text-slate-300 hover:text-white bg-transparent gap-1.5 font-bold"
+              className="h-8 text-xs border-border text-muted-foreground hover:text-white bg-transparent gap-1.5 font-bold"
               onClick={() => router.push(`/sign/dashboard/${token}`)}
             >
               <Building2 className="h-3.5 w-3.5 text-[#D4AF37]" /> View Documents Hub
@@ -435,15 +434,15 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       <div className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Side: Document Preview IFrame (65% width) */}
         <div className="lg:col-span-8 space-y-6">
-          <Card className="border-[#1E3A2F] bg-[#12241D]/90 text-white overflow-hidden shadow-xl">
-            <CardHeader className="border-b border-[#1E3A2F] py-4 px-6 flex flex-row items-center justify-between">
+          <Card className="border-border bg-card text-white overflow-hidden shadow-xl">
+            <CardHeader className="border-b border-border py-4 px-6 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-[#D4AF37]" />
                 <div>
-                  <CardTitle className="text-base font-bold text-white">
+                  <CardTitle className="text-base font-bold text-foreground">
                     {document?.project_title || document?.project || document?.title || docToken.document_type}
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-400">
+                  <CardDescription className="text-xs text-muted-foreground">
                     Ref: {document?.doc_id || 'NG-DOC'} · Version {document?.version || 1}
                   </CardDescription>
                 </div>
@@ -451,7 +450,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
               <Button
                 asChild
                 variant="outline"
-                className="h-8 text-xs gap-1 border-[#1E3A2F] text-slate-300 hover:bg-white/5 bg-transparent"
+                className="h-8 text-xs gap-1 border-border text-muted-foreground hover:bg-white/5 bg-transparent"
               >
                 <a href={`/api/document-pdf?token=${token}&v=${pdfVersion}`} target="_blank" rel="noreferrer">
                   <Download className="h-3 w-3" /> Download PDF
@@ -459,7 +458,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="relative aspect-[3/4] sm:aspect-[1/1.4] w-full bg-[#0A1612]">
+              <div className="relative aspect-[3/4] sm:aspect-[1/1.4] w-full bg-background">
                 <iframe
                   key={pdfVersion}
                   src={`/api/document-pdf?token=${token}&v=${pdfVersion}`}
@@ -482,10 +481,10 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-emerald-400">Document Digitally Signed</h3>
-                  <p className="text-xs text-slate-400 mt-1">This document has been finalized and locked.</p>
+                  <p className="text-xs text-muted-foreground mt-1">This document has been finalized and locked.</p>
                 </div>
 
-                <div className="border-t border-emerald-500/10 pt-4 text-left space-y-2 text-xs text-slate-300 font-mono">
+                <div className="border-t border-emerald-500/10 pt-4 text-left space-y-2 text-xs text-muted-foreground font-mono">
                   <p><span className="text-emerald-400">Verification ID:</span> {signedRecord.verificationId}</p>
                   <p><span className="text-emerald-400">Date/Time:</span> {new Date(signedRecord.signedAt).toLocaleString('en-IN')}</p>
                   <p><span className="text-emerald-400">Platform OS:</span> {signedRecord.os}</p>
@@ -508,8 +507,8 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
           ) : (
             <>
               {/* Signing Form Card */}
-              <Card className="border-[#1E3A2F] bg-[#12241D]/90 text-white shadow-xl">
-                <CardHeader className="border-b border-[#1E3A2F] pb-4">
+              <Card className="border-border bg-card text-white shadow-xl">
+                <CardHeader className="border-b border-border pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-2">
                     <Shield className="h-5 w-5 text-[#D4AF37]" /> E-Signature Portal
                   </CardTitle>
@@ -523,45 +522,45 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Signee Details</h3>
                     <div className="grid gap-3">
                       <div>
-                        <Label htmlFor="clientName" className="text-xs text-slate-400">FullName</Label>
+                        <Label htmlFor="clientName" className="text-xs text-muted-foreground">FullName</Label>
                         <Input
                           id="clientName"
                           value={clientName}
                           onChange={e => { setClientName(e.target.value); setTypeText(e.target.value); }}
                           placeholder="e.g. John Doe"
-                          className="bg-[#0A1612] border-[#1E3A2F] h-9 text-sm focus-visible:ring-[#D4AF37]"
+                          className="bg-background border-border h-9 text-sm focus-visible:ring-[#D4AF37]"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="company" className="text-xs text-slate-400">Company Name</Label>
+                        <Label htmlFor="company" className="text-xs text-muted-foreground">Company Name</Label>
                         <Input
                           id="company"
                           value={company}
                           onChange={e => setCompany(e.target.value)}
                           placeholder="e.g. Acme Corp"
-                          className="bg-[#0A1612] border-[#1E3A2F] h-9 text-sm focus-visible:ring-[#D4AF37]"
+                          className="bg-background border-border h-9 text-sm focus-visible:ring-[#D4AF37]"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label htmlFor="email" className="text-xs text-slate-400">Email Address</Label>
+                          <Label htmlFor="email" className="text-xs text-muted-foreground">Email Address</Label>
                           <Input
                             id="email"
                             type="email"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             placeholder="john@example.com"
-                            className="bg-[#0A1612] border-[#1E3A2F] h-9 text-xs focus-visible:ring-[#D4AF37]"
+                            className="bg-background border-border h-9 text-xs focus-visible:ring-[#D4AF37]"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="phone" className="text-xs text-slate-400">Phone (WhatsApp)</Label>
+                          <Label htmlFor="phone" className="text-xs text-muted-foreground">Phone (WhatsApp)</Label>
                           <Input
                             id="phone"
                             value={phone}
                             onChange={e => setPhone(e.target.value)}
                             placeholder="+91 9876543210"
-                            className="bg-[#0A1612] border-[#1E3A2F] h-9 text-xs focus-visible:ring-[#D4AF37]"
+                            className="bg-background border-border h-9 text-xs focus-visible:ring-[#D4AF37]"
                           />
                         </div>
                       </div>
@@ -571,25 +570,25 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   {/* Consent Checkboxes */}
                   <div className="space-y-3 pt-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Consent Checklist</h3>
-                    <div className="flex items-start space-x-2 bg-[#0A1612]/60 p-3 rounded-lg border border-[#1E3A2F]">
+                    <div className="flex items-start space-x-2 bg-muted/20 p-3 rounded-lg border border-border">
                       <Checkbox
                         id="consent-read"
                         checked={readChecked}
                         onCheckedChange={checked => setReadChecked(checked === true)}
-                        className="mt-0.5 border-[#1E3A2F] data-[state=checked]:bg-[#D4AF37] data-[state=checked]:text-black"
+                        className="mt-0.5 border-border data-[state=checked]:bg-[#D4AF37] data-[state=checked]:text-black"
                       />
-                      <label htmlFor="consent-read" className="text-xs text-slate-300 leading-normal cursor-pointer select-none">
+                      <label htmlFor="consent-read" className="text-xs text-muted-foreground leading-normal cursor-pointer select-none">
                         I confirm that I have fully read and reviewed this document.
                       </label>
                     </div>
-                    <div className="flex items-start space-x-2 bg-[#0A1612]/60 p-3 rounded-lg border border-[#1E3A2F]">
+                    <div className="flex items-start space-x-2 bg-muted/20 p-3 rounded-lg border border-border">
                       <Checkbox
                         id="consent-agree"
                         checked={agreeChecked}
                         onCheckedChange={checked => setAgreeChecked(checked === true)}
-                        className="mt-0.5 border-[#1E3A2F] data-[state=checked]:bg-[#D4AF37] data-[state=checked]:text-black"
+                        className="mt-0.5 border-border data-[state=checked]:bg-[#D4AF37] data-[state=checked]:text-black"
                       />
-                      <label htmlFor="consent-agree" className="text-xs text-slate-300 leading-normal cursor-pointer select-none">
+                      <label htmlFor="consent-agree" className="text-xs text-muted-foreground leading-normal cursor-pointer select-none">
                         I agree to all terms, deliverables, schedules, and policies outlined herein.
                       </label>
                     </div>
@@ -599,18 +598,18 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Signature Input</h3>
-                      <div className="flex bg-[#0A1612] border border-[#1E3A2F] rounded-lg p-0.5">
+                      <div className="flex bg-background border border-border rounded-lg p-0.5">
                         <button
                           type="button"
                           onClick={() => setSigType('draw')}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-white'}`}
                         >
                           <PenTool className="h-3 w-3" /> Draw
                         </button>
                         <button
                           type="button"
                           onClick={() => setSigType('type')}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-slate-400 hover:text-white'}`}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-white'}`}
                         >
                           <Type className="h-3 w-3" /> Type
                         </button>
@@ -620,7 +619,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                     {sigType === 'draw' ? (
                       /* Canvas draw pad */
                       <div className="space-y-2">
-                        <div className="border border-[#1E3A2F] rounded-lg bg-black overflow-hidden relative group">
+                        <div className="border border-border rounded-lg bg-black overflow-hidden relative group">
                           <canvas
                             ref={canvasRef}
                             width={360}
@@ -651,7 +650,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               type="button"
                               onClick={clearCanvas}
                               variant="outline"
-                              className="h-7 px-2 text-[10px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-white bg-transparent"
                             >
                               Clear
                             </Button>
@@ -659,7 +658,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               type="button"
                               onClick={undoCanvas}
                               variant="outline"
-                              className="h-7 px-2 text-[10px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-white bg-transparent"
                               disabled={drawHistory.length === 0}
                             >
                               Undo
@@ -679,13 +678,13 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                       /* Cursive text input */
                       <div className="space-y-3">
                         <div>
-                          <Label htmlFor="sigText" className="text-xs text-slate-400">Type Name</Label>
+                          <Label htmlFor="sigText" className="text-xs text-muted-foreground">Type Name</Label>
                           <Input
                             id="sigText"
                             value={typeText}
                             onChange={e => { setTypeText(e.target.value); setTypeSaved(false); }}
                             placeholder="John Doe"
-                            className="bg-[#0A1612] border-[#1E3A2F] h-9 text-sm focus-visible:ring-[#D4AF37]"
+                            className="bg-background border-border h-9 text-sm focus-visible:ring-[#D4AF37]"
                           />
                         </div>
                         <div className="grid grid-cols-3 gap-1">
@@ -694,13 +693,13 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               key={font.value}
                               type="button"
                               onClick={() => { setSelectedFont(font.value); setTypeSaved(false); }}
-                              className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-white' : 'border-[#1E3A2F] text-slate-400 hover:text-slate-200'}`}
+                              className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-white' : 'border-border text-muted-foreground hover:text-foreground'}`}
                             >
                               {font.name}
                             </button>
                           ))}
                         </div>
-                        <div className="border border-[#1E3A2F] rounded-lg p-4 bg-black h-20 flex items-center justify-center relative overflow-hidden">
+                        <div className="border border-border rounded-lg p-4 bg-black h-20 flex items-center justify-center relative overflow-hidden">
                           <p
                             className="text-2xl text-center text-[#D4AF37] px-4 truncate"
                             style={{
@@ -730,7 +729,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   </div>
 
                   {/* OTP Verification Method Selector */}
-                  <div className="border-t border-[#1E3A2F] pt-4 space-y-3">
+                  <div className="border-t border-border pt-4 space-y-3">
                     <div className="flex items-center gap-1.5">
                       <Shield className="h-4 w-4 text-[#D4AF37]" />
                       <h3 className="text-xs font-bold uppercase tracking-wider text-white">Verification Method</h3>
@@ -739,19 +738,19 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                       <button
                         type="button"
                         onClick={() => setOtpMethod('email')}
-                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'email' ? 'border-[#D4AF37] bg-[#D4AF37]/5 text-white' : 'border-[#1E3A2F] text-slate-400 hover:text-slate-200'}`}
+                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'email' ? 'border-[#D4AF37] bg-[#D4AF37]/5 text-white' : 'border-border text-muted-foreground hover:text-foreground'}`}
                       >
                         <p className="text-xs font-bold">Email OTP</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Coming Soon</p>
+                        <p className="text-[10px] text-muted-foreground/80 mt-0.5">Coming Soon</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => setOtpMethod('sms')}
-                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'sms' ? 'border-[#1E3A2F] text-slate-500 opacity-60' : 'border-[#1E3A2F] text-slate-400 hover:text-slate-200'}`}
+                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'sms' ? 'border-border text-muted-foreground/80 opacity-60' : 'border-border text-muted-foreground hover:text-foreground'}`}
                         disabled
                       >
                         <p className="text-xs font-bold">SMS OTP</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Coming Soon</p>
+                        <p className="text-[10px] text-muted-foreground/80 mt-0.5">Coming Soon</p>
                       </button>
                     </div>
                   </div>
@@ -798,25 +797,25 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       {/* Reject/Revision Request Dialog Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <Card className="max-w-md w-full border-[#1E3A2F] bg-[#12241D] text-white">
-            <CardHeader className="border-b border-[#1E3A2F] pb-4">
+          <Card className="max-w-md w-full border-border bg-card text-white">
+            <CardHeader className="border-b border-border pb-4">
               <CardTitle className="text-base font-bold text-white flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-400" /> Request Revision
               </CardTitle>
-              <CardDescription className="text-xs text-slate-400">
+              <CardDescription className="text-xs text-muted-foreground">
                 Let the team know what revisions or updates are required.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div>
-                <Label htmlFor="rejectNotes" className="text-xs text-slate-400">Details / Notes</Label>
+                <Label htmlFor="rejectNotes" className="text-xs text-muted-foreground">Details / Notes</Label>
                 <textarea
                   id="rejectNotes"
                   rows={4}
                   value={rejectNotes}
                   onChange={e => setRejectNotes(e.target.value)}
                   placeholder="Describe the changes or corrections required..."
-                  className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-white"
+                  className="w-full bg-background border border-border rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-white"
                 />
               </div>
               <div className="flex gap-2 justify-end pt-2">
@@ -824,7 +823,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   type="button"
                   variant="outline"
                   onClick={() => setShowRejectModal(false)}
-                  className="h-9 text-xs border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                  className="h-9 text-xs border-border text-muted-foreground hover:text-white bg-transparent"
                 >
                   Cancel
                 </Button>

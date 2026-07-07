@@ -14,12 +14,14 @@ import { formatCurrency, formatDate, cn, getInitials } from '@/lib/utils'
 import { DataTable } from '@/components/ui/data-table'
 import { TableSkeleton } from '@/components/ui/skeletons'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useTheme } from 'next-themes'
 import {
   Search, FileText, Download, Clock, CheckCircle2, AlertTriangle, FileCheck2,
   FolderOpen, Building2, User, Loader2, RefreshCw, LogOut, FileSignature,
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
-  Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink
+  Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink,
+  Sun, Moon
 } from 'lucide-react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -83,6 +85,7 @@ interface ClientNotification {
 }
 
 export default function ClientDashboardPage() {
+  const { theme, setTheme } = useTheme()
   const [session, setSession] = useState<any>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -1307,7 +1310,6 @@ export default function ClientDashboardPage() {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">{!sessionReady ? 'Verifying secure portal access...' : 'Retrieving client records...'}</p>
       </div>
     )
   }
@@ -1323,7 +1325,7 @@ export default function ClientDashboardPage() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} w-60 md:${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
         <div className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0">
           <div className="flex items-center gap-2 overflow-hidden">
             <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
@@ -1451,6 +1453,17 @@ export default function ClientDashboardPage() {
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
               Sync
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title="Toggle theme"
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
             </Button>
           </div>
         </header>
@@ -1673,22 +1686,48 @@ export default function ClientDashboardPage() {
                     <UniversalTimeline
                       entries={[
                         ...docs.flatMap(d =>
-                          (d.raw.history || []).map((h: any) => ({
-                            action: `${d.type}: ${h.action}`,
-                            actionType: 'doc' as const,
-                            by: d.raw.client_name || session?.name || 'Client',
-                            date: h.date,
-                            comment: d.docId
-                          }))
+                          (d.raw.history || []).map((h: any) => {
+                            let actionType: any = 'note'
+                            const act = h.action.toLowerCase()
+                            if (act.includes('sign')) actionType = 'signed'
+                            else if (act.includes('pay') || act.includes('paid')) actionType = 'paid'
+                            else if (act.includes('creat')) actionType = 'created'
+                            else if (act.includes('approv')) actionType = 'approved'
+                            return {
+                              action: `${d.type}: ${h.action}`,
+                              actionType,
+                              by: d.raw.client_name || session?.name || 'Client',
+                              date: h.date,
+                              comment: d.docId,
+                              module: 'Documents'
+                            }
+                          })
                         ),
-                        ...notifications.slice(0, 8).map(n => ({
+                        ...notifications.map(n => ({
                           action: n.title,
                           actionType: 'note' as const,
                           by: 'Netgain Team',
                           date: n.created_at,
-                          comment: n.message
+                          comment: n.message,
+                          module: 'Support'
+                        })),
+                        ...workspaceTimeline.map(t => ({
+                          action: t.action,
+                          actionType: 'updated' as const,
+                          by: t.user_name || 'Staff Member',
+                          date: t.created_at,
+                          comment: t.notes,
+                          module: 'Projects'
+                        })),
+                        ...workspaceMeetings.map(m => ({
+                          action: `Meeting: ${m.event_type}`,
+                          actionType: 'status_changed' as const,
+                          by: m.client_name || 'Client',
+                          date: m.meeting_date,
+                          comment: `Status: ${m.status}`,
+                          module: 'Meetings'
                         }))
-                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 12)}
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 15)}
                       compact
                     />
                     {docs.length === 0 && notifications.length === 0 && (

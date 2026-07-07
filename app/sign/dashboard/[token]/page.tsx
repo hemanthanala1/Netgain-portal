@@ -280,23 +280,22 @@ export default function ClientDashboard({ params }: { params: { token: string } 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A1612] text-white flex flex-col justify-center items-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37] mb-4" />
-        <p className="text-sm text-slate-400">Loading client dashboard hub...</p>
+      <div className="min-h-screen bg-background dark:bg-background text-foreground flex flex-col justify-center items-center">
+        <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
       </div>
     )
   }
 
   if (!clientInfo) {
     return (
-      <div className="min-h-screen bg-[#0A1612] text-white flex flex-col justify-center items-center p-4">
-        <Card className="max-w-md w-full border-red-500/20 bg-[#12241D]/90 text-white">
+      <div className="min-h-screen bg-background text-white flex flex-col justify-center items-center p-4">
+        <Card className="max-w-md w-full border-red-500/20 bg-card text-white">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
               <ShieldAlert className="h-6 w-6" />
             </div>
             <CardTitle className="text-xl font-bold">Unauthorized Access</CardTitle>
-            <p className="text-sm text-slate-400 font-sans">
+            <p className="text-sm text-muted-foreground font-sans">
               We could not authenticate your company or details using this token. Please contact Netgain Studio for support.
             </p>
           </CardContent>
@@ -306,22 +305,22 @@ export default function ClientDashboard({ params }: { params: { token: string } 
   }
 
   return (
-    <div className="min-h-screen bg-[#0A1612] text-slate-100 pb-16 font-sans">
+    <div className="min-h-screen bg-background text-foreground pb-16 font-sans">
       {/* Header bar */}
-      <div className="border-b border-[#1E3A2F] bg-[#0A1612]/80 backdrop-blur sticky top-0 z-50">
+      <div className="border-b border-border bg-background/85 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-white shadow-md">N</div>
             <div>
-              <p className="text-sm font-bold text-white tracking-wide">NETGAIN STUDIO</p>
+              <p className="text-sm font-bold text-foreground tracking-wide">NETGAIN STUDIO</p>
               <p className="text-[9px] text-[#D4AF37]/80 tracking-widest -mt-0.5">BUSINESS OS</p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <div className="hidden sm:flex items-center gap-1.5 bg-[#12241D] border border-[#1E3A2F] px-3 py-1 rounded-full text-slate-300">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="hidden sm:flex items-center gap-1.5 bg-card border border-border px-3 py-1 rounded-full text-muted-foreground">
               <Building2 className="h-3 w-3 text-[#D4AF37]" /> {clientInfo.company}
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 bg-[#12241D] border border-[#1E3A2F] px-3 py-1 rounded-full text-slate-300">
+            <div className="hidden sm:flex items-center gap-1.5 bg-card border border-border px-3 py-1 rounded-full text-muted-foreground">
               <User className="h-3 w-3 text-[#D4AF37]" /> {clientInfo.name}
             </div>
           </div>
@@ -330,15 +329,15 @@ export default function ClientDashboard({ params }: { params: { token: string } 
 
       <div className="max-w-7xl mx-auto px-4 pt-10 space-y-8">
         {/* Welcome Block */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#1E3A2F]/60 pb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/60 pb-6">
           <div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">Client Document Hub</h1>
-            <p className="text-sm text-slate-400 mt-1">Review, sign, download, and track all documents shared with {clientInfo.company}.</p>
+            <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Client Document Hub</h1>
+            <p className="text-sm text-muted-foreground mt-1">Review, sign, download, and track all documents shared with {clientInfo.company}.</p>
           </div>
           <Button
             onClick={loadDashboardData}
             variant="outline"
-            className="border-[#1E3A2F] text-slate-300 bg-[#12241D] hover:bg-white/5 h-9"
+            className="border-border text-muted-foreground bg-card hover:bg-white/5 h-9"
           >
             <RefreshCw className="h-3.5 w-3.5 mr-2" /> Refresh Hub
           </Button>
@@ -346,28 +345,28 @@ export default function ClientDashboard({ params }: { params: { token: string } 
 
         {/* Mini Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-[#1E3A2F] bg-[#12241D]/60 text-white">
+          <Card className="border-border bg-card/60 text-white">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Pending Signature</p>
+                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Pending Signature</p>
                 <p className="text-3xl font-bold mt-1 text-[#D4AF37]">{stats.pending}</p>
               </div>
               <Clock className="h-8 w-8 text-[#D4AF37]/20" />
             </CardContent>
           </Card>
-          <Card className="border-[#1E3A2F] bg-[#12241D]/60 text-white">
+          <Card className="border-border bg-card/60 text-white">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Completed / Signed</p>
+                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Completed / Signed</p>
                 <p className="text-3xl font-bold mt-1 text-emerald-400">{stats.completed}</p>
               </div>
               <FileCheck2 className="h-8 w-8 text-emerald-400/20" />
             </CardContent>
           </Card>
-          <Card className="border-[#1E3A2F] bg-[#12241D]/60 text-white">
+          <Card className="border-border bg-card/60 text-white">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Revisions Requested</p>
+                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Revisions Requested</p>
                 <p className="text-3xl font-bold mt-1 text-red-400">{stats.revisions}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-400/20" />
@@ -378,12 +377,12 @@ export default function ClientDashboard({ params }: { params: { token: string } 
         {/* Document Search / Listing */}
         <div className="space-y-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/80" />
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search documents by ID, title, or type..."
-              className="pl-9 bg-[#12241D]/80 border-[#1E3A2F] text-white focus-visible:ring-[#D4AF37]"
+              className="pl-9 bg-card/80 border-border text-white focus-visible:ring-[#D4AF37]"
             />
           </div>
 
@@ -394,7 +393,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
               const docTokenKey = doc.token || currentToken
 
               return (
-                <Card key={doc.id} className="group border-[#1E3A2F] bg-[#12241D]/90 text-white hover:border-[#D4AF37]/20 transition-all flex flex-col justify-between">
+                <Card key={doc.id} className="group border-border bg-card text-white hover:border-[#D4AF37]/20 transition-all flex flex-col justify-between">
                   <CardContent className="p-5 space-y-4">
                     <div className="flex justify-between items-start">
                       <div className="rounded-lg p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/20 text-[#D4AF37]">
@@ -404,25 +403,25 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                     </div>
 
                     <div>
-                      <h3 className="font-bold text-sm tracking-wide leading-snug line-clamp-1 group-hover:text-[#D4AF37] transition-all">
+                      <h3 className="font-bold text-sm tracking-wide leading-snug line-clamp-1 text-foreground group-hover:text-[#D4AF37] transition-all">
                         {doc.title}
                       </h3>
-                      <p className="text-[10px] text-slate-400 font-mono mt-1">{doc.docId}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-1">{doc.docId}</p>
                     </div>
 
-                    <div className="border-t border-[#1E3A2F]/60 pt-3 flex justify-between items-center text-xs">
-                      <div className="text-slate-400">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">Date Issued</p>
-                        <p className="font-semibold text-slate-300 mt-0.5">{doc.date || 'TBD'}</p>
+                    <div className="border-t border-border/60 pt-3 flex justify-between items-center text-xs">
+                      <div className="text-muted-foreground">
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground/80">Date Issued</p>
+                        <p className="font-semibold text-muted-foreground mt-0.5">{doc.date || 'TBD'}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[9px] uppercase tracking-wider text-slate-500">Document Type</p>
-                        <p className="font-semibold text-slate-300 mt-0.5">{doc.type}</p>
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground/80">Document Type</p>
+                        <p className="font-semibold text-muted-foreground mt-0.5">{doc.type}</p>
                       </div>
                     </div>
                   </CardContent>
 
-                  <div className="border-t border-[#1E3A2F]/60 bg-black/20 p-4 flex gap-2">
+                  <div className="border-t border-border/60 bg-muted/10 p-4 flex gap-2">
                     {isCompleted ? (() => {
                       const cacheBuster = doc.raw?.signed_at ? new Date(doc.raw.signed_at).getTime() : new Date().getTime()
                       return (
@@ -452,7 +451,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                         <Button
                           asChild
                           variant="outline"
-                          className="h-8 text-xs border-[#1E3A2F] text-slate-300 bg-transparent hover:bg-white/5"
+                          className="h-8 text-xs border-border text-muted-foreground bg-transparent hover:bg-white/5"
                         >
                           <a href={`/api/document-pdf?token=${docTokenKey}&v=${doc.raw?.signed_at ? new Date(doc.raw.signed_at).getTime() : new Date().getTime()}`} target="_blank" rel="noreferrer">
                             Review
@@ -467,10 +466,10 @@ export default function ClientDashboard({ params }: { params: { token: string } 
           </div>
 
           {filtered.length === 0 && (
-            <div className="text-center py-16 border border-dashed border-[#1E3A2F] rounded-xl bg-[#12241D]/20">
+            <div className="text-center py-16 border border-dashed border-border rounded-xl bg-card/20">
               <FolderOpen className="h-10 w-10 mx-auto text-slate-600 mb-2" />
-              <p className="text-sm font-semibold text-slate-400">No client documents found</p>
-              <p className="text-xs text-slate-500 mt-1">Refine your search parameters or check back later.</p>
+              <p className="text-sm font-semibold text-muted-foreground">No client documents found</p>
+              <p className="text-xs text-muted-foreground/80 mt-1">Refine your search parameters or check back later.</p>
             </div>
           )}
         </div>

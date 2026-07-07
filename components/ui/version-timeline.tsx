@@ -108,6 +108,7 @@ export function UniversalTimeline({
   const [filterModule, setFilterModule] = useState('')
   const [filterAction, setFilterAction] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [filterActionType, setFilterActionType] = useState('')
 
   const uniqueUsers = useMemo(() => {
     const users = new Set<string>()
@@ -133,16 +134,20 @@ export function UniversalTimeline({
         if (mod !== filterModule) return false
       }
       if (filterDate && !e.date.includes(filterDate)) return false
+      if (filterActionType) {
+        const type = e.actionType || inferActionType(e.action)
+        if (type !== filterActionType) return false
+      }
       return true
     })
-  }, [entries, filterUser, filterAction, filterModule, filterDate])
+  }, [entries, filterUser, filterAction, filterModule, filterDate, filterActionType])
 
   const displayEntries = maxItems ? filteredEntries.slice(0, maxItems) : filteredEntries
 
   return (
     <div className={cn('space-y-4', className)}>
       {enableFilters && (
-        <div className="flex flex-col sm:flex-row gap-2 bg-[#0a1612]/30 p-3 rounded-xl border border-border/50 text-xs mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 bg-muted/20 p-3 rounded-xl border border-border/50 text-xs mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -176,6 +181,27 @@ export function UniversalTimeline({
               {uniqueModules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           )}
+          <select
+            value={filterActionType}
+            onChange={e => setFilterActionType(e.target.value)}
+            className="bg-background border border-border rounded-lg px-2 py-1 focus:outline-none focus:border-gold text-xs h-8 text-muted-foreground"
+            aria-label="Filter by action type"
+          >
+            <option value="">All Action Types</option>
+            <option value="created">Created</option>
+            <option value="updated">Updated</option>
+            <option value="deleted">Deleted</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="signed">Signed</option>
+            <option value="paid">Paid</option>
+            <option value="sent">Sent</option>
+            <option value="uploaded">Uploaded</option>
+            <option value="commented">Commented</option>
+            <option value="assigned">Assigned</option>
+            <option value="status_changed">Status Changed</option>
+            <option value="note">Note</option>
+          </select>
           <input
             type="date"
             value={filterDate}
@@ -183,11 +209,11 @@ export function UniversalTimeline({
             className="bg-background border border-border rounded-lg px-2 py-1 focus:outline-none focus:border-gold text-xs h-8 text-muted-foreground"
             aria-label="Filter by date"
           />
-          {(filterUser || filterModule || filterAction || filterDate) && (
+          {(filterUser || filterModule || filterAction || filterDate || filterActionType) && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setFilterUser(''); setFilterModule(''); setFilterAction(''); setFilterDate('') }}
+              onClick={() => { setFilterUser(''); setFilterModule(''); setFilterAction(''); setFilterDate(''); setFilterActionType('') }}
               className="h-8 px-2 text-muted-foreground hover:text-foreground text-[10px]"
               aria-label="Clear filters"
             >

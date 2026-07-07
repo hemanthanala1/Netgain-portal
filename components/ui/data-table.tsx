@@ -474,7 +474,7 @@ export function DataTable<T = any>({
       )}
 
       {/* Search and Filters Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a1612]/30 p-3 rounded-xl border border-border/50">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-muted/30 p-3 rounded-xl border border-border/50">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           {searchKeys && searchKeys.length > 0 && (
             <div className="relative w-full md:w-72">
@@ -505,7 +505,7 @@ export function DataTable<T = any>({
                   {pinnedFilter ? `Filter: ${pinnedFilter.name}` : 'Saved Filters'}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 border-border bg-[#040d0a]">
+              <DropdownMenuContent align="start" className="w-56 border-border bg-popover text-popover-foreground">
                 <DropdownMenuLabel className="text-xs font-semibold text-[#D4AF37]">Saved Filters</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {savedFilters.length === 0 ? (
@@ -515,7 +515,7 @@ export function DataTable<T = any>({
                     <div key={f.name} className="flex items-center justify-between px-2 py-1 hover:bg-gold/5 rounded transition-colors" onClick={e => e.stopPropagation()}>
                       <button 
                         onClick={() => applySavedFilter(f)}
-                        className="text-xs text-left truncate flex-1 text-slate-200 hover:text-gold"
+                        className="text-xs text-left truncate flex-1 text-foreground hover:text-gold"
                       >
                         {f.name}
                       </button>
@@ -848,8 +848,8 @@ export function DataTable<T = any>({
                               key={cIdx}
                               onClick={() => onRowClick?.(row)}
                               className={cn(
-                                "py-3.5 px-4 text-xs font-normal text-slate-300",
-                                col.sticky && "sticky left-0 bg-[#07110e] sm:bg-[#07110e] group-hover:bg-muted/15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] z-10",
+                                "py-3.5 px-4 text-xs font-normal text-foreground",
+                                col.sticky && "sticky left-0 bg-background sm:bg-background group-hover:bg-muted/15 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] z-10",
                                 col.className
                               )}
                             >

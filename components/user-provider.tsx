@@ -13,6 +13,7 @@ export interface UserProfile {
   projects: number
   avatar_url?: string
   settings?: any
+  permissions: string[]
 }
 
 interface UserContextType {
@@ -36,58 +37,66 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         .eq('id', authId)
         .maybeSingle()
 
+      let userRole = 'Employee'
+      let phone = ''
+      let settings: any = {}
+      let avatar_url = ''
+      let name = email.split('@')[0]
+      let teamDataMerged: any = null
+
       if (!profileError && profileData) {
-        // Found in profiles table — now get team_members data to merge
-        const { data: teamData, error: teamError } = await supabase
+        userRole = profileData.role || 'Employee'
+        phone = authUserMetadata?.phone || profileData.settings?.phone || ''
+        settings = profileData.settings || {}
+        avatar_url = profileData.settings?.avatar_url || authUserMetadata?.avatar_url || ''
+        name = profileData.full_name || name
+
+        const { data: teamData } = await supabase
           .from('team_members')
           .select('*')
           .eq('email', email)
           .maybeSingle()
-
-        if (!teamError && teamData) {
-          // Merge: use role from profiles (source of truth), other fields from team_members
-          return {
-            ...teamData,
-            role: profileData.role,
-            phone: authUserMetadata?.phone || profileData.settings?.phone || teamData.phone || '',
-            settings: profileData.settings || {},
-            avatar_url: profileData.settings?.avatar_url || authUserMetadata?.avatar_url || ''
-          } as UserProfile
+        if (teamData) {
+          teamDataMerged = teamData
+          phone = phone || teamData.phone || ''
+        }
+      } else {
+        const { data: teamData } = await supabase
+          .from('team_members')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle()
+        if (teamData) {
+          teamDataMerged = teamData
+          userRole = teamData.role || 'Employee'
+          phone = authUserMetadata?.phone || teamData.phone || ''
         } else {
-          // Profile exists but no team_members row — this is the source of truth
-          return {
-            id: authId,
-            name: profileData.full_name || email.split('@')[0],
-            email: profileData.email,
-            phone: authUserMetadata?.phone || profileData.settings?.phone || '',
-            role: profileData.role || 'Employee',
-            status: 'active',
-            joined: new Date().toISOString().slice(0, 10),
-            projects: 0,
-            settings: profileData.settings || {},
-            avatar_url: profileData.settings?.avatar_url || authUserMetadata?.avatar_url || ''
-          } as UserProfile
+          return null
         }
       }
 
-      // Fallback: fetch from team_members if profiles doesn't have it
-      const { data: teamData, error: teamError } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('email', email)
+      // Fetch custom role permissions
+      const { data: roleInfo } = await supabase
+        .from('custom_roles')
+        .select('permissions')
+        .eq('name', userRole)
         .maybeSingle()
+      
+      const permissions = roleInfo?.permissions || []
 
-      if (!teamError && teamData) {
-        return {
-          ...teamData,
-          phone: authUserMetadata?.phone || teamData.phone || '',
-          avatar_url: authUserMetadata?.avatar_url || ''
-        } as UserProfile
-      }
-
-      // If neither profiles nor team_members exist, return null (do not auto-provision)
-      console.warn(`No profile found for ${email} — user must be created by founder via Supabase`)
-      return null
+      return {
+        id: authId,
+        name: teamDataMerged?.name || name,
+        email,
+        phone,
+        role: userRole,
+        status: 'active',
+        joined: teamDataMerged?.joined || new Date().toISOString().slice(0, 10),
+        projects: teamDataMerged?.projects || 0,
+        settings,
+        avatar_url,
+        permissions
+      } as UserProfile
     } catch (err) {
       console.error('Exception in fetchProfile:', err)
       return null

@@ -29,9 +29,12 @@ const statusLabels: Record<string, string> = {
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { usePermissions } from '@/hooks/use-permissions'
+import { PermissionDeniedState } from '@/components/ui/permission-denied'
 
 
 function CRMPageContent() {
+  const { hasPermission } = usePermissions()
   const [clients, setClients] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -146,12 +149,16 @@ function CRMPageContent() {
           <Link href={`/crm/${client.id}`}>
             <Button variant="ghost" size="icon" aria-label="View" className="h-7 w-7 hover:text-gold"><Eye className="h-3.5 w-3.5" /></Button>
           </Link>
-          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 hover:text-gold" onClick={() => setEditClient(client)}><Edit className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteClient({id: client.id, name: client.name})}><Trash2 className="h-3.5 w-3.5" /></Button>
+          {hasPermission('crm', 'update') && (
+            <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 hover:text-gold" onClick={() => setEditClient(client)}><Edit className="h-3.5 w-3.5" /></Button>
+          )}
+          {hasPermission('crm', 'delete') && (
+            <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" onClick={() => setDeleteClient({id: client.id, name: client.name})}><Trash2 className="h-3.5 w-3.5" /></Button>
+          )}
         </div>
       )
     }
-  ], [portalAccounts])
+  ], [portalAccounts, hasPermission])
 
   useEffect(() => {
     const cached = getCachedData<any[]>('crm_clients')
@@ -427,6 +434,10 @@ function CRMPageContent() {
     totalRevenue: clients.reduce((s, c) => s + (Number(c.revenue) || 0), 0),
   }
 
+  if (!hasPermission('crm', 'read')) {
+    return <PermissionDeniedState />
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -436,12 +447,12 @@ function CRMPageContent() {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'CRM' }
         ]}
-        primaryAction={{
+        primaryAction={hasPermission('crm', 'create') ? {
           label: 'Add Client',
           onClick: () => setShowAdd(true),
           icon: Plus,
           variant: 'gold'
-        }}
+        } : undefined}
         secondaryActions={
           <Link href="/crm/business-types">
             <Button variant="outline" size="sm">
@@ -493,9 +504,11 @@ function CRMPageContent() {
           savedFiltersKey="crm_clients"
           enableBulkSelect={true}
           bulkActions={[
-            { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
-            { label: 'Mark Won', action: 'status_won', icon: TrendingUp },
-            { label: 'Mark Active', action: 'status_active', icon: TrendingUp }
+            ...(hasPermission('crm', 'delete') ? [{ label: 'Delete Selected', action: 'delete', variant: 'destructive' as const, icon: Trash2 }] : []),
+            ...(hasPermission('crm', 'update') ? [
+              { label: 'Mark Won', action: 'status_won', icon: TrendingUp },
+              { label: 'Mark Active', action: 'status_active', icon: TrendingUp }
+            ] : [])
           ]}
           onBulkAction={handleBulkAction}
           filterDefs={[

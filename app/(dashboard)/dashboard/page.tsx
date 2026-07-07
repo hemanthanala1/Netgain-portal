@@ -552,7 +552,6 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col justify-center items-center py-48 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-gold" />
-        <span className="text-xs text-muted-foreground font-semibold">Streaming command center data...</span>
       </div>
     )
   }

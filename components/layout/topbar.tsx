@@ -281,7 +281,7 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[calc(100vw-32px)] max-w-sm sm:w-96 p-0 border-border bg-[#07110e]" sideOffset={6}>
+          <PopoverContent align="end" className="w-[calc(100vw-32px)] max-w-sm sm:w-96 p-0 border-border bg-popover text-popover-foreground" sideOffset={6}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/80">
               <div>
@@ -298,7 +298,7 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
             </div>
 
             {/* Filter categories */}
-            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border/50 bg-[#0d1e19]/35 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border/50 bg-muted/50 overflow-x-auto no-scrollbar">
               {['All', 'CRM', 'Projects', 'Documents', 'Meetings', 'Finance', 'Support', 'System'].map(cat => (
                 <button
                   key={cat}

@@ -341,7 +341,6 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
         <Loader2 className="h-6 w-6 animate-spin text-gold" />
-        <span>Loading meeting details...</span>
       </div>
     )
   }

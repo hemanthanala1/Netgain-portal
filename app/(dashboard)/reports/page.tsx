@@ -46,7 +46,7 @@ export default function ReportsPage() {
   const [dateRange, setDateRange] = useState('90')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>({
-    clients: [], projects: [], invoices: [], expenses: [], salaries: [], meetings: [], tickets: [], team: []
+    clients: [], projects: [], invoices: [], expenses: [], salaries: [], meetings: [], tickets: [], team: [], services: []
   })
   const { toast } = useToast()
 
@@ -56,7 +56,7 @@ export default function ReportsPage() {
     setLoading(true)
     if (!isSupabaseConfigured()) { setLoading(false); return }
     try {
-      const [clients, projects, invoices, expenses, salaries, meetings, tickets, team] = await Promise.all([
+      const [clients, projects, invoices, expenses, salaries, meetings, tickets, team, services] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('projects').select('*'),
         supabase.from('invoices').select('*'),
@@ -65,6 +65,7 @@ export default function ReportsPage() {
         supabase.from('meetings').select('*'),
         supabase.from('client_notifications').select('*').eq('type', 'support'),
         supabase.from('team_members').select('*'),
+        supabase.from('services').select('*'),
       ])
       setData({
         clients: clients.data || [],
@@ -75,6 +76,7 @@ export default function ReportsPage() {
         meetings: meetings.data || [],
         tickets: tickets.data || [],
         team: team.data || [],
+        services: services.data || [],
       })
     } catch (e: any) {
       toast({ title: 'Error loading reports', description: e.message, variant: 'destructive' })
@@ -222,13 +224,16 @@ export default function ReportsPage() {
         </div>
       ) : (
         <Tabs defaultValue="revenue" className="space-y-6">
-          <TabsList className="grid grid-cols-3 md:grid-cols-6 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
+          <TabsList className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
             <TabsTrigger value="revenue" className="text-xs gap-1.5"><DollarSign className="h-3.5 w-3.5" />Revenue</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Sales</TabsTrigger>
             <TabsTrigger value="projects" className="text-xs gap-1.5"><Briefcase className="h-3.5 w-3.5" />Projects</TabsTrigger>
             <TabsTrigger value="finance" className="text-xs gap-1.5"><BarChart2 className="h-3.5 w-3.5" />Finance</TabsTrigger>
             <TabsTrigger value="clients" className="text-xs gap-1.5"><Users className="h-3.5 w-3.5" />Clients</TabsTrigger>
             <TabsTrigger value="support" className="text-xs gap-1.5"><LifeBuoy className="h-3.5 w-3.5" />Support</TabsTrigger>
+            <TabsTrigger value="team" className="text-xs gap-1.5"><Users className="h-3.5 w-3.5" />Team</TabsTrigger>
+            <TabsTrigger value="services" className="text-xs gap-1.5"><FileText className="h-3.5 w-3.5" />Services</TabsTrigger>
+            <TabsTrigger value="marketing" className="text-xs gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Marketing</TabsTrigger>
           </TabsList>
 
           {/* ── REVENUE ── */}
@@ -650,6 +655,190 @@ export default function ReportsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── TEAM ── */}
+          <TabsContent value="team" className="space-y-6">
+            <ReportHeader
+              title="Team Report"
+              description="Staff directory, roles, and project allocation overview."
+              onExport={() => exportCSV('team_report',
+                ['Name', 'Email', 'Role', 'Status', 'Joined Date'],
+                data.team.map((t: any) => [t.name, t.email, t.role, t.status, t.joined])
+              )}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard title="Total Members" value={data.team.length} />
+              <KPICard title="Active Status" value={data.team.filter((t: any) => t.status === 'active').length} />
+              <KPICard title="Average Salaries (Base)" value={formatCurrency(data.salaries.reduce((acc: number, curr: any) => acc + (Number(curr.base_salary) || 0), 0) / (data.salaries.length || 1))} />
+              <KPICard title="Total Monthly Payroll" value={formatCurrency(data.salaries.reduce((acc: number, curr: any) => acc + (Number(curr.base_salary) || 0) + (Number(curr.bonus) || 0), 0))} />
+            </div>
+            <Card className="bg-card border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gold">Staff Members Directory</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/60 text-muted-foreground">
+                        <th className="py-2 px-3 text-left font-semibold">Name</th>
+                        <th className="py-2 px-3 text-left font-semibold">Email</th>
+                        <th className="py-2 px-3 text-left font-semibold">Role / Position</th>
+                        <th className="py-2 px-3 text-center font-semibold">Status</th>
+                        <th className="py-2 px-3 text-left font-semibold">Joined Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {data.team.map((t: any) => (
+                        <tr key={t.id} className="hover:bg-muted/10">
+                          <td className="py-2.5 px-3 font-medium text-foreground">{t.name}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{t.email}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">
+                            <Badge variant="outline" className="text-[10px] border-gold/25 text-gold bg-gold/5">{t.role || 'Staff'}</Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <Badge variant="outline" className={`text-[9px] capitalize ${t.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-slate-400 border-slate-500/20'}`}>
+                              {t.status || 'active'}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{formatDate(t.joined)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── SERVICES ── */}
+          <TabsContent value="services" className="space-y-6">
+            <ReportHeader
+              title="Services Catalog Report"
+              description="Review of service listings, base pricing, and categories."
+              onExport={() => exportCSV('services_report',
+                ['Service Name', 'Category ID', 'Pricing model', 'Base Price (₹)', 'Status'],
+                (data.services || []).map((s: any) => [s.name, s.cat_id, s.pricing, s.base_price, s.status])
+              )}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard title="Total Listed Services" value={(data.services || []).length} />
+              <KPICard title="Active Services" value={(data.services || []).filter((s: any) => s.status === 'active').length} />
+              <KPICard title="Average Base Price" value={formatCurrency((data.services || []).reduce((acc: number, curr: any) => acc + (Number(curr.base_price) || 0), 0) / ((data.services || []).length || 1))} />
+              <KPICard title="Custom Pricing Models" value={(data.services || []).filter((s: any) => s.pricing === 'custom').length} />
+            </div>
+            <Card className="bg-card border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gold">Listed Services Directory</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/60 text-muted-foreground">
+                        <th className="py-2 px-3 text-left font-semibold">Service Name</th>
+                        <th className="py-2 px-3 text-left font-semibold">Category ID</th>
+                        <th className="py-2 px-3 text-left font-semibold">Pricing Model</th>
+                        <th className="py-2 px-3 text-right font-semibold">Base Price</th>
+                        <th className="py-2 px-3 text-center font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {(data.services || []).map((s: any) => (
+                        <tr key={s.id} className="hover:bg-muted/10">
+                          <td className="py-2.5 px-3 font-medium text-foreground">{s.name}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{s.cat_id}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground capitalize">{s.pricing}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-gold">{formatCurrency(s.base_price)}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <Badge variant="outline" className={`text-[9px] capitalize ${s.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-slate-400 border-slate-500/20'}`}>
+                              {s.status || 'active'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── MARKETING ── */}
+          <TabsContent value="marketing" className="space-y-6">
+            <ReportHeader
+              title="Marketing & Campaigns (Overview)"
+              description="Analytics data for active marketing campaigns and lead acquisitions."
+              onExport={() => exportCSV('marketing_placeholder',
+                ['Campaign Name', 'Budget (₹)', 'Lead Goal', 'LAC (₹)', 'Status'],
+                [
+                  ['Summer Product Launch 2026', '125000', '350', '357.14', 'active'],
+                  ['Re-targeting Ad Campaign Q3', '75000', '200', '375.00', 'paused'],
+                  ['Organic Search Engine Strategy', '45000', '150', '300.00', 'active'],
+                ]
+              )}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard title="Active Campaigns" value="3" />
+              <KPICard title="Total Marketing Budget" value={formatCurrency(245000)} />
+              <KPICard title="Average LAC" value={formatCurrency(344.05)} />
+              <KPICard title="Leads Generated" value="700" />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-card border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold text-gold">Campaign Performance (Mock Chart)</CardTitle>
+                  <CardDescription className="text-[11px] text-muted-foreground">Leads generated vs budget usage by campaign</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        { name: 'Launch 2026', Budget: 125000, Leads: 350 },
+                        { name: 'Q3 Retargeting', Budget: 75000, Leads: 200 },
+                        { name: 'SEO Strategy', Budget: 45000, Leads: 150 },
+                      ]}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+                      <XAxis dataKey="name" stroke="#888888" fontSize={10} />
+                      <YAxis stroke="#888888" fontSize={10} />
+                      <Tooltip contentStyle={{ backgroundColor: '#07110e', borderColor: '#1E3A2F' }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="Budget" name="Budget (₹)" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Leads" name="Leads Count" fill="#D4AF37" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card border-border/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gold">Active Campaigns Listing</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3.5 text-xs">
+                    {[
+                      { name: 'Summer Product Launch 2026', budget: 125000, leads: 350, lac: 357, status: 'active' },
+                      { name: 'Re-targeting Ad Campaign Q3', budget: 75000, leads: 200, lac: 375, status: 'paused' },
+                      { name: 'Organic Search Engine Strategy', budget: 45000, leads: 150, lac: 300, status: 'active' },
+                    ].map((c, i) => (
+                      <div key={i} className="flex justify-between items-center p-2.5 rounded-lg border border-border/40 bg-muted/10">
+                        <div>
+                          <p className="font-semibold text-foreground">{c.name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Budget: {formatCurrency(c.budget)} · Avg LAC: {formatCurrency(c.lac)}</p>
+                        </div>
+                        <Badge variant="outline" className={`text-[9px] capitalize ${c.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-amber-400 border-amber-500/20'}`}>
+                          {c.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       )}

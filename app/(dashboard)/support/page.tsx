@@ -683,6 +683,24 @@ function SupportListContent() {
           <Button 
             size="sm" 
             variant="ghost" 
+            className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={async () => {
+              const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedTicketIds.size} tickets?`)
+              if (!confirmDelete) return
+              const ids = Array.from(selectedTicketIds)
+              if (isSupabaseConfigured()) {
+                await supabase.from('client_notifications').delete().in('id', ids)
+              }
+              setTickets(prev => prev.filter(t => !ids.includes(t.id)))
+              setSelectedTicketIds(new Set())
+              toast({ title: 'Selected tickets deleted successfully' })
+            }}
+          >
+            Delete
+          </Button>
+          <Button 
+            size="sm" 
+            variant="ghost" 
             className="h-8 text-xs text-muted-foreground hover:text-white"
             onClick={() => setSelectedTicketIds(new Set())}
           >

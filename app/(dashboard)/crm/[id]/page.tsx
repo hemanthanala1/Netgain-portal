@@ -543,6 +543,10 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     activities.forEach(a => { items.push({ event: a.description, date: a.activity_date || (a.created_at ? a.created_at.slice(0, 10) : ''), type: a.type, timestamp: safeTimestamp(a.created_at || a.activity_date) }) })
     meetings.forEach(m => { items.push({ event: `Scheduled meeting: ${m.event_type} (${m.status})`, date: m.meeting_date, type: 'meeting', timestamp: safeTimestamp(`${m.meeting_date}T${m.meeting_time || '00:00:00'}`) }) })
     documents.forEach(d => { items.push({ event: `${d.type} ${d.doc_id} created (${d.status}) - ${formatCurrency(d.amount)}`, date: d.date, type: d.type.toLowerCase(), timestamp: safeTimestamp(d.date) }) })
+    clientProjects.forEach(p => { items.push({ event: `Project "${p.title}" created (${p.status})`, date: p.created_at ? p.created_at.slice(0, 10) : (p.startDate || ''), type: 'project', timestamp: safeTimestamp(p.created_at || p.startDate) }) })
+    clientRequirements.forEach(r => { items.push({ event: `Requirement: ${r.title} (${r.status})`, date: r.created_at ? r.created_at.slice(0, 10) : '', type: 'requirement', timestamp: safeTimestamp(r.created_at) }) })
+    clientFiles.forEach(f => { items.push({ event: `File uploaded: ${f.file_name} (${f.category})`, date: f.uploaded_at ? f.uploaded_at.slice(0, 10) : '', type: 'file', timestamp: safeTimestamp(f.uploaded_at) }) })
+    clientSupport.forEach(s => { items.push({ event: `Support Ticket: ${s.title} (${s.status || 'open'})`, date: s.created_at ? s.created_at.slice(0, 10) : '', type: 'support', timestamp: safeTimestamp(s.created_at) }) })
     if (client) { items.push({ event: 'Client added to CRM', date: client.joined || (client.created_at ? client.created_at.slice(0, 10) : ''), type: 'new', timestamp: safeTimestamp(client.joined || client.created_at) }) }
     return items.sort((a, b) => b.timestamp - a.timestamp)
   }
@@ -639,31 +643,92 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             </CardContent>
           </Card>
 
-          {/* Related Records Links */}
-          <Card>
-            <CardContent className="p-5">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5 text-gold"><ExternalLink className="h-4 w-4" /> Related Records</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Link href={`/projects?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
-                  <Briefcase className="h-3.5 w-3.5 text-gold" />
-                  <span>Projects</span>
-                </Link>
-                <Link href={`/documents/invoices?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
-                  <Receipt className="h-3.5 w-3.5 text-gold" />
-                  <span>Invoices</span>
-                </Link>
-                <Link href={`/meetings?client=${encodeURIComponent(client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
-                  <Calendar className="h-3.5 w-3.5 text-gold" />
-                  <span>Meetings</span>
-                </Link>
-                <Link href={`/support?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors">
-                  <LifeBuoy className="h-3.5 w-3.5 text-gold" />
-                  <span>Support</span>
-                </Link>
-                <Link href={`/documents/vault?client=${encodeURIComponent(client.business || client.name)}`} className="flex items-center gap-1.5 p-2 rounded-lg bg-[#0a1612]/30 hover:bg-gold/10 hover:text-gold border border-border/40 transition-colors col-span-2 justify-center">
-                  <FolderOpen className="h-3.5 w-3.5 text-gold" />
-                  <span>Files & Documents (Vault)</span>
-                </Link>
+          {/* Related Records Summary Panel */}
+          <Card className="border-border/40 bg-[#0a1612]/10 backdrop-blur-sm">
+            <CardContent className="p-5 space-y-4">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5 text-gold border-b border-border/20 pb-2">
+                <Briefcase className="h-4 w-4 text-gold" />
+                Related Records Summary
+              </h3>
+              
+              <div className="space-y-3">
+                {/* Projects summary */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-3.5 w-3.5 text-gold/80" />
+                    <span className="text-muted-foreground">Active Projects</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px] bg-emerald-500/5 text-emerald-400 border-emerald-500/20">
+                      {clientProjects.filter(p => p.status === 'active').length} Active
+                    </Badge>
+                    <Link href={`/projects?client=${encodeURIComponent(client.business || client.name)}`} className="text-gold hover:underline font-medium">
+                      View
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Meetings summary */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-gold/80" />
+                    <span className="text-muted-foreground">Upcoming Meetings</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">
+                      {meetings.filter(m => m.status === 'upcoming' || m.status === 'rescheduled').length} Pending
+                    </Badge>
+                    <Link href={`/meetings?client=${encodeURIComponent(client.name)}`} className="text-gold hover:underline font-medium">
+                      View
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Invoices summary */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="h-3.5 w-3.5 text-gold/80" />
+                    <span className="text-muted-foreground">Unpaid Invoices</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-300">
+                      {formatCurrency(documents.filter(d => d.type === 'Invoice' && d.status !== 'paid').reduce((acc, curr) => acc + (curr.amount || 0), 0))}
+                    </span>
+                    <Link href={`/documents/invoices?client=${encodeURIComponent(client.business || client.name)}`} className="text-gold hover:underline font-medium">
+                      View
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Support summary */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <LifeBuoy className="h-3.5 w-3.5 text-gold/80" />
+                    <span className="text-muted-foreground">Open Tickets</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px] bg-amber-500/5 text-amber-400 border-amber-500/20">
+                      {clientSupport.filter(s => s.status !== 'resolved' && s.status !== 'closed').length} Open
+                    </Badge>
+                    <Link href={`/support?client=${encodeURIComponent(client.business || client.name)}`} className="text-gold hover:underline font-medium">
+                      View
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Files summary */}
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-border/20">
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="h-3.5 w-3.5 text-gold/80" />
+                    <span className="text-muted-foreground font-medium">Files in Vault</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground">{clientFiles.length} files</span>
+                    <Link href={`/documents/vault?client=${encodeURIComponent(client.business || client.name)}`} className="text-gold hover:underline font-medium">
+                      Open Vault
+                    </Link>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1134,10 +1199,28 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                   enableFilters={true}
                   entries={getTimelineItems().map(t => {
                     let actionType: any = 'custom'
+                    let moduleName = 'CRM'
                     if (t.type === 'new') actionType = 'created'
                     else if (t.type === 'email') actionType = 'sent'
                     else if (t.type === 'note') actionType = 'note'
-                    else if (['quotation', 'invoice', 'sow', 'agreement'].includes(t.type)) actionType = 'created'
+                    else if (['quotation', 'invoice', 'sow', 'agreement'].includes(t.type)) {
+                      actionType = 'created'
+                      moduleName = 'Documents'
+                    } else if (t.type === 'project') {
+                      actionType = 'created'
+                      moduleName = 'Projects'
+                    } else if (t.type === 'requirement') {
+                      actionType = 'created'
+                      moduleName = 'PRD'
+                    } else if (t.type === 'file') {
+                      actionType = 'uploaded'
+                      moduleName = 'Vault'
+                    } else if (t.type === 'support') {
+                      actionType = 'created'
+                      moduleName = 'Support'
+                    } else if (t.type === 'meeting') {
+                      moduleName = 'Meetings'
+                    }
 
                     let linkedRecord = undefined
                     if (['quotation', 'invoice', 'sow', 'agreement'].includes(t.type)) {
@@ -1145,6 +1228,14 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       linkedRecord = { label: `View Document`, href: `/documents/${typePath}` }
                     } else if (t.type === 'meeting') {
                       linkedRecord = { label: `View Meetings`, href: `/meetings` }
+                    } else if (t.type === 'project') {
+                      linkedRecord = { label: `View Project`, href: `/projects` }
+                    } else if (t.type === 'requirement') {
+                      linkedRecord = { label: `View Requirements`, href: `/prd` }
+                    } else if (t.type === 'file') {
+                      linkedRecord = { label: `View Vault`, href: `/documents/vault` }
+                    } else if (t.type === 'support') {
+                      linkedRecord = { label: `View Tickets`, href: `/support` }
                     }
 
                     return {
@@ -1153,7 +1244,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       date: t.date,
                       by: t.type === 'note' ? 'Staff Member' : undefined,
                       linkedRecord,
-                      module: 'CRM'
+                      module: moduleName
                     }
                   })}
                 />

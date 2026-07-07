@@ -5,6 +5,7 @@ import { TopBar } from '@/components/layout/topbar'
 import { useState } from 'react'
 import { UserProvider } from '@/components/user-provider'
 import { CommandPalette } from '@/components/ui/command-palette'
+import { KeyboardShortcuts } from '@/components/ui/keyboard-shortcuts'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -42,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Global Utilities */}
       <CommandPalette />
+      <KeyboardShortcuts />
     </UserProvider>
   )
 }

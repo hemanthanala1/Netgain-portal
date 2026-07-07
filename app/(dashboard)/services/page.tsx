@@ -597,7 +597,6 @@ export default function ServicesPage() {
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-gold" />
-          <span className="ml-2 text-sm text-muted-foreground">Loading services...</span>
         </div>
       ) : (
         <div className={gridView ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>

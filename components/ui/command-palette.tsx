@@ -163,7 +163,7 @@ export function CommandPalette() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-xl p-0 border-[#1E3A2F]/80 bg-[#07110E] overflow-hidden shadow-2xl rounded-2xl">
+      <DialogContent className="max-w-xl p-0 border-border bg-popover text-popover-foreground overflow-hidden shadow-2xl rounded-2xl">
         <div className="relative border-b border-border/40">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
@@ -176,7 +176,7 @@ export function CommandPalette() {
             autoFocus
           />
           {query && (
-            <button onClick={() => setQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white">
+            <button onClick={() => setQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -207,10 +207,10 @@ export function CommandPalette() {
                 onMouseEnter={() => setSelectedIndex(idx)}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-150 select-none",
-                  isSelected ? "bg-gold/10 text-white border-l-2 border-gold" : "text-slate-300 hover:bg-muted/10 border-l-2 border-transparent"
+                  isSelected ? "bg-gold/10 text-foreground border-l-2 border-gold font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border-l-2 border-transparent"
                 )}
               >
-                <div className={cn("p-1.5 rounded-lg shrink-0", isSelected ? "bg-gold text-black" : "bg-muted/30 text-gold")}>
+                <div className={cn("p-1.5 rounded-lg shrink-0", isSelected ? "bg-gold text-white" : "bg-muted/30 text-gold")}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -226,7 +226,7 @@ export function CommandPalette() {
         </div>
 
         {/* Footer shortcuts helper */}
-        <div className="bg-[#0b1612] px-4 py-2 flex items-center justify-between text-[10px] text-muted-foreground border-t border-border/30">
+        <div className="bg-muted/40 px-4 py-2 flex items-center justify-between text-[10px] text-muted-foreground border-t border-border/30">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
             <kbd className="bg-muted px-1.5 py-0.5 rounded border border-border">↑↓</kbd> to select
