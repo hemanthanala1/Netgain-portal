@@ -991,7 +991,7 @@ function InvoicesPageContent() {
           const { error: itemsErr } = await supabase.from('invoice_items').insert(
             form.items.map((item, idx) => ({
               invoice_id: targetId,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,
@@ -1107,7 +1107,7 @@ function InvoicesPageContent() {
           const { error: itemsErr } = await supabase.from('invoice_items').insert(
             form.items.map((item, idx) => ({
               invoice_id: editInvoice.id,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,

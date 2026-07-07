@@ -1042,7 +1042,7 @@ function QuotationsPageContent() {
             const { error: itemsErr } = await supabase.from('quotation_items').insert(
               form.items.map((item, idx) => ({
                 quotation_id: newQ.id,
-                service_id: item.service_id,
+                service_id: item.service_id || null,
                 service_name: item.service_name,
                 description: item.description,
                 quantity: item.quantity,
@@ -1154,7 +1154,7 @@ function QuotationsPageContent() {
           const { error: itemsErr } = await supabase.from('quotation_items').insert(
             form.items.map((item, idx) => ({
               quotation_id: editQuote.id,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,

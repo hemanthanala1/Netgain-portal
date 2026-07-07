@@ -361,7 +361,7 @@ function AgreementsPageContent() {
   }
 
   async function downloadPdf(agr: Agreement, forceClientSide = false) {
-    if (agr.status === 'signed' && !forceClientSide) {
+    if ((agr.status === 'signed' || agr.status === 'completed' || agr.signed_at) && !forceClientSide) {
       const cacheBuster = agr.signed_at ? new Date(agr.signed_at).getTime() : new Date().getTime()
       const res = await fetch(`/api/document-pdf?id=${agr.id}&type=Agreement&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
@@ -489,7 +489,7 @@ function AgreementsPageContent() {
           const { error: itemsErr } = await supabase.from('agreement_items').insert(
             form.items.map((item, idx) => ({
               agreement_id: targetId,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,
@@ -570,7 +570,7 @@ function AgreementsPageContent() {
           const { error: itemsErr } = await supabase.from('agreement_items').insert(
             form.items.map((item, idx) => ({
               agreement_id: editItem.id,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,

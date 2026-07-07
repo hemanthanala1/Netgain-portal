@@ -844,6 +844,17 @@ function VaultListContent() {
       doc_id: doc.docId
     }
 
+    if (doc.status === 'signed' || doc.status === 'completed' || raw.signed_at) {
+      const cacheBuster = raw.signed_at ? new Date(raw.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${doc.id}&type=SOW&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      a.download = `SOW_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      return
+    }
+
     const clientName = raw.client
     const project = raw.project
 
@@ -908,6 +919,17 @@ function VaultListContent() {
       status: doc.status,
       created: doc.date,
       doc_id: doc.docId
+    }
+
+    if (doc.status === 'signed' || doc.status === 'completed' || raw.signed_at) {
+      const cacheBuster = raw.signed_at ? new Date(raw.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${doc.id}&type=Agreement&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      a.download = `Agreement_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      return
     }
 
     const content = [

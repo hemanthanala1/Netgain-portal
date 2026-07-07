@@ -651,7 +651,7 @@ function SOWPageContent() {
   }
 
   async function downloadSowPdf(sow: SOW, forceClientSide = false) {
-    if (sow.status === 'signed' && !forceClientSide) {
+    if ((sow.status === 'signed' || sow.status === 'completed' || sow.signed_at) && !forceClientSide) {
       const cacheBuster = sow.signed_at ? new Date(sow.signed_at).getTime() : new Date().getTime()
       const res = await fetch(`/api/document-pdf?id=${sow.id}&type=SOW&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
@@ -898,7 +898,7 @@ function SOWPageContent() {
           const { error: itemsErr } = await supabase.from('sow_items').insert(
             form.items.map((item, idx) => ({
               sow_id: targetId,
-              service_id: item.service_id,
+              service_id: item.service_id || null,
               service_name: item.service_name,
               description: item.description,
               quantity: item.quantity,
