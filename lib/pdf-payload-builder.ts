@@ -20,7 +20,8 @@ export async function buildPdfPayload(
       .select('*')
       .eq('document_type', docType)
       .eq('document_id', doc.id)
-      .maybeSingle(),
+      .order('created_at', { ascending: false })
+      .limit(1),
     supabase.from(
       docType === 'Quotation' ? 'quotation_items' :
       docType === 'Invoice' ? 'invoice_items' :
@@ -37,7 +38,7 @@ export async function buildPdfPayload(
   const companyDocs = cRes.data?.docs || {}
   const paymentSchedules = companyDocs.paymentSchedules || []
   const services = svRes.data || []
-  const signature = sigRes.data
+  const signature = sigRes.data && sigRes.data.length > 0 ? sigRes.data[0] : null
   if (itemsRes && itemsRes.data) {
     lineItems = itemsRes.data
   }
