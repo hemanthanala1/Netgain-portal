@@ -5,7 +5,6 @@ import { TopBar } from '@/components/layout/topbar'
 import { useState } from 'react'
 import { UserProvider } from '@/components/user-provider'
 import { CommandPalette } from '@/components/ui/command-palette'
-import { QuickActionButton } from '@/components/ui/quick-action-button'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -43,7 +42,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Global Utilities */}
       <CommandPalette />
-      <QuickActionButton />
     </UserProvider>
   )
 }

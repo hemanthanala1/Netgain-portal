@@ -14,7 +14,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History, Globe } from 'lucide-react'
+import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History, Globe, FileText } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
@@ -102,6 +102,159 @@ function AgreementsPageContent() {
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
   const searchParams = useSearchParams()
+
+  const columns = useMemo(() => [
+    {
+      header: 'Doc ID',
+      accessor: 'docId',
+      sortable: true,
+      sticky: true,
+      cell: (a: Agreement) => (
+        <div>
+          <span className="font-mono text-xs text-gold font-bold">{a.docId}</span>
+          {a.published ? (
+            <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+              <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${a.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={a.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
+                <Globe className="h-2.5 w-2.5" />
+                {a.visibility_status === 'hidden' ? 'Hidden' : `V${a.published_version || 1}`}
+              </span>
+              {a.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(a.viewed_at)}`}>Viewed</span>}
+              {a.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(a.downloaded_at)}`}>DL</span>}
+              {a.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(a.signed_at)}`}>Signed</span>}
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
+          )}
+          {a.status === 'needs revision' && (
+            <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
+              ⚠ Client requested changes
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Client',
+      accessor: 'client',
+      sortable: true,
+      cell: (a: Agreement) => (
+        <div>
+          <a href={`/crm?search=${encodeURIComponent(a.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+            {a.client}
+          </a>
+          <p className="text-[10px] text-muted-foreground">{a.contact}</p>
+        </div>
+      )
+    },
+    {
+      header: 'Type',
+      accessor: 'type',
+      sortable: true,
+      cell: (a: Agreement) => <span className="text-xs text-muted-foreground max-w-[200px] truncate">{a.type}</span>
+    },
+    {
+      header: 'Value',
+      accessor: 'value',
+      sortable: true,
+      cell: (a: Agreement) => <span className="font-semibold text-gold text-xs">{a.value > 0 ? formatCurrency(a.value) : '—'}</span>
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      sortable: true,
+      cell: (a: Agreement) => (
+        <div onClick={e => e.stopPropagation()}>
+          <Select value={a.status} onValueChange={v => updateStatus(a.id, v)}>
+            <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(a.status)}`}><SelectValue /></SelectTrigger>
+            <SelectContent>{STATUS_OPTS.map(o => <SelectItem key={o} value={o} className="text-xs capitalize">{o}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )
+    },
+    {
+      header: 'Created',
+      accessor: 'created',
+      sortable: true,
+      cell: (a: Agreement) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(a.created)}</span>
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      className: 'text-right',
+      cell: (a: Agreement) => (
+        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(a)}><History className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
+            {downloadingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs); setShowCreate(true); }}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
+            <Globe className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}><Send className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(a.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )
+    }
+  ], [downloadingId, companyDocs])
+
+  const handleBulkAction = async (action: string, selectedRows: Agreement[]) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} agreements?`)) return
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('agreements').delete().in('id', ids)
+          if (error) {
+            toast({ title: 'Error deleting agreements', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(r => r.id))
+      const updatedList = agreements.filter(a => !idsSet.has(a.id))
+      setAgreements(updatedList)
+      setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Agreements Deleted', description: `${selectedRows.length} agreements have been deleted.` })
+      setLoading(false)
+    } else if (action.startsWith('status_')) {
+      const newStatus = action.replace('status_', '')
+      setLoading(true)
+      if (isSupabaseConfigured()) {
+        try {
+          const ids = selectedRows.map(r => r.id)
+          const { error } = await supabase.from('agreements').update({ status: newStatus }).in('id', ids)
+          if (error) {
+            toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
+            setLoading(false)
+            return
+          }
+        } catch (err: any) {
+          toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
+          setLoading(false)
+          return
+        }
+      }
+      const idsSet = new Set(selectedRows.map(a => a.id))
+      const updatedList = agreements.map(a => idsSet.has(a.id) ? { ...a, status: newStatus } : a)
+      setAgreements(updatedList)
+      setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
+      invalidateCache('dashboard')
+      toast({ title: 'Status Updated', description: `${selectedRows.length} agreements marked as ${newStatus}.` })
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     const clientId = searchParams.get('clientId') || searchParams.get('prefill_client_id')
@@ -757,84 +910,33 @@ function AgreementsPageContent() {
         ))}
       </div>
 
-      <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search agreements..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">{['Doc ID','Client','Type','Value','Status','Date','Actions'].map(h => <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody>
-              {agreements.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="p-8">
-                    <EmptyState
-                      icon={HandshakeIcon}
-                      title="No agreements found"
-                      description="Create your first client agreement."
-                      action={{ label: 'New Agreement', onClick: () => { resetForm(null, companyDocs); setShowCreate(true) }, icon: Plus }}
-                    />
-                  </td>
-                </tr>
-              )}
-              {agreements.filter(a => a.client.toLowerCase().includes(search.toLowerCase())).map(a => (
-                <tr key={a.id} className={`border-b border-border hover:bg-muted/30 transition-colors ${a.status === 'needs revision' ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
-                  <td className="py-3 px-4">
-                    <span className="font-mono text-xs text-gold">{a.docId}</span>
-                    {a.published ? (
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px]">
-                        <span className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border ${a.visibility_status === 'hidden' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`} title={a.visibility_status === 'hidden' ? 'Hidden from Client Portal' : 'Published to Client Portal'}>
-                          <Globe className="h-2.5 w-2.5" />
-                          {a.visibility_status === 'hidden' ? 'Hidden' : `V${a.published_version || 1}`}
-                        </span>
-                        {a.viewed_at && <span className="text-blue-400 font-medium border border-blue-500/20 bg-blue-500/5 px-1 py-0.5 rounded" title={`Viewed at ${formatDate(a.viewed_at)}`}>Viewed</span>}
-                        {a.downloaded_at && <span className="text-green-400 font-medium border border-green-500/20 bg-green-500/5 px-1 py-0.5 rounded" title={`Downloaded at ${formatDate(a.downloaded_at)}`}>DL</span>}
-                        {a.signed_at && <span className="text-emerald-400 font-medium border border-emerald-500/20 bg-emerald-500/5 px-1 py-0.5 rounded" title={`Signed at ${formatDate(a.signed_at)}`}>Signed</span>}
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-muted-foreground/50 mt-1">Not Published</div>
-                    )}
-                    {a.status === 'needs revision' && (
-                      <div className="mt-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1 text-amber-400 font-semibold flex items-center gap-1">
-                        ⚠ Client requested changes
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3 px-4"><a href={`/crm?search=${encodeURIComponent(a.client)}`} className="font-medium hover:text-gold transition-colors hover:underline decoration-dotted">{a.client}</a><p className="text-xs text-muted-foreground">{a.contact}</p></td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground">{a.type}</td>
-                  <td className="py-3 px-4 font-semibold text-gold">{a.value > 0 ? formatCurrency(a.value) : '—'}</td>
-                  <td className="py-3 px-4">
-                    <Select value={a.status} onValueChange={v => updateStatus(a.id, v)}>
-                      <SelectTrigger className={`h-7 w-28 text-xs border ${getDocStatusColor(a.status)}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>{STATUS_OPTS.map(s => <SelectItem key={s} value={s} className="text-xs capitalize">{s}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground">{formatDate(a.created)}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(a)}><History className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
-                        {downloadingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs) }}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
-                        <Globe className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}>
-                        <Send className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(a.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DataTable
+        data={agreements}
+        columns={columns}
+        searchPlaceholder="Search Client Agreements..."
+        searchKeys={['client', 'type', 'docId']}
+        exportFileName="agreements"
+        initialSearch={searchParams.get('search') || searchParams.get('client') || ''}
+        savedFiltersKey="agreement"
+        enableBulkSelect={true}
+        bulkActions={[
+          { label: 'Delete Selected', action: 'delete', variant: 'destructive', icon: Trash2 },
+          { label: 'Mark Sent', action: 'status_sent', icon: FileText },
+          { label: 'Mark Signed', action: 'status_signed', icon: FileText }
+        ]}
+        onBulkAction={handleBulkAction}
+        filterDefs={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: STATUS_OPTS.map(s => ({ label: s.toUpperCase(), value: s }))
+          }
+        ]}
+        emptyTitle="No agreements found"
+        emptyDescription="Create your first client agreement or adjust your filters."
+        emptyIcon={HandshakeIcon}
+        emptyAction={{ label: 'New Agreement', onClick: () => { resetForm(null, companyDocs); setShowCreate(true) }, icon: Plus }}
+      />
 
       <Drawer
         isOpen={showCreate}
