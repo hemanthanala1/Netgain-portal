@@ -58,6 +58,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [editNoteContent, setEditNoteContent] = useState('')
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
   const [previewDoc, setPreviewDoc] = useState<any>(null)
+  const [pdfVersion, setPdfVersion] = useState(1)
   const [versions, setVersions] = useState<any[]>([])
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [activities, setActivities] = useState<any[]>([])
@@ -443,6 +444,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
   const handlePreviewDoc = async (doc: any) => {
     setPreviewDoc(doc)
+    setPdfVersion(v => v + 1)
     setVersions([])
     setLoadingVersions(true)
     setDocTimeline([])
@@ -1298,8 +1300,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       <Dialog open={!!previewDoc} onOpenChange={v => !v && setPreviewDoc(null)}>
         <DialogContent className="fixed right-0 top-0 left-auto top-auto translate-x-0 translate-y-0 h-screen w-full max-w-5xl p-0 flex flex-col md:flex-row overflow-hidden bg-background border-l border-border shadow-2xl rounded-l-2xl animate-in slide-in-from-right duration-300 !left-auto !top-auto !translate-x-0 !translate-y-0 !right-0 !top-0 h-screen w-[95vw] max-w-5xl">
           {previewDoc && (() => {
-            const isLocked = previewDoc.is_locked || previewDoc.status === 'signed' || previewDoc.status === 'completed' || previewDoc.status === 'paid';
-            const isSigned = previewDoc.status === 'signed' || previewDoc.signed_at;
+            const currentDoc = documents.find(d => d.id === previewDoc.id && d.type === previewDoc.type) || previewDoc;
+            const isLocked = currentDoc.is_locked || currentDoc.status === 'signed' || currentDoc.status === 'completed' || currentDoc.status === 'paid';
+            const isSigned = currentDoc.status === 'signed' || currentDoc.signed_at;
 
             return (
               <>
@@ -1307,9 +1310,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <div className="flex-1 h-full bg-black/40 border-r border-border relative font-sans">
                   <iframe
                     id="preview-doc-iframe"
-                    src={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
+                    src={`/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : pdfVersion}`}
                     className="w-full h-full border-0 rounded-l-2xl"
-                    title={`Preview of ${previewDoc.doc_id}`}
+                    title={`Preview of ${currentDoc.doc_id}`}
                   />
                 </div>
 
@@ -1317,8 +1320,8 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <div className="w-full md:w-[380px] h-full p-6 flex flex-col justify-between overflow-y-auto shrink-0 bg-background/95 space-y-6">
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-bold text-gold">{previewDoc.doc_id}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">{previewDoc.type}</p>
+                      <h3 className="text-lg font-bold text-gold">{currentDoc.doc_id}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{currentDoc.type}</p>
                     </div>
 
                     {/* Lock Status & Signature Badge */}
@@ -1343,16 +1346,16 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <div className="space-y-2 bg-muted/20 p-4 rounded-xl border border-border/30 text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount:</span>
-                        <span className="font-semibold text-gold">{formatCurrency(previewDoc.amount)}</span>
+                        <span className="font-semibold text-gold">{formatCurrency(currentDoc.amount)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Date:</span>
-                        <span>{formatDate(previewDoc.date)}</span>
+                        <span>{formatDate(currentDoc.date)}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Status:</span>
-                        <Badge variant={previewDoc.status === 'paid' || previewDoc.status === 'signed' || previewDoc.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[9px] h-5">
-                          {previewDoc.status}
+                        <Badge variant={currentDoc.status === 'paid' || currentDoc.status === 'signed' || currentDoc.status === 'won' ? 'default' : 'secondary'} className="capitalize text-[9px] h-5">
+                          {currentDoc.status}
                         </Badge>
                       </div>
                     </div>
@@ -1362,8 +1365,8 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Actions</h4>
                       <div className="grid grid-cols-2 gap-2">
                         <a
-                          href={`/api/document-pdf?id=${previewDoc.id}&type=${previewDoc.type}`}
-                          download={`Document_${previewDoc.doc_id}.pdf`}
+                          href={`/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : pdfVersion}`}
+                          download={`Document_${currentDoc.doc_id}.pdf`}
                           className="w-full col-span-2"
                         >
                           <Button variant="gold" className="w-full gap-1.5 gold-gradient text-white border-0 text-xs h-8">
@@ -1385,7 +1388,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => setShareDoc({ id: previewDoc.id, title: `${previewDoc.doc_id} - ${client?.business || client?.name}` })}
+                          onClick={() => setShareDoc({ id: currentDoc.id, title: `${currentDoc.doc_id} - ${client?.business || client?.name}` })}
                           className="w-full text-xs h-8 gap-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/5"
                         >
                           <Send className="h-3.5 w-3.5" /> Send Document
@@ -1449,7 +1452,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
                   <div className="pt-4 border-t border-border/40 flex gap-2">
                     <a
-                      href={previewDoc.type === 'Quotation' ? `/documents/quotations` : previewDoc.type === 'Invoice' ? `/documents/invoices` : previewDoc.type === 'SOW' ? `/documents/sow` : `/documents/agreements`}
+                      href={currentDoc.type === 'Quotation' ? `/documents/quotations` : currentDoc.type === 'Invoice' ? `/documents/invoices` : currentDoc.type === 'SOW' ? `/documents/sow` : `/documents/agreements`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1"

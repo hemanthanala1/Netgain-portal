@@ -651,8 +651,8 @@ function SOWPageContent() {
   }
 
   async function downloadSowPdf(sow: SOW) {
-    const payload = buildPayload({ ...sow, value: String(sow.value), email: '', businessType: '', startDate: '', confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.', customTerms: sow.customTerms || '' }, sow.client, sow.project, sow.docId)
-    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const cacheBuster = sow.signed_at ? new Date(sow.signed_at).getTime() : new Date().getTime()
+    const res = await fetch(`/api/document-pdf?id=${sow.id}&type=SOW&v=${cacheBuster}`)
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob)

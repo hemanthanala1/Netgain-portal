@@ -361,47 +361,8 @@ function AgreementsPageContent() {
   }
 
   async function downloadPdf(agr: Agreement) {
-    let sub = Number(agr.value) || 0
-    let dAmt = 0
-    let tot = Number(agr.value) || 0
-    let pdfItems: any[] = []
-    let servicesStr = agr.services || ''
-
-    if (agr.items && agr.items.length > 0) {
-      sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
-      const lineDisc = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
-      dAmt = lineDisc
-      const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
-      tot = (sub - dAmt) + lineTax
-
-      servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
-      pdfItems = agr.items.map((item: any) => ({
-        serviceName: item.service_name,
-        finalPrice: item.total,
-        price: item.unit_price,
-        quantity: item.quantity,
-        category: 'Service',
-        pricing_model: 'fixed',
-        deliverables: item.description ? item.description.split('\n') : []
-      }))
-    }
-
-    const payload = {
-      docType: 'Agreement',
-      clientName: agr.contact || agr.client,
-      projectTitle: `${agr.type} — ${agr.client}`,
-      companyName: agr.client,
-      clientInfo: { business: agr.type, mobile: agr.phone },
-      content: buildContent({ ...agr, value: tot }, agr.client, tot, servicesStr),
-      items: pdfItems,
-      subtotal: sub,
-      discountTotal: dAmt,
-      grandTotal: tot,
-      docsSettings: {
-        customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
-      }
-    }
-    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const cacheBuster = agr.signed_at ? new Date(agr.signed_at).getTime() : new Date().getTime()
+    const res = await fetch(`/api/document-pdf?id=${agr.id}&type=Agreement&v=${cacheBuster}`)
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob)

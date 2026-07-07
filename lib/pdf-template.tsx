@@ -10,11 +10,11 @@ import {
 // Register cursive fonts for client e-signatures
 Font.register({
   family: 'DancingScript',
-  src: 'https://fonts.gstatic.com/s/dancingscript/v25/GhF3yp15Mr-MC5tA851Es39uSMkP.ttf'
+  src: 'https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5hNP6pg.ttf'
 })
 Font.register({
   family: 'AlexBrush',
-  src: 'https://fonts.gstatic.com/s/alexbrush/v22/SZcuFz4rVPCQMBpkqFMq_Mf5.ttf'
+  src: 'https://fonts.gstatic.com/s/alexbrush/v23/SZc83FzrJKuqFbwMKk6EhUXz6BlNiCY.ttf'
 })
 
 // ── Colour palette (Urban Edge / Dark Theme) ─────────────────────────────

@@ -717,7 +717,10 @@ export default function ClientDashboardPage() {
   }
 
   const handleDownloadPdf = (doc: ClientDoc) => {
-    const url = doc.token ? `/api/document-pdf?token=${doc.token}&download=1` : `/api/document-pdf?id=${doc.id}&type=${doc.type}&download=1`
+    const cacheBuster = doc.signed_at ? new Date(doc.signed_at).getTime() : new Date().getTime()
+    const url = doc.token 
+      ? `/api/document-pdf?token=${doc.token}&v=${cacheBuster}&download=1` 
+      : `/api/document-pdf?id=${doc.id}&type=${doc.type}&v=${cacheBuster}&download=1`
     window.open(url, '_blank')
     trackActivity(doc, 'download')
   }
@@ -953,20 +956,42 @@ export default function ClientDashboardPage() {
         { date: new Date().toISOString().split('T')[0], action: 'Status changed to signed' }
       ]
 
-      const { error: updateDocError } = await supabase
-        .from(tableName)
-        .update({
-          status: 'signed',
-          is_locked: true,
-          signed_at: new Date().toISOString(),
-          ip_address: ip,
-          browser: browser,
-          device: device,
-          history: updatedHistory
-        })
-        .eq('id', selectedDoc.id)
+      let updateDocError: any = null
+      try {
+        const { error } = await supabase
+          .from(tableName)
+          .update({
+            status: 'signed',
+            is_locked: true,
+            signed_at: new Date().toISOString(),
+            signed_by: signerName,
+            ip_address: ip,
+            browser: browser,
+            device: device,
+            history: updatedHistory
+          })
+          .eq('id', selectedDoc.id)
+        updateDocError = error
+      } catch (e: any) {
+        updateDocError = e
+      }
 
-      if (updateDocError) throw updateDocError
+      if (updateDocError) {
+        // Fallback: try without signed_by if column doesn't exist
+        const { error: fallbackErr } = await supabase
+          .from(tableName)
+          .update({
+            status: 'signed',
+            is_locked: true,
+            signed_at: new Date().toISOString(),
+            ip_address: ip,
+            browser: browser,
+            device: device,
+            history: updatedHistory
+          })
+          .eq('id', selectedDoc.id)
+        if (fallbackErr) throw fallbackErr
+      }
 
       // 7. Update timeline
       await supabase.from('document_timeline').insert([
@@ -2327,171 +2352,179 @@ export default function ClientDashboardPage() {
         )}
 
         {/* Detailed Document Viewer tab/layout */}
-        {selectedDoc && (
-          <div className="p-6 space-y-6 max-w-5xl">
-            {/* Viewer Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border">
-              <div className="flex items-center gap-3">
-                <Button onClick={() => setSelectedDoc(null)} variant="outline" size="sm" className="h-8 border-border bg-transparent text-foreground/90 gap-1.5">
-                  <ArrowLeft className="h-3.5 w-3.5" /> Back
-                </Button>
-                <div>
-                  <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-                    {selectedDoc.title}
-                    <Badge className="bg-primary/10 text-primary border border-primary/20 font-mono text-[10px]">V{selectedDoc.published_version}</Badge>
-                  </h1>
-                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Issued: {formatDate(selectedDoc.date)} · Ref: {selectedDoc.docId}</p>
+        {selectedDoc && (() => {
+          const currentDoc = docs.find(d => d.id === selectedDoc.id && d.type === selectedDoc.type) || selectedDoc
+          return (
+            <div className="p-6 space-y-6 max-w-5xl">
+              {/* Viewer Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <Button onClick={() => setSelectedDoc(null)} variant="outline" size="sm" className="h-8 border-border bg-transparent text-foreground/90 gap-1.5">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+                  </Button>
+                  <div>
+                    <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      {currentDoc.title}
+                      <Badge className="bg-primary/10 text-primary border border-primary/20 font-mono text-[10px]">V{currentDoc.published_version}</Badge>
+                    </h1>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Issued: {formatDate(currentDoc.date)} · Ref: {currentDoc.docId}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => handleDownloadPdf(currentDoc)} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
+                    <Download className="h-3.5 w-3.5" /> Download
+                  </Button>
+                  <Button onClick={printDocument} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
+                    <Printer className="h-3.5 w-3.5" /> Print
+                  </Button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button onClick={() => handleDownloadPdf(selectedDoc)} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
-                  <Download className="h-3.5 w-3.5" /> Download
-                </Button>
-                <Button onClick={printDocument} variant="outline" size="sm" className="h-8 text-xs border-border bg-transparent text-foreground/90 gap-1.5">
-                  <Printer className="h-3.5 w-3.5" /> Print
+              {/* Mobile helper banner */}
+              <div className="lg:hidden bg-primary/10 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-foreground/90">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="h-4 w-4 text-primary shrink-0" />
+                  Mobile View: If you can only see the first page, open the full document in a new tab.
+                </span>
+                <Button 
+                  onClick={() => {
+                    const cacheBuster = currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : new Date().getTime()
+                    const url = currentDoc.token 
+                      ? `/api/document-pdf?token=${currentDoc.token}&v=${cacheBuster}` 
+                      : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${cacheBuster}`
+                    window.open(url, '_blank')
+                  }} 
+                  variant="default" 
+                  size="sm" 
+                  className="h-8 text-xs text-black font-semibold shrink-0"
+                >
+                  Open Full Document
                 </Button>
               </div>
-            </div>
 
-            {/* Mobile helper banner */}
-            <div className="lg:hidden bg-primary/10 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-foreground/90">
-              <span className="flex items-center gap-1.5 font-medium">
-                <AlertTriangle className="h-4 w-4 text-primary shrink-0" />
-                Mobile View: If you can only see the first page, open the full document in a new tab.
-              </span>
-              <Button 
-                onClick={() => {
-                  const url = selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}`
-                  window.open(url, '_blank')
-                }} 
-                variant="default" 
-                size="sm" 
-                className="h-8 text-xs text-black font-semibold shrink-0"
-              >
-                Open Full Document
-              </Button>
-            </div>
+              {/* Document body preview with iframe */}
+              <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
+                   <iframe 
+                     id="doc-viewer-iframe"
+                     src={currentDoc.token 
+                       ? `/api/document-pdf?token=${currentDoc.token}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : 0}#toolbar=0` 
+                       : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : 0}#toolbar=0`} 
+                     className="w-full h-full border-0 bg-white"
+                     style={{ minHeight: '400px' }}
+                     title={currentDoc.title}
+                     scrolling="yes"
+                   />
+                </div>
 
-            {/* Document body preview with iframe */}
-            <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
-              <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
-                 <iframe 
-                   id="doc-viewer-iframe"
-                   src={selectedDoc.token ? `/api/document-pdf?token=${selectedDoc.token}#toolbar=0` : `/api/document-pdf?id=${selectedDoc.id}&type=${selectedDoc.type}#toolbar=0`} 
-                   className="w-full h-full border-0 bg-white"
-                   style={{ minHeight: '400px' }}
-                   title={selectedDoc.title}
-                   scrolling="yes"
-                 />
-              </div>
-
-              {/* Sidebar Action Panel */}
-              <div className="lg:col-span-1 space-y-6">
-                <Card className="bg-card border-border shadow-xl">
-                  <CardContent className="p-5 space-y-5">
-                    
-                    {/* Status & Version */}
-                    <div className="flex flex-col gap-2 pb-4 border-b border-border">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground font-medium">Status</span>
-                        {getStatusBadgeStyled(selectedDoc.status)}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground font-medium">Version</span>
-                        <span className="font-mono font-bold text-foreground/90">V{selectedDoc.published_version}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground font-medium">Published</span>
-                        <span className="font-semibold text-foreground/90 text-xs">{formatDate(selectedDoc.published_at)}</span>
-                      </div>
-                    </div>
-
-                    {/* Interactive signing controls if applicable and NOT signed */}
-                    {!selectedDoc.signed_at && 
-                     !['completed', 'signed', 'approved', 'needs revision', 'rejected'].includes(selectedDoc.status?.toLowerCase() || '') && 
-                     ['Quotation', 'Agreement', 'SOW'].includes(selectedDoc.type) && (
-                      <div className="space-y-2 pt-2">
-                        {selectedDoc.type === 'Quotation' ? (
-                          <Button onClick={handleApproveDoc} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
-                            {submittingAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            Approve Quotation
-                          </Button>
-                        ) : (
-                          <Button onClick={() => setShowSignModal(true)} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
-                            <FileSignature className="h-3.5 w-3.5" />
-                            Accept & Sign
-                          </Button>
-                        )}
-                        
-                        <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-border bg-transparent text-foreground/90 hover:bg-white/5 h-9">
-                          Request Changes
-                        </Button>
-                        <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
-                          Decline / Reject
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Needs revision state */}
-                    {selectedDoc.status?.toLowerCase() === 'needs revision' && (
-                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
-                        <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400 mx-auto" />
-                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Revision Requested</p>
-                        <p className="text-[10px] text-muted-foreground leading-normal">
-                          Your change request has been sent to the Netgain team. We will update this document shortly.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Approved & Signed state message */}
-                    {(selectedDoc.signed_at || 
-                      ['completed', 'signed', 'approved'].includes(selectedDoc.status?.toLowerCase() || '')) && (
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
-                        <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400 mx-auto" />
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✅ Approved & Signed</p>
-                        <p className="text-[10px] text-muted-foreground leading-normal">
-                          This document has been digitally signed and is legally binding.
-                        </p>
-                        {selectedDoc.signed_at && (
-                          <p className="text-[9px] text-muted-foreground">Signed on {formatDate(selectedDoc.signed_at)}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Invoices specific pay action if unpaid */}
-                    {selectedDoc.type === 'Invoice' && selectedDoc.status !== 'paid' && (
-                      <div className="pt-2">
-                        <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
-                          Pay Now (Future)
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* History Log */}
-                <Card className="bg-card border-border text-foreground">
-                  <CardHeader className="pb-3 border-b border-border/50">
-                    <CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Document Timeline</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-4 max-h-[220px] overflow-y-auto">
-                    {(selectedDoc.raw.history || []).slice().reverse().map((h: any, i: number) => (
-                      <div key={i} className="flex gap-2.5 text-[11px]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="text-foreground/90 leading-snug">{h.action}</p>
-                          <p className="text-[9px] text-muted-foreground mt-0.5">{formatDate(h.date)}</p>
+                {/* Sidebar Action Panel */}
+                <div className="lg:col-span-1 space-y-6">
+                  <Card className="bg-card border-border shadow-xl">
+                    <CardContent className="p-5 space-y-5">
+                      
+                      {/* Status & Version */}
+                      <div className="flex flex-col gap-2 pb-4 border-b border-border">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground font-medium">Status</span>
+                          {getStatusBadgeStyled(currentDoc.status)}
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground font-medium">Version</span>
+                          <span className="font-mono font-bold text-foreground/90">V{currentDoc.published_version}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground font-medium">Published</span>
+                          <span className="font-semibold text-foreground/90 text-xs">{formatDate(currentDoc.published_at)}</span>
                         </div>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </div>
 
+                      {/* Interactive signing controls if applicable and NOT signed */}
+                      {!currentDoc.signed_at && 
+                       !['completed', 'signed', 'approved', 'needs revision', 'rejected'].includes(currentDoc.status?.toLowerCase() || '') && 
+                       ['Quotation', 'Agreement', 'SOW'].includes(currentDoc.type) && (
+                        <div className="space-y-2 pt-2">
+                          {currentDoc.type === 'Quotation' ? (
+                            <Button onClick={handleApproveDoc} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                              {submittingAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                              Approve Quotation
+                            </Button>
+                          ) : (
+                            <Button onClick={() => setShowSignModal(true)} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                              <FileSignature className="h-3.5 w-3.5" />
+                              Accept & Sign
+                            </Button>
+                          )}
+                          
+                          <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-border bg-transparent text-foreground/90 hover:bg-white/5 h-9">
+                            Request Changes
+                          </Button>
+                          <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
+                            Decline / Reject
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Needs revision state */}
+                      {currentDoc.status?.toLowerCase() === 'needs revision' && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
+                          <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400 mx-auto" />
+                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Revision Requested</p>
+                          <p className="text-[10px] text-muted-foreground leading-normal">
+                            Your change request has been sent to the Netgain team. We will update this document shortly.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Approved & Signed state message */}
+                      {(currentDoc.signed_at || 
+                        ['completed', 'signed', 'approved'].includes(currentDoc.status?.toLowerCase() || '')) && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center space-y-2 mt-2">
+                          <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400 mx-auto" />
+                          <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✅ Approved & Signed</p>
+                          <p className="text-[10px] text-muted-foreground leading-normal">
+                            This document has been digitally signed and is legally binding.
+                          </p>
+                          {currentDoc.signed_at && (
+                            <p className="text-[9px] text-muted-foreground">Signed on {formatDate(currentDoc.signed_at)}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Invoices specific pay action if unpaid */}
+                      {currentDoc.type === 'Invoice' && currentDoc.status !== 'paid' && (
+                        <div className="pt-2">
+                          <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                            Pay Now (Future)
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* History Log */}
+                  <Card className="bg-card border-border text-foreground">
+                    <CardHeader className="pb-3 border-b border-border/50">
+                      <CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Document Timeline</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-4 max-h-[220px] overflow-y-auto">
+                      {(currentDoc.raw.history || []).slice().reverse().map((h: any, i: number) => (
+                        <div key={i} className="flex gap-2.5 text-[11px]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 shrink-0" />
+                          <div>
+                            <p className="text-foreground/90 leading-snug">{h.action}</p>
+                            <p className="text-[9px] text-muted-foreground mt-0.5">{formatDate(h.date)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
       </main>
 
