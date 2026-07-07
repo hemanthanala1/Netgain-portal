@@ -1077,16 +1077,27 @@ function AgreementsPageContent() {
                 </div>
               ) : null
             })()}
-            <UniversalTimeline
-              entries={historyDoc?.history.slice().reverse().map(h => ({
-                action: h.action,
-                by: 'System',
-                date: h.date,
-                canDownload: h.canDownload,
-                module: 'Billing'
-              })) || []}
-              onDownload={() => { if (historyDoc) handleDownload(historyDoc) }}
-            />
+            {historyDoc?.history.slice().reverse().map((h, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/30 hover:bg-gold/5 cursor-pointer group transition-all"
+                onClick={() => { if (historyDoc) handleDownload(historyDoc) }}
+              >
+                <div className="flex-1 flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-gold/50 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">{h.action}</p>
+                    <p className="text-xs text-muted-foreground">{h.date}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" aria-label="Action"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-gold hover:text-gold hover:bg-gold/10"
+                  disabled={downloadingId === historyDoc?.id}
+                  onClick={(e) => { e.stopPropagation(); if (historyDoc) handleDownload(historyDoc) }}
+                  title="Download document version"
+                >
+                  {downloadingId === historyDoc?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+            ))}
           </div>
           <DialogFooter className="border-t border-white/10 pt-3">
             <Button variant="outline" size="sm" onClick={() => setHistoryDoc(null)}>Close</Button>
