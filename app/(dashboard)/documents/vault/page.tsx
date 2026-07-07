@@ -167,7 +167,7 @@ function VaultListContent() {
       accessor: 'client',
       sortable: true,
       cell: (doc: VaultDoc) => (
-        <span className="text-xs font-medium text-slate-300">{doc.client}</span>
+        <span className="text-xs font-medium text-muted-foreground">{doc.client}</span>
       )
     },
     {
@@ -231,7 +231,7 @@ function VaultListContent() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 text-slate-400 hover:text-white" 
+            className="h-7 w-7 text-muted-foreground hover:text-foreground" 
             onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -239,7 +239,7 @@ function VaultListContent() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-7 w-7 text-slate-400 hover:text-white" 
+            className="h-7 w-7 text-muted-foreground hover:text-foreground" 
             onClick={() => doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc)} 
             title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}
           >
@@ -1213,13 +1213,13 @@ function VaultListContent() {
         </div>
         
         {/* Storage Summary */}
-        <div className="bg-[#0A1612] border border-[#1E3A2F] rounded-xl p-3 flex items-center gap-4 min-w-[280px]">
+        <div className="bg-card border border-border rounded-xl p-3 flex items-center gap-4 min-w-[280px]">
           <div className="p-2 bg-[#D4AF37]/10 rounded-lg text-[#D4AF37]">
             <HardDrive className="h-5 w-5" />
           </div>
           <div className="flex-1">
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-slate-400 font-medium">Vault Storage</span>
+              <span className="text-muted-foreground font-medium">Vault Storage</span>
               <span className="text-[#D4AF37] font-mono">{usedStorageMB.toFixed(1)} MB / 2 GB</span>
             </div>
             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -1245,13 +1245,13 @@ function VaultListContent() {
                   onClick={() => setSelectedFolder(folder.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
                     isActive 
-                      ? 'bg-[#12241D] border-[#D4AF37]/40 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]' 
-                      : 'bg-[#0A1612] border-[#1E3A2F] text-slate-400 hover:text-slate-200 hover:bg-[#1E3A2F]/40'
+                      ? 'bg-card border-[#D4AF37]/40 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]' 
+                      : 'bg-card border-border text-muted-foreground hover:text-slate-200 hover:bg-card'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                   {folder.label}
-                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-slate-800 text-slate-400'}`}>
+                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-slate-800 text-muted-foreground'}`}>
                     {count}
                   </span>
                 </button>
@@ -1302,10 +1302,10 @@ function VaultListContent() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
-              className="w-full max-w-xl bg-[#07110E] border-l border-[#1E3A2F] h-full flex flex-col justify-between shadow-2xl overflow-y-auto text-slate-100 z-50"
+              className="w-full max-w-xl bg-[#07110E] border-l border-border h-full flex flex-col justify-between shadow-2xl overflow-y-auto text-slate-100 z-50"
             >
               {/* Drawer Header */}
-              <div className="border-b border-[#1E3A2F] p-5 flex justify-between items-center bg-[#0A1612]">
+              <div className="border-b border-border p-5 flex justify-between items-center bg-card">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/20 text-[#D4AF37]">
                     <FileText className="h-5 w-5" />
@@ -1314,14 +1314,14 @@ function VaultListContent() {
                     <h2 className="font-bold text-sm tracking-wide leading-tight truncate max-w-[280px]">
                       {selectedDoc.title}
                     </h2>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{selectedDoc.docId}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{selectedDoc.docId}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-[10px] border-[#D4AF37]/30 text-[#D4AF37] capitalize">
                     {selectedDoc.status}
                   </Badge>
-                  <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowDetails(false)}>
+                  <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-muted-foreground hover:text-foreground border-border bg-transparent" onClick={() => setShowDetails(false)}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1334,14 +1334,14 @@ function VaultListContent() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5 items-center">
-                      <Tag className="h-3.5 w-3.5 text-slate-500 mr-1" />
+                      <Tag className="h-3.5 w-3.5 text-muted-foreground mr-1" />
                       {Array.from(new Set([...(selectedDoc.tags || []), ...(customTags[selectedDoc.id] || [])])).map(tag => (
-                        <Badge key={tag} variant="secondary" className="bg-[#12241D] text-emerald-400 hover:bg-[#1E3A2F] border border-emerald-900/30 text-[9px] capitalize pr-1 flex items-center gap-1">
+                        <Badge key={tag} variant="secondary" className="bg-card text-emerald-400 hover:bg-card border border-emerald-900/30 text-[9px] capitalize pr-1 flex items-center gap-1">
                           {tag}
-                          <X className="h-3 w-3 cursor-pointer hover:text-white" onClick={() => handleRemoveTag(selectedDoc.id, tag)} />
+                          <X className="h-3 w-3 cursor-pointer hover:text-foreground" onClick={() => handleRemoveTag(selectedDoc.id, tag)} />
                         </Badge>
                       ))}
-                      <div className="flex items-center gap-1 ml-1 bg-[#0A1612] border border-[#1E3A2F] rounded-full px-2 py-0.5 focus-within:border-[#D4AF37]/50 transition-colors">
+                      <div className="flex items-center gap-1 ml-1 bg-card border border-border rounded-full px-2 py-0.5 focus-within:border-[#D4AF37]/50 transition-colors">
                         <input
                           type="text"
                           placeholder="Add tag..."
@@ -1353,16 +1353,16 @@ function VaultListContent() {
                               handleAddTag(selectedDoc.id);
                             }
                           }}
-                          className="bg-transparent text-[10px] text-white w-16 outline-none placeholder:text-slate-600"
+                          className="bg-transparent text-[10px] text-foreground w-16 outline-none placeholder:text-slate-600"
                         />
-                        <Plus className="h-3 w-3 text-slate-500 cursor-pointer hover:text-[#D4AF37]" onClick={() => handleAddTag(selectedDoc.id)} />
+                        <Plus className="h-3 w-3 text-muted-foreground cursor-pointer hover:text-[#D4AF37]" onClick={() => handleAddTag(selectedDoc.id)} />
                       </div>
                     </div>
                   </div>
                   
                   <Button 
                     variant="outline" 
-                    className="w-full h-8 text-xs border-[#1E3A2F] text-slate-300 hover:text-white hover:bg-[#1E3A2F]/50 gap-2"
+                    className="w-full h-8 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-card gap-2"
                     onClick={() => setPreviewDoc(selectedDoc)}
                   >
                     <Expand className="h-3.5 w-3.5" /> Open Full Preview
@@ -1372,7 +1372,7 @@ function VaultListContent() {
                 {/* 1. Document Lifecycle Progress Tracker */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">Workflow Status</h3>
-                  <div className="grid grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-slate-500">
+                  <div className="grid grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-muted-foreground">
                     {[
                       { l: 'Draft', active: ['draft', 'internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Reviewed', active: ['internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
@@ -1389,10 +1389,10 @@ function VaultListContent() {
                 </div>
 
                 {/* 2. Operations / Workflow Actions */}
-                <div className="bg-[#12241D]/30 border border-[#1E3A2F]/60 rounded-xl p-4 space-y-4">
+                <div className="bg-card border border-border rounded-xl p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Approvals & Operations</h3>
-                    <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
+                    <Badge variant="outline" className="text-[9px] border-slate-700 text-muted-foreground capitalize">
                       Role: {user?.role || 'Guest'}
                     </Badge>
                   </div>
@@ -1463,7 +1463,7 @@ function VaultListContent() {
                             size="sm"
                             disabled={actionLoading}
                             onClick={() => handleDocAction('cancel_signing')}
-                            className="h-8 text-xs font-bold bg-red-600 hover:bg-red-700 text-white flex-1 border-none"
+                            className="h-8 text-xs font-bold bg-red-500 hover:bg-red-600 text-white flex-1 border-none"
                           >
                             Cancel Signing
                           </Button>
@@ -1495,20 +1495,20 @@ function VaultListContent() {
 
                 {/* 3. Secure E-Signature Certificate (if signed) */}
                 {signatureInfo && (
-                  <div className="bg-[#12241D]/30 border border-[#1E3A2F]/60 rounded-xl p-4 space-y-3 font-sans">
+                  <div className="bg-card border border-border rounded-xl p-4 space-y-3 font-sans">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
                       <ShieldCheck className="h-4 w-4 text-[#D4AF37]" /> Signature Audit Certificate
                     </h3>
-                    <div className="border-t border-[#1E3A2F]/60 pt-2 space-y-2 text-xs text-slate-300 font-mono">
-                      <div className="flex justify-between"><span className="text-slate-500">Signee Name</span><span>{signatureInfo.client_name}</span></div>
-                      {signatureInfo.company && <div className="flex justify-between"><span className="text-slate-500">Company</span><span>{signatureInfo.company}</span></div>}
-                      <div className="flex justify-between"><span className="text-slate-500">Email</span><span>{signatureInfo.email}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Signature Type</span><span className="capitalize">{signatureInfo.signature_type}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Date/Time</span><span>{new Date(signatureInfo.created_at).toLocaleString('en-IN')}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Browser / OS</span><span className="truncate max-w-[200px]">{signatureInfo.browser} on {signatureInfo.operating_system}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Client IP Address</span><span>{signatureInfo.ip_address}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Doc SHA-256 Hash</span><span className="truncate max-w-[160px] text-slate-500 hover:text-white" title={signatureInfo.document_hash}>{signatureInfo.document_hash}</span></div>
-                      <div className="flex justify-between font-bold border-t border-[#1E3A2F]/40 pt-2 text-[#D4AF37]"><span className="text-slate-400">Verification ID</span><span>{signatureInfo.verification_id}</span></div>
+                    <div className="border-t border-border pt-2 space-y-2 text-xs text-muted-foreground font-mono">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Signee Name</span><span>{signatureInfo.client_name}</span></div>
+                      {signatureInfo.company && <div className="flex justify-between"><span className="text-muted-foreground">Company</span><span>{signatureInfo.company}</span></div>}
+                      <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span>{signatureInfo.email}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Signature Type</span><span className="capitalize">{signatureInfo.signature_type}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Date/Time</span><span>{new Date(signatureInfo.created_at).toLocaleString('en-IN')}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Browser / OS</span><span className="truncate max-w-[200px]">{signatureInfo.browser} on {signatureInfo.operating_system}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Client IP Address</span><span>{signatureInfo.ip_address}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Doc SHA-256 Hash</span><span className="truncate max-w-[160px] text-muted-foreground hover:text-foreground" title={signatureInfo.document_hash}>{signatureInfo.document_hash}</span></div>
+                      <div className="flex justify-between font-bold border-t border-border pt-2 text-[#D4AF37]"><span className="text-muted-foreground">Verification ID</span><span>{signatureInfo.verification_id}</span></div>
                     </div>
                   </div>
                 )}
@@ -1517,28 +1517,28 @@ function VaultListContent() {
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Version History</h3>
                   {versions.length === 0 ? (
-                    <p className="text-xs text-slate-500 font-sans">No previous versions archived.</p>
+                    <p className="text-xs text-muted-foreground font-sans">No previous versions archived.</p>
                   ) : (
                     <div className="space-y-2.5">
-                      <div className="flex gap-2 items-center bg-[#12241D]/20 border border-[#1E3A2F]/60 rounded-xl p-3">
+                      <div className="flex gap-2 items-center bg-card border border-border rounded-xl p-3">
                         <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
                           <div>
-                            <label className="text-[10px] text-slate-500 block mb-0.5">Version A</label>
+                            <label className="text-[10px] text-muted-foreground block mb-0.5">Version A</label>
                             <select
                               value={compVer1}
                               onChange={e => setCompVer1(e.target.value)}
-                              className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded p-1 text-slate-300 outline-none"
+                              className="w-full bg-card border border-border rounded p-1 text-muted-foreground outline-none"
                             >
                               <option value="">Select version</option>
                               {versions.map(v => <option key={v.id} value={v.version}>v{v.version}</option>)}
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-500 block mb-0.5">Version B</label>
+                            <label className="text-[10px] text-muted-foreground block mb-0.5">Version B</label>
                             <select
                               value={compVer2}
                               onChange={e => setCompVer2(e.target.value)}
-                              className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded p-1 text-slate-300 outline-none"
+                              className="w-full bg-card border border-border rounded p-1 text-muted-foreground outline-none"
                             >
                               <option value="">Select version</option>
                               {versions.map(v => <option key={v.id} value={v.version}>v{v.version}</option>)}
@@ -1548,7 +1548,7 @@ function VaultListContent() {
                         <Button
                           disabled={!compVer1 || !compVer2}
                           onClick={handleCompareVersions}
-                          className="h-8 text-[10px] font-bold border-[#1E3A2F] bg-[#12241D] text-slate-300 hover:bg-[#D4AF37]/10"
+                          className="h-8 text-[10px] font-bold border-border bg-card text-muted-foreground hover:bg-[#D4AF37]/10"
                           variant="outline"
                         >
                           Compare
@@ -1556,10 +1556,10 @@ function VaultListContent() {
                       </div>
 
                       {versions.map(v => (
-                        <div key={v.id} className="flex justify-between items-center border border-[#1E3A2F]/40 p-3 rounded-lg text-xs bg-black/10">
+                        <div key={v.id} className="flex justify-between items-center border border-border p-3 rounded-lg text-xs bg-black/10">
                           <div>
                             <p className="font-bold text-[#D4AF37]">Version {v.version}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
                               Created by {v.created_by || 'System'} on {new Date(v.created_at).toLocaleDateString('en-IN')}
                             </p>
                           </div>
@@ -1569,7 +1569,7 @@ function VaultListContent() {
                               variant="outline"
                               onClick={() => handleRestoreVersion(v.version)}
                               disabled={actionLoading}
-                              className="h-6 text-[9px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                              className="h-6 text-[9px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                             >
                               Restore
                             </Button>
@@ -1591,7 +1591,7 @@ function VaultListContent() {
                                 }
                               }}
                               disabled={downloadingId === `v_${v.id}`}
-                              className="h-6 text-[9px] border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                              className="h-6 text-[9px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                             >
                               {downloadingId === `v_${v.id}` ? '...' : <Download className="h-3 w-3" />}
                             </Button>
@@ -1606,9 +1606,9 @@ function VaultListContent() {
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Activity History</h3>
                   {timeline.length === 0 ? (
-                    <p className="text-xs text-slate-500 font-sans">No logs recorded.</p>
+                    <p className="text-xs text-muted-foreground font-sans">No logs recorded.</p>
                   ) : (
-                    <div className="relative pl-4 border-l border-[#1E3A2F]/60 space-y-4 text-xs font-sans">
+                    <div className="relative pl-4 border-l border-border space-y-4 text-xs font-sans">
                       {timeline.map((entry, idx) => {
                         const dateStr = new Date(entry.created_at).toLocaleString('en-IN', {
                           day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
@@ -1617,13 +1617,13 @@ function VaultListContent() {
                           <div key={entry.id || idx} className="relative space-y-0.5">
                             {/* Dot overlay */}
                             <div className="absolute -left-[20px] top-1.5 h-2 w-2 rounded-full bg-[#D4AF37] border-4 border-[#07110E]" />
-                            <div className="flex justify-between font-bold text-slate-300">
+                            <div className="flex justify-between font-bold text-muted-foreground">
                               <span className="capitalize">{entry.event.replace('_', ' ')}</span>
-                              <span className="text-[10px] text-slate-500 font-normal">{dateStr}</span>
+                              <span className="text-[10px] text-muted-foreground font-normal">{dateStr}</span>
                             </div>
-                            <p className="text-[10px] text-slate-400">By {entry.user_name}</p>
+                            <p className="text-[10px] text-muted-foreground">By {entry.user_name}</p>
                             {entry.notes && (
-                              <p className="text-[10px] text-slate-500 bg-[#0A1612]/80 p-2 rounded border border-[#1E3A2F]/30 mt-1 font-mono italic">
+                              <p className="text-[10px] text-muted-foreground bg-card p-2 rounded border border-border mt-1 font-mono italic">
                                 "{entry.notes}"
                               </p>
                             )}
@@ -1642,17 +1642,17 @@ function VaultListContent() {
       {/* Version Comparison Modal */}
       {showCompare && comparisonResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <Card className="max-w-2xl w-full border-[#1E3A2F] bg-[#12241D] text-white">
-            <CardHeader className="border-b border-[#1E3A2F] pb-4 flex flex-row items-center justify-between">
+          <Card className="max-w-2xl w-full border-border bg-card text-foreground">
+            <CardHeader className="border-b border-border pb-4 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                   <Layers className="h-5 w-5 text-[#D4AF37]" /> Version Comparison
                 </CardTitle>
-                <CardDescription className="text-xs text-slate-400">
+                <CardDescription className="text-xs text-muted-foreground">
                   Comparing Version {compVer1} vs. Version {compVer2}
                 </CardDescription>
               </div>
-              <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-slate-400 hover:text-white border-[#1E3A2F] bg-transparent" onClick={() => setShowCompare(false)}>
+              <Button variant="outline" size="icon" aria-label="Action" className="h-7 w-7 text-muted-foreground hover:text-foreground border-border bg-transparent" onClick={() => setShowCompare(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -1660,7 +1660,7 @@ function VaultListContent() {
               <div className="overflow-x-auto text-xs">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="border-b border-[#1E3A2F] text-slate-500 text-[10px] uppercase font-bold font-mono">
+                    <tr className="border-b border-border text-muted-foreground text-[10px] uppercase font-bold font-mono">
                       <th className="py-2">Property</th>
                       <th className="py-2">v{compVer1}</th>
                       <th className="py-2">v{compVer2}</th>
@@ -1670,7 +1670,7 @@ function VaultListContent() {
                     {comparisonResult.map((res, idx) => (
                       <tr
                         key={idx}
-                        className={`border-b border-[#1E3A2F]/30 hover:bg-white/5 transition-colors ${res.changed ? 'bg-amber-500/5 text-amber-300' : 'text-slate-400'}`}
+                        className={`border-b border-border hover:bg-white/5 transition-colors ${res.changed ? 'bg-amber-500/5 text-amber-300' : 'text-muted-foreground'}`}
                       >
                         <td className="py-2.5 font-bold">{res.label}</td>
                         <td className="py-2.5 font-mono truncate max-w-[200px]" title={res.val1}>{res.val1}</td>
@@ -1688,25 +1688,25 @@ function VaultListContent() {
       {/* Revision Request Dialog Modal */}
       {showRevisionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <Card className="max-w-md w-full border-[#1E3A2F] bg-[#12241D] text-white">
-            <CardHeader className="border-b border-[#1E3A2F] pb-4">
-              <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+          <Card className="max-w-md w-full border-border bg-card text-foreground">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500" /> Request Revision
               </CardTitle>
-              <CardDescription className="text-xs text-slate-400">
+              <CardDescription className="text-xs text-muted-foreground">
                 Log the revision request and details for the drafting employee.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div>
-                <Label htmlFor="revisionNotes" className="text-xs text-slate-400">Revision Notes</Label>
+                <Label htmlFor="revisionNotes" className="text-xs text-muted-foreground">Revision Notes</Label>
                 <textarea
                   id="revisionNotes"
                   rows={4}
                   value={revisionNotes}
                   onChange={e => setRevisionNotes(e.target.value)}
                   placeholder="Details of corrections, modifications, or budget adjustments required..."
-                  className="w-full bg-[#0A1612] border border-[#1E3A2F] rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-white"
+                  className="w-full bg-card border border-border rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-foreground"
                 />
               </div>
               <div className="flex gap-2 justify-end pt-2">
@@ -1714,7 +1714,7 @@ function VaultListContent() {
                   type="button"
                   variant="outline"
                   onClick={() => setShowRevisionModal(false)}
-                  className="h-9 text-xs border-[#1E3A2F] text-slate-400 hover:text-white bg-transparent"
+                  className="h-9 text-xs border-border text-muted-foreground hover:text-foreground bg-transparent"
                 >
                   Cancel
                 </Button>
@@ -1737,23 +1737,23 @@ function VaultListContent() {
       {/* File Preview Modal Overlay */}
       {previewDoc && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-[#07110E] border border-[#1E3A2F] rounded-xl overflow-hidden shadow-2xl">
+          <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-[#07110E] border border-border rounded-xl overflow-hidden shadow-2xl">
             {/* Modal Header */}
-            <div className="flex justify-between items-center p-4 border-b border-[#1E3A2F] bg-[#0A1612]">
+            <div className="flex justify-between items-center p-4 border-b border-border bg-card">
               <div className="flex items-center gap-3">
                 <div className="rounded p-2 bg-emerald-500/10 text-emerald-400">
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">{previewDoc.title}</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">{previewDoc.docId}</p>
+                  <h3 className="font-bold text-foreground text-sm">{previewDoc.title}</h3>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{previewDoc.docId}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-8 gap-2 bg-[#12241D] text-slate-300 border-[#1E3A2F] hover:text-white" onClick={() => handleDownload(previewDoc)}>
+                <Button variant="outline" size="sm" className="h-8 gap-2 bg-card text-muted-foreground border-border hover:text-foreground" onClick={() => handleDownload(previewDoc)}>
                   <Download className="h-4 w-4" /> Download PDF
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setPreviewDoc(null)}>
+                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setPreviewDoc(null)}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>
@@ -1775,16 +1775,16 @@ function VaultListContent() {
               </div>
               <div className="w-full max-w-2xl bg-white h-full max-h-[600px] mt-12 shadow-2xl rounded-sm p-8 flex flex-col items-center justify-center opacity-80 border border-slate-300">
                 <div className="w-24 h-24 mb-6 rounded-full bg-slate-100 flex items-center justify-center">
-                  <Eye className="h-10 w-10 text-slate-300" />
+                  <Eye className="h-10 w-10 text-muted-foreground" />
                 </div>
                 <h4 className="text-xl font-bold text-slate-800 mb-2 font-serif">{previewDoc.title}</h4>
-                <p className="text-slate-500 font-medium mb-6">Generated on {formatDate(previewDoc.date)} for {previewDoc.client}</p>
+                <p className="text-muted-foreground font-medium mb-6">Generated on {formatDate(previewDoc.date)} for {previewDoc.client}</p>
                 <div className="w-3/4 space-y-4">
                   <div className="h-3 bg-slate-100 rounded w-full" />
                   <div className="h-3 bg-slate-100 rounded w-5/6" />
                   <div className="h-3 bg-slate-100 rounded w-4/6" />
                 </div>
-                <div className="mt-8 px-4 py-2 bg-slate-100 rounded text-slate-500 text-xs font-mono">
+                <div className="mt-8 px-4 py-2 bg-slate-100 rounded text-muted-foreground text-xs font-mono">
                   Protected Document View
                 </div>
               </div>

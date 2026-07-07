@@ -37,10 +37,10 @@ export function PageHeader({
   exportSlot,
 }: PageHeaderProps) {
   return (
-    <div className="space-y-4 mb-6">
+    <div className="space-y-5 mb-8">
       {/* Breadcrumbs */}
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-label="Breadcrumb">
+        <nav className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium" aria-label="Breadcrumb">
           {breadcrumbs.map((item, idx) => {
             const isLast = idx === breadcrumbs.length - 1
             return (
@@ -50,9 +50,9 @@ export function PageHeader({
                     {item.label}
                   </Link>
                 ) : (
-                  <span className={cn(isLast && "text-foreground font-medium")}>{item.label}</span>
+                  <span className={cn(isLast && "text-foreground font-semibold")}>{item.label}</span>
                 )}
-                {!isLast && <span className="text-muted-foreground/50">/</span>}
+                {!isLast && <span className="text-muted-foreground/40">/</span>}
               </React.Fragment>
             )
           })}
@@ -62,8 +62,8 @@ export function PageHeader({
       {/* Main Header Row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="text-xs text-muted-foreground">{description}</p>}
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">{title}</h1>
+          {description && <p className="text-sm text-muted-foreground/80">{description}</p>}
         </div>
 
         {/* Action buttons (Primary & Secondary) */}

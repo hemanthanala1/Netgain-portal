@@ -210,7 +210,7 @@ export function CommandPalette() {
                   isSelected ? "bg-gold/10 text-foreground border-l-2 border-gold font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border-l-2 border-transparent"
                 )}
               >
-                <div className={cn("p-1.5 rounded-lg shrink-0", isSelected ? "bg-gold text-white" : "bg-muted/30 text-gold")}>
+                <div className={cn("p-1.5 rounded-lg shrink-0", isSelected ? "bg-gold text-foreground" : "bg-muted/30 text-gold")}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">

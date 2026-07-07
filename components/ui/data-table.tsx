@@ -547,7 +547,7 @@ export function DataTable<T = any>({
                       <div key={idx} className="px-2 py-1" onClick={e => e.stopPropagation()}>
                         <button 
                           onClick={() => applySavedFilter(rf)}
-                          className="text-xs text-left truncate w-full text-slate-400 hover:text-gold"
+                          className="text-xs text-left truncate w-full text-muted-foreground hover:text-gold"
                         >
                           Search: "{rf.searchQuery || 'None'}", Date: {rf.datePreset}
                         </button>
@@ -661,7 +661,7 @@ export function DataTable<T = any>({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-white gap-1"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
               onClick={clearFilters}
               aria-label="Reset all filters"
             >
@@ -730,7 +730,7 @@ export function DataTable<T = any>({
               {chip.label}
               <button
                 onClick={chip.onRemove}
-                className="ml-0.5 hover:text-white transition-colors"
+                className="ml-0.5 hover:text-foreground transition-colors"
                 aria-label={`Remove filter: ${chip.label}`}
               >
                 <X className="h-2.5 w-2.5" />
@@ -777,7 +777,7 @@ export function DataTable<T = any>({
                         key={idx}
                         onClick={() => handleSort(String(col.accessor), col.sortable)}
                         className={cn(
-                          "py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide select-none",
+                          "py-3.5 px-4 text-left text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider select-none",
                           col.sortable && "cursor-pointer hover:text-foreground",
                           col.sticky && "sticky left-0 bg-card shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] z-10",
                           col.className

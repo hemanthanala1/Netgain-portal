@@ -643,7 +643,7 @@ export default function ReportsPage() {
                             </Badge>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <Badge variant="outline" className={`text-[9px] capitalize ${t.priority === 'urgent' ? 'text-red-400 border-red-500/20' : t.priority === 'high' ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-500/20'}`}>
+                            <Badge variant="outline" className={`text-[9px] capitalize ${t.priority === 'urgent' ? 'text-red-400 border-red-500/20' : t.priority === 'high' ? 'text-amber-400 border-amber-500/20' : 'text-muted-foreground border-slate-500/20'}`}>
                               {t.priority || 'medium'}
                             </Badge>
                           </td>
@@ -698,7 +698,7 @@ export default function ReportsPage() {
                             <Badge variant="outline" className="text-[10px] border-gold/25 text-gold bg-gold/5">{t.role || 'Staff'}</Badge>
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <Badge variant="outline" className={`text-[9px] capitalize ${t.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-slate-400 border-slate-500/20'}`}>
+                            <Badge variant="outline" className={`text-[9px] capitalize ${t.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-muted-foreground border-slate-500/20'}`}>
                               {t.status || 'active'}
                             </Badge>
                           </td>
@@ -752,7 +752,7 @@ export default function ReportsPage() {
                           <td className="py-2.5 px-3 text-muted-foreground capitalize">{s.pricing}</td>
                           <td className="py-2.5 px-3 text-right font-semibold text-gold">{formatCurrency(s.base_price)}</td>
                           <td className="py-2.5 px-3 text-center">
-                            <Badge variant="outline" className={`text-[9px] capitalize ${s.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-slate-400 border-slate-500/20'}`}>
+                            <Badge variant="outline" className={`text-[9px] capitalize ${s.status === 'active' ? 'text-emerald-400 border-emerald-500/20' : 'text-muted-foreground border-slate-500/20'}`}>
                               {s.status || 'active'}
                             </Badge>
                           </td>

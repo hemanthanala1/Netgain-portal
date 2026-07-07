@@ -1497,7 +1497,7 @@ function InvoicesPageContent() {
                         <div className="flex items-center gap-2">
                           <Input 
                             type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            className="w-28 h-7 text-right text-xs bg-muted/30 text-gold font-bold border-gold/30" 
                             min={totalMinPrice} 
                             max={totalMaxPrice} 
                             value={form.customSubtotal ?? computedSubStandard} 
@@ -1514,7 +1514,7 @@ function InvoicesPageContent() {
                         <div className="flex items-center gap-2">
                           <Input 
                             type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            className="w-28 h-7 text-right text-xs bg-muted/30 text-gold font-bold border-gold/30" 
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
@@ -1532,7 +1532,7 @@ function InvoicesPageContent() {
                           max={totalMaxPrice} 
                           value={form.customSubtotal ?? computedSubStandard} 
                           onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
-                          className="w-full accent-gold bg-[#0b1b15]" 
+                          className="w-full accent-gold bg-muted/30" 
                         />
                       </div>
                     )}
@@ -1809,7 +1809,7 @@ function InvoicesPageContent() {
                         <div className="flex items-center gap-2">
                           <Input 
                             type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            className="w-28 h-7 text-right text-xs bg-muted/30 text-gold font-bold border-gold/30" 
                             min={totalMinPrice} 
                             max={totalMaxPrice} 
                             value={form.customSubtotal ?? computedSubStandard} 
@@ -1826,7 +1826,7 @@ function InvoicesPageContent() {
                         <div className="flex items-center gap-2">
                           <Input 
                             type="number" 
-                            className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                            className="w-28 h-7 text-right text-xs bg-muted/30 text-gold font-bold border-gold/30" 
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
@@ -1844,7 +1844,7 @@ function InvoicesPageContent() {
                           max={totalMaxPrice} 
                           value={form.customSubtotal ?? computedSubStandard} 
                           onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
-                          className="w-full accent-gold bg-[#0b1b15]" 
+                          className="w-full accent-gold bg-muted/30" 
                         />
                       </div>
                     )}

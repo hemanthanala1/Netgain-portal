@@ -288,8 +288,8 @@ export default function ClientDashboard({ params }: { params: { token: string } 
 
   if (!clientInfo) {
     return (
-      <div className="min-h-screen bg-background text-white flex flex-col justify-center items-center p-4">
-        <Card className="max-w-md w-full border-red-500/20 bg-card text-white">
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center p-4">
+        <Card className="max-w-md w-full border-red-500/20 bg-card text-foreground">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
               <ShieldAlert className="h-6 w-6" />
@@ -310,7 +310,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
       <div className="border-b border-border bg-background/85 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-white shadow-md">N</div>
+            <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-foreground shadow-md">N</div>
             <div>
               <p className="text-sm font-bold text-foreground tracking-wide">NETGAIN STUDIO</p>
               <p className="text-[9px] text-[#D4AF37]/80 tracking-widest -mt-0.5">BUSINESS OS</p>
@@ -345,7 +345,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
 
         {/* Mini Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-border bg-card/60 text-white">
+          <Card className="border-border bg-card/60 text-foreground">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Pending Signature</p>
@@ -354,7 +354,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
               <Clock className="h-8 w-8 text-[#D4AF37]/20" />
             </CardContent>
           </Card>
-          <Card className="border-border bg-card/60 text-white">
+          <Card className="border-border bg-card/60 text-foreground">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Completed / Signed</p>
@@ -363,7 +363,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
               <FileCheck2 className="h-8 w-8 text-emerald-400/20" />
             </CardContent>
           </Card>
-          <Card className="border-border bg-card/60 text-white">
+          <Card className="border-border bg-card/60 text-foreground">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Revisions Requested</p>
@@ -382,7 +382,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search documents by ID, title, or type..."
-              className="pl-9 bg-card/80 border-border text-white focus-visible:ring-[#D4AF37]"
+              className="pl-9 bg-card/80 border-border text-foreground focus-visible:ring-[#D4AF37]"
             />
           </div>
 
@@ -393,7 +393,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
               const docTokenKey = doc.token || currentToken
 
               return (
-                <Card key={doc.id} className="group border-border bg-card text-white hover:border-[#D4AF37]/20 transition-all flex flex-col justify-between">
+                <Card key={doc.id} className="group border-border bg-card text-foreground hover:border-[#D4AF37]/20 transition-all flex flex-col justify-between">
                   <CardContent className="p-5 space-y-4">
                     <div className="flex justify-between items-start">
                       <div className="rounded-lg p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/20 text-[#D4AF37]">
@@ -427,7 +427,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                       return (
                         <Button
                           asChild
-                          className="w-full h-8 text-xs font-bold bg-[#1E3A2F] border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                          className="w-full h-8 text-xs font-bold bg-card border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
                         >
                           <a href={`/api/document-pdf?token=${docTokenKey}&v=${cacheBuster}`} download>
                             <Download className="h-3 w-3" /> Download Signed

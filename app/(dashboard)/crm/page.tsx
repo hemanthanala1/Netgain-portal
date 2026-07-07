@@ -113,7 +113,7 @@ function CRMPageContent() {
       header: 'Contact',
       accessor: 'email',
       cell: (client: any) => (
-        <div className="space-y-0.5 text-xs text-slate-300">
+        <div className="space-y-0.5 text-xs text-muted-foreground">
           <p className="flex items-center gap-1"><Mail className="h-3 w-3 text-gold/80" />{client.email}</p>
           <p className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3.5 w-3.5" />{client.phone}</p>
         </div>

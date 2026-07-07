@@ -191,7 +191,7 @@ function MeetingsListContent() {
       accessor: 'meeting_date',
       sortable: true,
       cell: (row: Meeting) => (
-        <div className="space-y-0.5 text-xs text-slate-300">
+        <div className="space-y-0.5 text-xs text-muted-foreground">
           <p className="font-medium">{formatDate(row.meeting_date)}</p>
           <p className="text-muted-foreground text-[11px]">{formatTime(row.meeting_time)} ({row.meeting_duration}m)</p>
         </div>

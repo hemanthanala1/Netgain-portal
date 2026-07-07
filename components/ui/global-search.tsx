@@ -195,7 +195,7 @@ export function GlobalSearch() {
                   <button
                     key={idx}
                     onClick={() => handleRecentClick(text)}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-slate-300 hover:bg-muted/30 text-left"
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-muted-foreground hover:bg-muted/30 text-left"
                   >
                     <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
                     <span>{text}</span>
@@ -233,7 +233,7 @@ export function GlobalSearch() {
                               onMouseEnter={() => setSelectedIndex(globalIdx)}
                               className={cn(
                                 "flex flex-col w-full px-2.5 py-1.5 rounded-lg text-left transition-colors",
-                                isSelected ? "bg-primary/10 text-white border-l-2 border-primary" : "text-slate-300 hover:bg-muted/20 border-l-2 border-transparent"
+                                isSelected ? "bg-primary/10 text-foreground border-l-2 border-primary" : "text-muted-foreground hover:bg-muted/20 border-l-2 border-transparent"
                               )}
                             >
                               <span className="font-semibold text-foreground leading-snug">

@@ -476,9 +476,9 @@ export default function BlueprintEnginePage() {
               <div className="space-y-2 mt-4">
                 <h4 className="text-xs font-bold text-gold uppercase">Uploaded Documents</h4>
                 {detailPrd?.history && detailPrd.history.filter(h => h.canDownload).length > 0 ? (
-                  <div className="border border-[#152e23] rounded-lg divide-y divide-[#152e23] bg-[#091510]/50">
+                  <div className="border border-border rounded-lg divide-y divide-[#152e23] bg-card">
                     {detailPrd.history.filter(h => h.canDownload).map((h: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-3 text-xs text-slate-300">
+                      <div key={idx} className="flex items-center justify-between p-3 text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-gold" />
                           <div>

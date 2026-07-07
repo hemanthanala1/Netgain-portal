@@ -108,7 +108,7 @@ export default function AIHubPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl gold-gradient flex items-center justify-center">
-              <Zap className="h-5 w-5 text-white" />
+              <Zap className="h-5 w-5 text-foreground" />
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">AI Hub</h1>

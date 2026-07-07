@@ -1315,7 +1315,7 @@ export default function ClientDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row font-sans relative overflow-hidden">
+    <div className="h-screen bg-background text-foreground flex flex-col md:flex-row font-sans relative overflow-hidden">
       {/* Mobile Sidebar overlay */}
       {mobileMenuOpen && (
         <div 
@@ -1325,26 +1325,32 @@ export default function ClientDashboardPage() {
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 border-r border-border bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} w-60 md:${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
-        <div className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-50 border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 overflow-hidden",
+        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        sidebarCollapsed ? 'w-60 md:w-[72px]' : 'w-64'
+      )}>
+        <div className="flex h-16 items-center justify-between px-4 shrink-0 border-b border-[hsl(var(--sidebar-border))]">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="relative shrink-0">
+              <img src="/logo.png" className="h-8 w-8 rounded-lg object-contain" alt="Netgain Logo" />
+            </div>
             {!sidebarCollapsed && (
               <div className="overflow-hidden">
-                <p className="text-sm font-bold text-foreground tracking-wide whitespace-nowrap">NETGAIN PORTAL</p>
-                <p className="text-[9px] text-primary tracking-widest -mt-0.5 whitespace-nowrap font-semibold">SECURE CLIENT SUITE</p>
+                <p className="text-[13px] font-bold text-foreground whitespace-nowrap tracking-tight">NETGAIN PORTAL</p>
+                <p className="text-[10px] text-primary tracking-widest -mt-0.5 whitespace-nowrap font-semibold uppercase">CLIENT SUITE</p>
               </div>
             )}
           </div>
           <button 
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden p-1 text-muted-foreground hover:text-foreground focus:outline-none"
+            className="md:hidden p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors focus:outline-none"
           >
-            <X className="h-5 w-5 text-primary" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5 no-scrollbar">
           {navigationItems.map(item => {
             const Icon = item.icon
             const active = activeTab === item.id
@@ -1355,17 +1361,17 @@ export default function ClientDashboardPage() {
                 className={cn(
                   'sidebar-item w-full',
                   active ? 'active' : 'text-muted-foreground hover:text-foreground',
-                  sidebarCollapsed && 'justify-center px-0 py-2'
+                  sidebarCollapsed && 'justify-center px-0 py-2.5'
                 )}
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={cn('shrink-0', sidebarCollapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
+                  <Icon className={cn('shrink-0 transition-all', sidebarCollapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+                  {!sidebarCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
                 </div>
                 {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
                   <span className={cn(
-                    'px-2 py-0.5 rounded-full text-[9px] font-bold',
+                    'px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0',
                     active ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary border border-primary/20'
                   )}>
                     {item.badge}
@@ -1376,58 +1382,65 @@ export default function ClientDashboardPage() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-border space-y-1.5 shrink-0">
-          {/* Collapse Toggle */}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={cn(
-              "hidden md:flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-all",
-              sidebarCollapsed && "justify-center px-0"
-            )}
-            title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          >
-            {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-primary" />}
-            {!sidebarCollapsed && <span>Collapse Sidebar</span>}
-          </button>
-
+        <div className="p-3 border-t border-[hsl(var(--sidebar-border))] space-y-2 shrink-0">
           <div className={cn("flex items-center gap-2 rounded p-2 hover:bg-accent transition-colors cursor-pointer", sidebarCollapsed && "justify-center")}>
-            <Avatar className="h-7 w-7 shrink-0">
+            <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-bold">
                 {session ? getInitials(session.name) : 'C'}
               </AvatarFallback>
             </Avatar>
             {!sidebarCollapsed && (
               <div className="overflow-hidden flex-1">
-                <p className="text-xs font-semibold text-foreground whitespace-nowrap font-sans truncate">
+                <p className="text-[13px] font-semibold text-foreground whitespace-nowrap tracking-tight truncate">
                   {session?.name || 'Client'}
                 </p>
-                <p className="text-[10px] text-muted-foreground whitespace-nowrap font-sans truncate">{session?.company}</p>
+                <p className="text-[10px] text-muted-foreground whitespace-nowrap tracking-wide truncate">{session?.company}</p>
               </div>
             )}
           </div>
 
-          <Button 
-            onClick={handleLogout} 
-            variant="outline" 
-            className={cn(
-              "w-full h-9 text-xs border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10 bg-transparent gap-2",
-              sidebarCollapsed && "justify-center px-0"
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={cn(
+                "flex items-center justify-center h-9 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-all",
+                sidebarCollapsed ? "col-span-2" : "col-span-1 border border-border"
+              )}
+              title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronLeft className="h-4 w-4 shrink-0" />}
+            </button>
+            {!sidebarCollapsed && (
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                className="col-span-1 h-9 px-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/20 transition-all border border-border"
+                title="Log Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             )}
-            title={sidebarCollapsed ? "Log Out Portal" : undefined}
-          >
-            <LogOut className="h-3.5 w-3.5 shrink-0" />
-            {!sidebarCollapsed && <span>Log Out Portal</span>}
-          </Button>
+          </div>
+          {sidebarCollapsed && (
+            <Button 
+              onClick={handleLogout} 
+              variant="outline" 
+              className="w-full h-9 px-0 border-border text-muted-foreground hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/20 transition-all"
+              title="Log Out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-background relative">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6 sticky top-0 z-30 shadow-sm">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-background px-4 shadow-sm sm:px-6">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden focus:outline-none"
+              className="p-1.5 -ml-1 text-muted-foreground hover:text-foreground md:hidden focus:outline-none rounded-lg hover:bg-accent"
             >
               <Menu className="h-5 w-5 text-primary" />
             </button>
@@ -1587,7 +1600,7 @@ export default function ClientDashboardPage() {
                                 </linearGradient>
                               </defs>
                             </svg>
-                            <span className="absolute text-[10px] font-bold text-slate-300">{pct}%</span>
+                            <span className="absolute text-[10px] font-bold text-muted-foreground">{pct}%</span>
                           </div>
                         </CardContent>
                       </Card>
@@ -1681,8 +1694,8 @@ export default function ClientDashboardPage() {
               {/* Account Timeline */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Account Timeline</h3>
-                <Card className="bg-card border-border/80">
-                  <CardContent className="p-4">
+                <Card className="bg-card border-border/80 max-h-[500px] flex flex-col">
+                  <CardContent className="p-4 overflow-y-auto no-scrollbar flex-1">
                     <UniversalTimeline
                       entries={[
                         ...docs.flatMap(d =>
@@ -1900,7 +1913,7 @@ export default function ClientDashboardPage() {
                       <Input 
                         type="file" 
                         onChange={e => setClientUploadFiles(e.target.files ? Array.from(e.target.files) : [])} 
-                        className="bg-transparent border-none file:bg-primary file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                        className="bg-transparent border-none file:bg-primary file:text-primary-foreground file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
                       />
                       {clientUploadFiles.length > 0 && (
                         <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
@@ -1918,7 +1931,7 @@ export default function ClientDashboardPage() {
 
                   <div className="flex gap-2 justify-end border-t border-border pt-3">
                     <Button variant="outline" size="sm" onClick={() => setActiveSubmittingReq(null)}>Cancel</Button>
-                    <Button variant="default" size="sm" onClick={handleSubmitRequirement} disabled={submittingRequirementState}>
+                    <Button size="sm" onClick={handleSubmitRequirement} disabled={submittingRequirementState}>
                       {submittingRequirementState ? 'Submitting...' : 'Submit Information'}
                     </Button>
                   </div>
@@ -1949,7 +1962,7 @@ export default function ClientDashboardPage() {
                           <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : req.status === 'needs revision' ? 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20' : req.status === 'submitted' ? 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20' : 'text-muted-foreground bg-slate-500/10 border border-slate-500/20'}`}>{req.status === 'needs revision' ? 'revision needed' : req.status}</span>
                           
                           {['pending', 'needs revision'].includes(req.status) && (
-                            <Button variant="default" size="sm" onClick={() => setActiveSubmittingReq(req)} className="h-8 text-xs font-semibold px-4">Provide Details</Button>
+                            <Button size="sm" onClick={() => setActiveSubmittingReq(req)} className="h-8 text-xs font-semibold px-4">Provide Details</Button>
                           )}
                         </div>
                       </div>
@@ -2087,7 +2100,7 @@ export default function ClientDashboardPage() {
                       <Input 
                         type="file" 
                         onChange={e => setClientGeneralFile(e.target.files ? e.target.files[0] : null)}
-                        className="bg-transparent border-none file:bg-primary file:text-black file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
+                        className="bg-transparent border-none file:bg-primary file:text-primary-foreground file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
                       />
                     </div>
                     <div className="space-y-2 flex flex-col justify-between">
@@ -2106,7 +2119,6 @@ export default function ClientDashboardPage() {
                         </Select>
                       </div>
                       <Button 
-                        variant="default" 
                         className="h-8 text-xs font-bold w-full"
                         onClick={handleClientUploadFile}
                         disabled={uploadingClientFile || !clientGeneralFile}
@@ -2189,7 +2201,7 @@ export default function ClientDashboardPage() {
                     rel="noopener noreferrer"
                     className="shrink-0"
                   >
-                    <Button variant="default" size="sm" className="h-9 font-semibold px-4 gap-1.5">
+                    <Button size="sm" className="h-9 font-semibold px-4 gap-1.5">
                       Book via Cal.com <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
                   </a>
@@ -2221,7 +2233,7 @@ export default function ClientDashboardPage() {
 
                       {isUpcoming && meet.meet_link && (
                         <a href={meet.meet_link} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                          <Button variant="default" size="sm" className="h-8 font-semibold px-4 gap-1.5">Join Call <ExternalLink className="h-3.5 w-3.5" /></Button>
+                          <Button size="sm" className="h-8 font-semibold px-4 gap-1.5">Join Call <ExternalLink className="h-3.5 w-3.5" /></Button>
                         </a>
                       )}
                     </div>
@@ -2307,7 +2319,7 @@ export default function ClientDashboardPage() {
                         className="bg-muted/10 border-border text-foreground min-h-[150px] resize-y focus-visible:ring-gold"
                       />
                     </div>
-                    <Button type="submit" variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                    <Button type="submit" className="w-full text-xs font-semibold gap-2 h-9" disabled={submittingAction}>
                       {submittingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Send Ticket
                     </Button>
@@ -2442,16 +2454,9 @@ export default function ClientDashboardPage() {
                   Mobile View: If you can only see the first page, open the full document in a new tab.
                 </span>
                 <Button 
-                  onClick={() => {
-                    const cacheBuster = currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : new Date().getTime()
-                    const url = currentDoc.token 
-                      ? `/api/document-pdf?token=${currentDoc.token}&v=${cacheBuster}` 
-                      : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${cacheBuster}`
-                    window.open(url, '_blank')
-                  }} 
-                  variant="default" 
+                  onClick={() => window.open(currentDoc.token ? `/api/document-pdf?token=${currentDoc.token}` : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}`, '_blank')} 
                   size="sm" 
-                  className="h-8 text-xs text-black font-semibold shrink-0"
+                  className="h-8 text-xs font-semibold shrink-0"
                 >
                   Open Full Document
                 </Button>
@@ -2499,12 +2504,12 @@ export default function ClientDashboardPage() {
                        ['Quotation', 'Agreement', 'SOW'].includes(currentDoc.type) && (
                         <div className="space-y-2 pt-2">
                           {currentDoc.type === 'Quotation' ? (
-                            <Button onClick={handleApproveDoc} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9" disabled={submittingAction}>
+                            <Button onClick={handleApproveDoc} className="w-full text-xs font-semibold gap-2 h-9" disabled={submittingAction}>
                               {submittingAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                               Approve Quotation
                             </Button>
                           ) : (
-                            <Button onClick={() => setShowSignModal(true)} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                            <Button onClick={() => setShowSignModal(true)} className="w-full text-xs font-semibold gap-2 h-9">
                               <FileSignature className="h-3.5 w-3.5" />
                               Accept & Sign
                             </Button>
@@ -2548,7 +2553,7 @@ export default function ClientDashboardPage() {
                       {/* Invoices specific pay action if unpaid */}
                       {currentDoc.type === 'Invoice' && currentDoc.status !== 'paid' && (
                         <div className="pt-2">
-                          <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold text-black gap-2 h-9">
+                          <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold gap-2 h-9">
                             Pay Now (Future)
                           </Button>
                         </div>

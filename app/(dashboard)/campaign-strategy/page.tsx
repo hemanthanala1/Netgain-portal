@@ -889,7 +889,7 @@ export default function CampaignStrategyPage() {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
+            <TabsList className="w-full flex flex-wrap gap-1 bg-[#11241c]/40 border border-border p-1 rounded-lg">
               <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Business Info</TabsTrigger>
               <TabsTrigger value="prompt" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-gold data-[state=active]:text-black">AI Prompt Builder</TabsTrigger>
               <TabsTrigger value="versions" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Campaign History</TabsTrigger>
@@ -900,10 +900,10 @@ export default function CampaignStrategyPage() {
               {detailProject && (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-slate-300">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-slate-300">{detailProject.pm || 'N/A'}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-muted-foreground">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-muted-foreground">{detailProject.pm || 'N/A'}</p></CardContent></Card>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -913,8 +913,8 @@ export default function CampaignStrategyPage() {
                     </div>
 
                     {/* Right Column: Quick Stats Editor */}
-                    <div className="space-y-4 bg-[#091510] border border-[#152e23] rounded-xl p-4 md:col-span-2 max-w-2xl">
-                      <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                    <div className="space-y-4 bg-card border border-border rounded-xl p-4 md:col-span-2 max-w-2xl">
+                      <div className="flex justify-between items-center border-b border-border pb-2">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Edit Details</h4>
                         <Button variant="ghost" size="sm" onClick={() => setEditingOverview(!editingOverview)} className="text-gold h-6 text-[10px]">
                           {editingOverview ? 'Cancel' : 'Edit'}
@@ -937,19 +937,19 @@ export default function CampaignStrategyPage() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Budget (₹)</Label>
-                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Spent (₹)</Label>
-                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Timeline (e.g. 8 Weeks)</Label>
-                            <Input value={editedTimeline} onChange={e => setEditedTimeline(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input value={editedTimeline} onChange={e => setEditedTimeline(e.target.value)} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Project Manager</Label>
-                            <Input value={editedPm} onChange={e => setEditedPm(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input value={editedPm} onChange={e => setEditedPm(e.target.value)} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px] flex justify-between">Progress <span>{editedProgress}%</span></Label>
@@ -959,7 +959,7 @@ export default function CampaignStrategyPage() {
                               max="100" 
                               value={editedProgress} 
                               onChange={e => setEditedProgress(Number(e.target.value))}
-                              className="w-full accent-gold bg-[#0b1b15]" 
+                              className="w-full accent-gold bg-muted/30" 
                             />
                           </div>
                           <Button 
@@ -985,10 +985,10 @@ export default function CampaignStrategyPage() {
                         </div>
                       ) : (
                         <div className="space-y-2.5 text-xs font-sans">
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Status</span><span className="capitalize text-emerald-400 font-semibold">{detailProject.status}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Timeline</span><span className="font-semibold">{detailProject.timeline || 'Not set'}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Type</span><span className="font-semibold text-slate-300">{detailProject.type}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Date Created</span><span className="font-semibold text-slate-300">{formatDate(detailProject.startDate)}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Status</span><span className="capitalize text-emerald-400 font-semibold">{detailProject.status}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Timeline</span><span className="font-semibold">{detailProject.timeline || 'Not set'}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Type</span><span className="font-semibold text-muted-foreground">{detailProject.type}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Date Created</span><span className="font-semibold text-muted-foreground">{formatDate(detailProject.startDate)}</span></div>
                         </div>
                       )}
                     </div>
@@ -999,17 +999,17 @@ export default function CampaignStrategyPage() {
               )}
             </TabsContent>
             <TabsContent value="workspace-requirements" className="mt-4 space-y-4">
-              <div className="rounded-xl border border-[#152e23] bg-[#091510] p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Workspace Requirements</h4>
-                    <p className="mt-1 text-xs text-slate-400">Manage the brief items, files, and approvals that need follow-up.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Manage the brief items, files, and approvals that need follow-up.</p>
                   </div>
-                  <Badge variant="secondary" className="bg-[#11241c] text-slate-300 border border-[#152e23]">
+                  <Badge variant="secondary" className="bg-[#11241c] text-muted-foreground border border-border">
                     {workspaceRequirements.length} items
                   </Badge>
                 </div>
-                <div className="mt-4 rounded-lg border border-dashed border-[#152e23] bg-black/10 px-4 py-8 text-center text-xs text-slate-500">
+                <div className="mt-4 rounded-lg border border-dashed border-border bg-black/10 px-4 py-8 text-center text-xs text-muted-foreground">
                   {workspaceRequirements.length === 0
                     ? 'No requirement requests published yet.'
                     : 'Requirements are loaded, but the detailed table is not currently rendered.'}
@@ -1022,7 +1022,7 @@ export default function CampaignStrategyPage() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* File Uploader Card */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Upload Project Document / Resource File</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1030,7 +1030,7 @@ export default function CampaignStrategyPage() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1073,11 +1073,11 @@ export default function CampaignStrategyPage() {
                   </Card>
 
                   {/* Registered Files List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">File Name</th>
                             <th className="text-left py-2 px-3 font-semibold">Category</th>
                             <th className="text-left py-2 px-3 font-semibold">Version</th>
@@ -1088,14 +1088,14 @@ export default function CampaignStrategyPage() {
                         </thead>
                         <tbody>
                           {workspaceFiles.map((file: any) => (
-                            <tr key={file.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={file.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={file.name}>{file.name}</td>
-                              <td className="py-2 px-3 text-slate-400">{file.category}</td>
-                              <td className="py-2 px-3 text-slate-400">V{file.version}</td>
-                              <td className="py-2 px-3 text-slate-400">{formatDate(file.uploaded_at)}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{file.category}</td>
+                              <td className="py-2 px-3 text-muted-foreground">V{file.version}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
                               <td className="py-2 px-3">
                                 <Select value={file.visibility} onValueChange={v => handleUpdateFileVisibility(detailProject.id, file.id, file.name, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1111,7 +1111,7 @@ export default function CampaignStrategyPage() {
                             </tr>
                           ))}
                           {workspaceFiles.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No workspace files uploaded yet.</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No workspace files uploaded yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1126,7 +1126,7 @@ export default function CampaignStrategyPage() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* Upload Reports form */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1149,7 +1149,7 @@ export default function CampaignStrategyPage() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1181,11 +1181,11 @@ export default function CampaignStrategyPage() {
                   </Card>
 
                   {/* Reports List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Report Title</th>
                             <th className="text-left py-2 px-3 font-semibold">Type</th>
                             <th className="text-left py-2 px-3 font-semibold">Version</th>
@@ -1196,14 +1196,14 @@ export default function CampaignStrategyPage() {
                         </thead>
                         <tbody>
                           {workspaceReports.map((rep: any) => (
-                            <tr key={rep.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
-                              <td className="py-2 px-3 text-slate-400">{rep.report_type}</td>
-                              <td className="py-2 px-3 text-slate-400">V{rep.version}</td>
-                              <td className="py-2 px-3 text-slate-400">{formatDate(rep.uploaded_at)}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
+                              <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
                               <td className="py-2 px-3">
                                 <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1219,7 +1219,7 @@ export default function CampaignStrategyPage() {
                             </tr>
                           ))}
                           {workspaceReports.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No reports generated yet.</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No reports generated yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1234,7 +1234,7 @@ export default function CampaignStrategyPage() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* Add Link form */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Publish Resource / Deliverable Link</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1271,7 +1271,7 @@ export default function CampaignStrategyPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="sm:col-span-3 flex justify-end pt-2 border-t border-[#152e23]">
+                      <div className="sm:col-span-3 flex justify-end pt-2 border-t border-border">
                         <Button 
                           variant="gold" 
                           className="h-8 text-xs font-bold px-6" 
@@ -1285,11 +1285,11 @@ export default function CampaignStrategyPage() {
                   </Card>
 
                   {/* Links List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>
                             <th className="text-left py-2 px-3 font-semibold">Category</th>
                             <th className="text-left py-2 px-3 font-semibold">URL</th>
@@ -1299,18 +1299,18 @@ export default function CampaignStrategyPage() {
                         </thead>
                         <tbody>
                           {workspaceLinks.map((link: any) => (
-                            <tr key={link.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={link.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3">
                                 <p className="font-semibold text-slate-200">{link.title}</p>
-                                {link.description && <p className="text-[10px] text-slate-500">{link.description}</p>}
+                                {link.description && <p className="text-[10px] text-muted-foreground">{link.description}</p>}
                               </td>
-                              <td className="py-2 px-3 text-slate-400">{link.category}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{link.category}</td>
                               <td className="py-2 px-3 truncate max-w-[200px]" title={link.url}>
                                 <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1 font-mono text-[10px]"><Link2 className="h-3 w-3 shrink-0" /> {link.url}</a>
                               </td>
                               <td className="py-2 px-3">
                                 <Select value={link.visibility} onValueChange={v => handleUpdateLinkVisibility(detailProject.id, link.id, link.title, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1320,13 +1320,13 @@ export default function CampaignStrategyPage() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
                           ))}
                           {workspaceLinks.length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-8 text-slate-500 italic">No workspace links shared yet.</td></tr>
+                            <tr><td colSpan={5} className="text-center py-8 text-muted-foreground italic">No workspace links shared yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1342,20 +1342,20 @@ export default function CampaignStrategyPage() {
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Audit & Timeline Logs</h4>
                   
-                  <div className="relative pl-4 border-l border-[#152e23] space-y-4 max-h-[300px] overflow-y-auto">
+                  <div className="relative pl-4 border-l border-border space-y-4 max-h-[300px] overflow-y-auto">
                     {workspaceTimeline.map((item, idx) => (
                       <div key={item.id || idx} className="relative text-xs">
                         <div className="absolute -left-[20px] top-1 h-2 w-2 rounded-full bg-gold border border-black" />
                         <div className="flex justify-between font-bold text-slate-200">
                           <span className="text-xs font-semibold">{item.action}</span>
-                          <span className="text-[10px] text-slate-500 font-normal">{new Date(item.created_at).toLocaleString('en-IN')}</span>
+                          <span className="text-[10px] text-muted-foreground font-normal">{new Date(item.created_at).toLocaleString('en-IN')}</span>
                         </div>
-                        <p className="text-[10px] text-slate-400">By {item.user_name}</p>
-                        {item.notes && <p className="text-[10px] text-slate-500 mt-1 italic font-mono bg-[#0b1b15]/60 p-1.5 rounded border border-[#152e23]/30">"{item.notes}"</p>}
+                        <p className="text-[10px] text-muted-foreground">By {item.user_name}</p>
+                        {item.notes && <p className="text-[10px] text-muted-foreground mt-1 italic font-mono bg-muted/30 p-1.5 rounded border border-border">"{item.notes}"</p>}
                       </div>
                     ))}
                     {workspaceTimeline.length === 0 && (
-                      <p className="text-xs text-slate-500 italic py-4 text-center">No timeline activity logs recorded.</p>
+                      <p className="text-xs text-muted-foreground italic py-4 text-center">No timeline activity logs recorded.</p>
                     )}
                   </div>
                 </div>

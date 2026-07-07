@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { cn, getInitials } from '@/lib/utils'
 import { useUser } from '@/components/user-provider'
 import {
@@ -75,61 +75,84 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const { user } = useUser()
+  const isExpanded = !collapsed || !!onMobileClose
 
   return (
     <motion.aside
-      animate={{ width: collapsed && !onMobileClose ? 64 : 240 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex h-screen flex-col border-r border-border bg-[hsl(var(--sidebar-bg))] overflow-hidden"
+      animate={{ width: isExpanded ? 256 : 72 }}
+      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      className="relative flex h-screen flex-col bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] overflow-hidden shrink-0"
     >
-      {/* Logo */}
-      <div className="flex h-14 items-center justify-between border-b border-border px-4 shrink-0">
+      {/* ── Logo / Brand ── */}
+      <div className="flex h-16 items-center justify-between px-4 shrink-0 border-b border-[hsl(var(--sidebar-border))]">
         <motion.div
-          animate={{ opacity: collapsed && !onMobileClose ? 0 : 1, width: collapsed && !onMobileClose ? 0 : 'auto' }}
-          className="flex items-center gap-2 overflow-hidden"
+          animate={{ opacity: isExpanded ? 1 : 0, width: isExpanded ? 'auto' : 0 }}
+          transition={{ duration: 0.18 }}
+          className="flex items-center gap-2.5 overflow-hidden"
         >
-          <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
+          <div className="relative shrink-0">
+            <img
+              src="/logo.png"
+              className="h-8 w-8 rounded-lg object-contain"
+              alt="Netgain Logo"
+            />
+          </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-bold text-foreground whitespace-nowrap">NETGAIN</p>
-            <p className="text-[10px] text-primary whitespace-nowrap -mt-0.5 font-semibold">BUSINESS OS</p>
+            <p className="text-[13px] font-bold text-foreground whitespace-nowrap tracking-tight">NETGAIN</p>
+            <p className="text-[10px] text-primary whitespace-nowrap font-semibold tracking-widest -mt-0.5 uppercase">Business OS</p>
           </div>
         </motion.div>
-        {collapsed && !onMobileClose && (
-          <img src="/logo.png" className="h-7 w-7 rounded shrink-0 object-contain" alt="Netgain Logo" />
+
+        {/* Collapsed logo */}
+        {!isExpanded && (
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <img src="/logo.png" className="h-8 w-8 rounded-lg object-contain" alt="Netgain Logo" />
+          </div>
         )}
+
+        {/* Mobile close */}
         {onMobileClose && (
-          <button onClick={onMobileClose} className="md:hidden text-muted-foreground hover:text-foreground p-1">
-            <X className="h-5 w-5" />
+          <button
+            onClick={onMobileClose}
+            className="md:hidden p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent transition-colors"
+          >
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+      {/* ── Navigation ── */}
+      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-5 no-scrollbar">
         {navItems.map((group) => (
           <div key={group.label}>
-            {(!collapsed || onMobileClose) && (
-              <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+            {isExpanded && (
+              <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/50 select-none">
                 {group.label}
               </p>
             )}
+            {!isExpanded && <div className="my-1 mx-auto h-px w-8 bg-border/50" />}
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = item.href === '/ai-hub'
                   ? pathname === '/ai-hub'
                   : pathname === item.href || pathname.startsWith(item.href + '/')
                 return (
-                  <Link key={item.href} href={item.href} title={collapsed && !onMobileClose ? item.label : undefined} onClick={onMobileClose}>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={!isExpanded ? item.label : undefined}
+                    onClick={onMobileClose}
+                  >
                     <div
                       className={cn(
                         'sidebar-item',
                         isActive ? 'active' : 'text-muted-foreground hover:text-foreground',
-                        collapsed && !onMobileClose && 'justify-center px-0 py-2'
+                        !isExpanded && 'justify-center px-0 py-2.5'
                       )}
                     >
-                      <item.icon className={cn('shrink-0', collapsed && !onMobileClose ? 'h-5 w-5' : 'h-4 w-4')} />
-                      {(!collapsed || onMobileClose) && (
-                        <span className="whitespace-nowrap text-sm">{item.label}</span>
+                      <item.icon className={cn('shrink-0 transition-all', !isExpanded ? 'h-5 w-5' : 'h-4 w-4')} />
+                      {isExpanded && (
+                        <span className="whitespace-nowrap">{item.label}</span>
                       )}
                     </div>
                   </Link>
@@ -140,34 +163,44 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
         ))}
       </div>
 
-      {/* User Footer & Collapse toggle */}
-      <div className="border-t border-border p-3 space-y-1.5 shrink-0">
+      {/* ── Footer (user + collapse) ── */}
+      <div className="border-t border-[hsl(var(--sidebar-border))] p-3 space-y-1 shrink-0">
+        {/* Collapse toggle — desktop only */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "hidden md:flex items-center gap-3 w-full px-3 py-2 rounded text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-all",
-            collapsed && "justify-center px-0"
+            "hidden md:flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-150",
+            !isExpanded && "justify-center px-0"
           )}
-          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          title={!isExpanded ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : <ChevronLeft className="h-4 w-4 shrink-0 text-primary" />}
-          {!collapsed && <span>Collapse Sidebar</span>}
+          {collapsed
+            ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+            : <ChevronLeft className="h-4 w-4 shrink-0 text-primary" />
+          }
+          {isExpanded && <span>Collapse</span>}
         </button>
 
-        <Link href="/profile" onClick={onMobileClose} title={collapsed ? "View Profile" : undefined}>
-          <div className={cn("flex items-center gap-2 rounded p-2 hover:bg-accent transition-colors cursor-pointer", collapsed && "justify-center")}>
-            <Avatar className="h-7 w-7 shrink-0">
+        {/* Profile link */}
+        <Link href="/profile" onClick={onMobileClose} title={!isExpanded ? "My Profile" : undefined}>
+          <div className={cn(
+            "flex items-center gap-2.5 rounded-lg p-2 hover:bg-accent transition-all duration-150 cursor-pointer",
+            !isExpanded && "justify-center"
+          )}>
+            <Avatar className="h-7 w-7 shrink-0 ring-2 ring-border">
               {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
               <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-bold">
                 {user ? getInitials(user.name) : 'U'}
               </AvatarFallback>
             </Avatar>
-            {!collapsed && (
-              <div className="overflow-hidden">
-                <p className="text-xs font-semibold text-foreground whitespace-nowrap font-sans">
-                  {user?.name ? (user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')) : 'User'}
+            {isExpanded && (
+              <div className="overflow-hidden flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground whitespace-nowrap truncate">
+                  {user?.name
+                    ? user.name.split(' ').map((n, i, arr) => i === arr.length - 1 ? n[0] + '.' : n).join(' ')
+                    : 'User'}
                 </p>
-                <p className="text-[10px] text-muted-foreground whitespace-nowrap font-sans">{user?.role || 'Loading...'}</p>
+                <p className="text-[10px] text-muted-foreground whitespace-nowrap truncate">{user?.role || '...'}</p>
               </div>
             )}
           </div>

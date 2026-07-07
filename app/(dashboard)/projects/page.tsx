@@ -83,7 +83,7 @@ function CampaignStrategyPageContent() {
       accessor: 'pm',
       sortable: true,
       cell: (project: Project) => (
-        <span className="text-xs text-slate-300">{project.pm || 'Netgain Team'}</span>
+        <span className="text-xs text-muted-foreground">{project.pm || 'Netgain Team'}</span>
       )
     },
     {
@@ -114,7 +114,7 @@ function CampaignStrategyPageContent() {
       accessor: 'status',
       sortable: true,
       cell: (project: Project) => (
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[project.status] || 'text-slate-400 bg-slate-500/10'}`}>
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[project.status] || 'text-muted-foreground bg-slate-500/10'}`}>
           {project.status}
         </span>
       )
@@ -123,7 +123,7 @@ function CampaignStrategyPageContent() {
       header: 'Timeline',
       accessor: 'timeline',
       cell: (project: Project) => (
-        <span className="text-xs text-slate-400">{project.timeline || 'Not set'}</span>
+        <span className="text-xs text-muted-foreground">{project.timeline || 'Not set'}</span>
       )
     },
     {
@@ -985,11 +985,11 @@ function CampaignStrategyPageContent() {
         }}
         secondaryActions={
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+            <span className={`inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full font-semibold border ${realtimeConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-muted-foreground border-slate-500/20'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${realtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
               {realtimeConnected ? 'Live' : 'Connecting...'}
             </span>
-            <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 border-[#152e23] hover:bg-[#11241c]/50 hover:text-gold text-slate-300">
+            <Button variant="outline" size="sm" onClick={() => setShowManageTypes(true)} className="gap-1.5 border-border hover:bg-[#11241c]/50 hover:text-gold text-muted-foreground">
               <Settings className="h-4 w-4 text-gold" /> Project Types
             </Button>
           </div>
@@ -1131,7 +1131,7 @@ function CampaignStrategyPageContent() {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-[#11241c]/40 border border-[#152e23] p-1 rounded-lg">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-[#11241c]/40 border border-border p-1 rounded-lg">
               <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
               <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Tasks</TabsTrigger>
               <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
@@ -1150,10 +1150,10 @@ function CampaignStrategyPageContent() {
               {detailProject && (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-slate-300">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
-                    <Card className="bg-[#091510] border-[#152e23]"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-slate-300">{detailProject.pm || 'N/A'}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-muted-foreground">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
+                    <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">PM Assignee</p><p className="text-sm font-bold text-muted-foreground">{detailProject.pm || 'N/A'}</p></CardContent></Card>
                   </div>
                   {/* Cross-module quick links */}
                   <div className="flex flex-wrap gap-2 pt-1">
@@ -1178,8 +1178,8 @@ function CampaignStrategyPageContent() {
                     </div>
 
                     {/* Right Column: Quick Stats Editor */}
-                    <div className="space-y-4 bg-[#091510] border border-[#152e23] rounded-xl p-4 md:col-span-2 max-w-2xl">
-                      <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                    <div className="space-y-4 bg-card border border-border rounded-xl p-4 md:col-span-2 max-w-2xl">
+                      <div className="flex justify-between items-center border-b border-border pb-2">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Edit Details</h4>
                         <Button variant="ghost" size="sm" onClick={() => setEditingOverview(!editingOverview)} className="text-gold h-6 text-[10px]">
                           {editingOverview ? 'Cancel' : 'Edit'}
@@ -1202,15 +1202,15 @@ function CampaignStrategyPageContent() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Budget (₹)</Label>
-                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Spent (₹)</Label>
-                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Timeline (e.g. 8 Weeks)</Label>
-                            <Input value={editedTimeline} onChange={e => setEditedTimeline(e.target.value)} className="h-7 text-xs bg-[#0b1b15]" />
+                            <Input value={editedTimeline} onChange={e => setEditedTimeline(e.target.value)} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Project Manager</Label>
@@ -1230,7 +1230,7 @@ function CampaignStrategyPageContent() {
                               max="100" 
                               value={editedProgress} 
                               onChange={e => setEditedProgress(Number(e.target.value))}
-                              className="w-full accent-gold bg-[#0b1b15]" 
+                              className="w-full accent-gold bg-muted/30" 
                             />
                           </div>
                           <Button 
@@ -1256,34 +1256,34 @@ function CampaignStrategyPageContent() {
                         </div>
                       ) : (
                         <div className="space-y-2.5 text-xs font-sans">
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Status</span><span className="capitalize text-emerald-400 font-semibold">{detailProject.status}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Timeline</span><span className="font-semibold">{detailProject.timeline || 'Not set'}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Type</span><span className="font-semibold text-slate-300">{detailProject.type}</span></div>
-                          <div className="flex justify-between border-b border-[#152e23] pb-1"><span className="text-slate-500">Date Created</span><span className="font-semibold text-slate-300">{formatDate(detailProject.startDate)}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Status</span><span className="capitalize text-emerald-400 font-semibold">{detailProject.status}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Timeline</span><span className="font-semibold">{detailProject.timeline || 'Not set'}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Type</span><span className="font-semibold text-muted-foreground">{detailProject.type}</span></div>
+                          <div className="flex justify-between border-b border-border pb-1"><span className="text-muted-foreground">Date Created</span><span className="font-semibold text-muted-foreground">{formatDate(detailProject.startDate)}</span></div>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Time Tracking Panel */}
-                  <div className="mt-6 border-t border-[#152e23] pt-5">
+                  <div className="mt-6 border-t border-border pt-5">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Time Tracking & Timesheets</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                      <Card className="bg-card border-border">
                         <CardContent className="p-3.5 space-y-1">
                           <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
                           <p className="text-xl font-bold text-slate-200">142.5 hrs</p>
                           <p className="text-[9px] text-muted-foreground">Estimated: 200 hrs</p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                      <Card className="bg-card border-border">
                         <CardContent className="p-3.5 space-y-1">
                           <p className="text-[10px] text-muted-foreground uppercase">Burn Rate</p>
                           <p className="text-xl font-bold text-amber-400">71%</p>
                           <p className="text-[9px] text-muted-foreground">Budget utilisation</p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-[#091510]/50 border-[#152e23]">
+                      <Card className="bg-card border-border">
                         <CardContent className="p-3.5 space-y-1">
                           <p className="text-[10px] text-muted-foreground uppercase">Billable Amount</p>
                           <p className="text-xl font-bold text-emerald-400">₹1,78,250</p>
@@ -1292,12 +1292,12 @@ function CampaignStrategyPageContent() {
                       </Card>
                     </div>
 
-                    <div className="mt-4 bg-[#091510]/30 border border-[#152e23] rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between items-center pb-2 border-b border-[#152e23]/60">
-                        <span className="text-xs font-semibold text-slate-300">Mock Timesheet Schema</span>
+                    <div className="mt-4 bg-card border border-border rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between items-center pb-2 border-b border-border">
+                        <span className="text-xs font-semibold text-muted-foreground">Mock Timesheet Schema</span>
                         <Badge variant="outline" className="text-[9px] border-gold/30 text-gold bg-gold/5">Architecture Schema</Badge>
                       </div>
-                      <pre className="text-[10px] text-slate-400 font-mono overflow-x-auto bg-black/20 p-2.5 rounded border border-[#152e23]/40">
+                      <pre className="text-[10px] text-muted-foreground font-mono overflow-x-auto bg-black/20 p-2.5 rounded border border-border">
 {`interface TimesheetEntry {
   id: string; // uuid
   project_id: string; // foreign key
@@ -1319,9 +1319,9 @@ function CampaignStrategyPageContent() {
             <TabsContent value="workspace-tasks" className="mt-4 space-y-4">
               {detailProject && (
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                  <div className="flex justify-between items-center border-b border-border pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Tasks & Milestones</h4>
-                    <span className="text-[10px] text-slate-500">{detailProject.milestones.length} tasks</span>
+                    <span className="text-[10px] text-muted-foreground">{detailProject.milestones.length} tasks</span>
                   </div>
                   
                   <div className="space-y-2">
@@ -1329,7 +1329,7 @@ function CampaignStrategyPageContent() {
                       const isDone = m.endsWith(' ✅')
                       const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
                       return (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded bg-[#0b1b15] border border-[#152e23]/60 hover:border-gold/30">
+                        <div key={idx} className="flex items-center justify-between p-3 rounded bg-muted/30 border border-border hover:border-gold/30">
                           <div className="flex items-center gap-3">
                             <input 
                               type="checkbox" 
@@ -1337,13 +1337,13 @@ function CampaignStrategyPageContent() {
                               onChange={() => handleToggleMilestone(detailProject, idx)}
                               className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
                             />
-                            <span className={`text-sm ${isDone ? 'line-through text-slate-500' : 'text-slate-200 font-semibold'}`}>{cleanLabel}</span>
+                            <span className={`text-sm ${isDone ? 'line-through text-muted-foreground' : 'text-slate-200 font-semibold'}`}>{cleanLabel}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Button 
                               variant="ghost" 
                               size="icon" aria-label="Action" 
-                              className="h-7 w-7 text-slate-400 hover:text-gold hover:bg-gold/10"
+                              className="h-7 w-7 text-muted-foreground hover:text-gold hover:bg-gold/10"
                               onClick={() => {
                                 const newLabel = window.prompt("Edit task description:", cleanLabel);
                                 if (newLabel && newLabel.trim() !== "") {
@@ -1368,7 +1368,7 @@ function CampaignStrategyPageContent() {
                       )
                     })}
                     {detailProject.milestones.length === 0 && (
-                      <p className="text-sm text-slate-500 text-center py-6">No tasks created yet.</p>
+                      <p className="text-sm text-muted-foreground text-center py-6">No tasks created yet.</p>
                     )}
                   </div>
 
@@ -1378,7 +1378,7 @@ function CampaignStrategyPageContent() {
                       placeholder="Add new task (e.g. Figma Review)" 
                       value={newMilestoneText}
                       onChange={e => setNewMilestoneText(e.target.value)}
-                      className="h-10 text-sm bg-[#091510] border-[#152e23]"
+                      className="h-10 text-sm bg-card border-border"
                     />
                     <Button 
                       variant="gold" 
@@ -1397,7 +1397,7 @@ function CampaignStrategyPageContent() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* Top Header and Toggle Request Form */}
-                  <div className="flex justify-between items-center bg-[#091510] border border-[#152e23] p-3 rounded-xl">
+                  <div className="flex justify-between items-center bg-card border border-border p-3 rounded-xl">
                     <div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Requirements Request System</h4>
                       <p className="text-[10px] text-muted-foreground mt-0.5">Request guidelines, brand details, logos, or hosting details from the client.</p>
@@ -1409,7 +1409,7 @@ function CampaignStrategyPageContent() {
 
                   {/* Create Request Form */}
                   {showReqForm && (
-                    <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                    <Card className="bg-card border-border p-4 space-y-3">
                       <h5 className="text-xs font-bold text-gold">New Requirement Details</h5>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <div className="space-y-1">
@@ -1448,7 +1448,7 @@ function CampaignStrategyPageContent() {
                         </div>
                         
                         {/* Checkboxes */}
-                        <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#152e23]">
+                        <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border">
                           <label className="flex items-center gap-1.5 cursor-pointer">
                             <input type="checkbox" checked={reqAllowFile} onChange={e => setReqAllowFile(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
                             <span>Allow File Upload</span>
@@ -1467,7 +1467,7 @@ function CampaignStrategyPageContent() {
                           </label>
                         </div>
                       </div>
-                      <div className="flex gap-2 justify-end border-t border-[#152e23] pt-3">
+                      <div className="flex gap-2 justify-end border-t border-border pt-3">
                         <Button variant="outline" size="sm" onClick={() => setShowReqForm(false)}>Cancel</Button>
                         <Button variant="gold" size="sm" onClick={() => handleCreateRequirement(detailProject.id, detailProject.client)}>Submit Request</Button>
                       </div>
@@ -1476,16 +1476,16 @@ function CampaignStrategyPageContent() {
 
                   {/* Submission Review Modal Overlay */}
                   {reviewingSub && (
-                    <Card className="bg-[#121f1a] border-[#1e3a2f] p-4 space-y-3 relative">
-                      <button onClick={() => setReviewingSub(null)} className="absolute top-2 right-2 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+                    <Card className="bg-card border-border p-4 space-y-3 relative">
+                      <button onClick={() => setReviewingSub(null)} className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
                       <h5 className="text-xs font-bold text-[#D4AF37] uppercase">Review Client Submission</h5>
-                      <div className="text-xs space-y-1.5 bg-[#070e0b]/60 p-3 rounded border border-[#1e3a2f]/40 font-mono">
-                        <div><span className="text-slate-500">Submitted By:</span> <span className="text-white">{reviewingSub.submitted_by}</span></div>
-                        <div><span className="text-slate-500">Submitted At:</span> <span className="text-white">{new Date(reviewingSub.submitted_at).toLocaleString('en-IN')}</span></div>
-                        {reviewingSub.text_response && <div><span className="text-slate-500">Text Response:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.text_response}"</p></div>}
+                      <div className="text-xs space-y-1.5 bg-card p-3 rounded border border-border font-mono">
+                        <div><span className="text-muted-foreground">Submitted By:</span> <span className="text-foreground">{reviewingSub.submitted_by}</span></div>
+                        <div><span className="text-muted-foreground">Submitted At:</span> <span className="text-foreground">{new Date(reviewingSub.submitted_at).toLocaleString('en-IN')}</span></div>
+                        {reviewingSub.text_response && <div><span className="text-muted-foreground">Text Response:</span> <p className="text-muted-foreground mt-1 italic font-sans">"{reviewingSub.text_response}"</p></div>}
                         {reviewingSub.links && reviewingSub.links.length > 0 && (
                           <div>
-                            <span className="text-slate-500">Links:</span> 
+                            <span className="text-muted-foreground">Links:</span> 
                             <div className="flex flex-col gap-1 mt-1 font-sans">
                               {reviewingSub.links.map((link: string, i: number) => (
                                 <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{link}</a>
@@ -1495,15 +1495,15 @@ function CampaignStrategyPageContent() {
                         )}
                         {reviewingSub.file_paths && reviewingSub.file_paths.length > 0 && (
                           <div>
-                            <span className="text-slate-500">Uploaded Files:</span> 
+                            <span className="text-muted-foreground">Uploaded Files:</span> 
                             <div className="flex flex-col gap-1.5 mt-1 font-sans">
                               {reviewingSub.file_paths.map((file: string, i: number) => (
-                                <a key={i} href={file} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline flex items-center gap-1.5 border border-[#152e23] p-1.5 rounded bg-black/40"><Download className="h-3.5 w-3.5" />{file.split('/').pop()}</a>
+                                <a key={i} href={file} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline flex items-center gap-1.5 border border-border p-1.5 rounded bg-black/40"><Download className="h-3.5 w-3.5" />{file.split('/').pop()}</a>
                               ))}
                             </div>
                           </div>
                         )}
-                        {reviewingSub.notes && <div><span className="text-slate-500">Notes:</span> <p className="text-slate-300 mt-1 italic font-sans">"{reviewingSub.notes}"</p></div>}
+                        {reviewingSub.notes && <div><span className="text-muted-foreground">Notes:</span> <p className="text-muted-foreground mt-1 italic font-sans">"{reviewingSub.notes}"</p></div>}
                       </div>
 
                       <div className="space-y-2">
@@ -1512,10 +1512,10 @@ function CampaignStrategyPageContent() {
                           placeholder="Approve with note, or request specific changes..." 
                           value={reviewComment}
                           onChange={e => setReviewComment(e.target.value)}
-                          className="h-16 text-xs bg-[#0b1b15] border-[#1e3a2f]"
+                          className="h-16 text-xs bg-muted/30 border-border"
                         />
                       </div>
-                      <div className="flex gap-2 justify-end pt-2 border-t border-[#1e3a2f]/40">
+                      <div className="flex gap-2 justify-end pt-2 border-t border-border">
                         <Button variant="outline" size="sm" onClick={() => setReviewingSub(null)} className="h-8 text-xs">Close</Button>
                         <Button variant="outline" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Decline')} className="h-8 text-xs text-red-400 border-red-500/20 hover:bg-red-500/10">Request Revision</Button>
                         <Button variant="gold" size="sm" onClick={() => handleReviewSubmission(detailProject.id, detailProject.client, reviewingSub.id, reviewingSub.requirement_id, 'Approve')} className="h-8 text-xs px-4">Approve submission</Button>
@@ -1524,11 +1524,11 @@ function CampaignStrategyPageContent() {
                   )}
 
                   {/* List of active requests */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>
                             <th className="text-left py-2 px-3 font-semibold">Category</th>
                             <th className="text-left py-2 px-3 font-semibold">Priority</th>
@@ -1541,31 +1541,31 @@ function CampaignStrategyPageContent() {
                           {workspaceRequirements.map((req: any) => {
                             const sub = workspaceSubmissions.find(s => s.requirement_id === req.id)
                             return (
-                              <tr key={req.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                              <tr key={req.id} className="border-b border-border hover:bg-[#11241c]/10">
                                 <td className="py-2.5 px-3">
                                   <p className="font-semibold text-slate-200">{req.title}</p>
-                                  {req.description && <p className="text-[10px] text-slate-500 truncate max-w-[200px]">{req.description}</p>}
+                                  {req.description && <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{req.description}</p>}
                                 </td>
-                                <td className="py-2.5 px-3"><span className="px-1.5 py-0.5 rounded border border-[#152e23] bg-black/20 text-slate-400 text-[10px]">{req.category}</span></td>
+                                <td className="py-2.5 px-3"><span className="px-1.5 py-0.5 rounded border border-border bg-black/20 text-muted-foreground text-[10px]">{req.category}</span></td>
                                 <td className="py-2.5 px-3">
-                                  <span className={`capitalize ${req.priority === 'high' ? 'text-red-400 font-bold' : req.priority === 'medium' ? 'text-yellow-400' : 'text-slate-400'}`}>{req.priority}</span>
+                                  <span className={`capitalize ${req.priority === 'high' ? 'text-red-400 font-bold' : req.priority === 'medium' ? 'text-yellow-400' : 'text-muted-foreground'}`}>{req.priority}</span>
                                 </td>
-                                <td className="py-2.5 px-3 text-slate-400">{req.due_date ? formatDate(req.due_date) : '—'}</td>
+                                <td className="py-2.5 px-3 text-muted-foreground">{req.due_date ? formatDate(req.due_date) : '—'}</td>
                                 <td className="py-2.5 px-3">
-                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10' : 'text-slate-400 bg-slate-500/10'}`}>{req.status}</span>
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${req.status === 'completed' || req.status === 'approved' ? 'text-emerald-400 bg-emerald-500/10' : req.status === 'needs revision' ? 'text-red-400 bg-red-500/10' : req.status === 'submitted' ? 'text-purple-400 bg-purple-500/10' : 'text-muted-foreground bg-slate-500/10'}`}>{req.status}</span>
                                 </td>
                                 <td className="py-2.5 px-3 text-right">
                                   {sub ? (
                                     <Button variant="outline" size="sm" onClick={() => setReviewingSub(sub)} className="h-7 text-[10px] border-gold/20 text-gold hover:bg-gold/15">Review Submission</Button>
                                   ) : (
-                                    <span className="text-[10px] text-slate-500 italic pr-2">Awaiting client response</span>
+                                    <span className="text-[10px] text-muted-foreground italic pr-2">Awaiting client response</span>
                                   )}
                                 </td>
                               </tr>
                             )
                           })}
                           {workspaceRequirements.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No requirement requests published yet.</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No requirement requests published yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1580,7 +1580,7 @@ function CampaignStrategyPageContent() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* File Uploader Card */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Upload Project Document / Resource File</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1588,7 +1588,7 @@ function CampaignStrategyPageContent() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1631,11 +1631,11 @@ function CampaignStrategyPageContent() {
                   </Card>
 
                   {/* Registered Files List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">File Name</th>
                             <th className="text-left py-2 px-3 font-semibold">Category</th>
                             <th className="text-left py-2 px-3 font-semibold">Version</th>
@@ -1646,14 +1646,14 @@ function CampaignStrategyPageContent() {
                         </thead>
                         <tbody>
                           {workspaceFiles.map((file: any) => (
-                            <tr key={file.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={file.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={file.name}>{file.name}</td>
-                              <td className="py-2 px-3 text-slate-400">{file.category}</td>
-                              <td className="py-2 px-3 text-slate-400">V{file.version}</td>
-                              <td className="py-2 px-3 text-slate-400">{formatDate(file.uploaded_at)}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{file.category}</td>
+                              <td className="py-2 px-3 text-muted-foreground">V{file.version}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
                               <td className="py-2 px-3">
                                 <Select value={file.visibility} onValueChange={v => handleUpdateFileVisibility(detailProject.id, file.id, file.name, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1669,7 +1669,7 @@ function CampaignStrategyPageContent() {
                             </tr>
                           ))}
                           {workspaceFiles.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No workspace files uploaded yet.</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No workspace files uploaded yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1684,7 +1684,7 @@ function CampaignStrategyPageContent() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* Upload Reports form */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1707,7 +1707,7 @@ function CampaignStrategyPageContent() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-[#0b1b15] border-[#152e23] file:text-gold"
+                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1739,11 +1739,11 @@ function CampaignStrategyPageContent() {
                   </Card>
 
                   {/* Reports List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Report Title</th>
                             <th className="text-left py-2 px-3 font-semibold">Type</th>
                             <th className="text-left py-2 px-3 font-semibold">Version</th>
@@ -1754,14 +1754,14 @@ function CampaignStrategyPageContent() {
                         </thead>
                         <tbody>
                           {workspaceReports.map((rep: any) => (
-                            <tr key={rep.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
-                              <td className="py-2 px-3 text-slate-400">{rep.report_type}</td>
-                              <td className="py-2 px-3 text-slate-400">V{rep.version}</td>
-                              <td className="py-2 px-3 text-slate-400">{formatDate(rep.uploaded_at)}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
+                              <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
                               <td className="py-2 px-3">
                                 <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1777,7 +1777,7 @@ function CampaignStrategyPageContent() {
                             </tr>
                           ))}
                           {workspaceReports.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-slate-500 italic">No reports generated yet.</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No reports generated yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1792,7 +1792,7 @@ function CampaignStrategyPageContent() {
               {detailProject && (
                 <div className="space-y-4">
                   {/* Add Link form */}
-                  <Card className="bg-[#091510] border-[#152e23] p-4 space-y-3">
+                  <Card className="bg-card border-border p-4 space-y-3">
                     <h4 className="text-xs font-bold text-gold uppercase">Publish Resource / Deliverable Link</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
@@ -1829,7 +1829,7 @@ function CampaignStrategyPageContent() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="sm:col-span-3 flex justify-end pt-2 border-t border-[#152e23]">
+                      <div className="sm:col-span-3 flex justify-end pt-2 border-t border-border">
                         <Button 
                           variant="gold" 
                           className="h-8 text-xs font-bold px-6" 
@@ -1843,11 +1843,11 @@ function CampaignStrategyPageContent() {
                   </Card>
 
                   {/* Links List */}
-                  <div className="border border-[#152e23] rounded-xl overflow-hidden bg-[#091510]">
+                  <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#152e23] text-slate-400 uppercase tracking-wider text-[10px] bg-black/10">
+                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>
                             <th className="text-left py-2 px-3 font-semibold">Category</th>
                             <th className="text-left py-2 px-3 font-semibold">URL</th>
@@ -1857,18 +1857,18 @@ function CampaignStrategyPageContent() {
                         </thead>
                         <tbody>
                           {workspaceLinks.map((link: any) => (
-                            <tr key={link.id} className="border-b border-[#152e23]/30 hover:bg-[#11241c]/10">
+                            <tr key={link.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3">
                                 <p className="font-semibold text-slate-200">{link.title}</p>
-                                {link.description && <p className="text-[10px] text-slate-500">{link.description}</p>}
+                                {link.description && <p className="text-[10px] text-muted-foreground">{link.description}</p>}
                               </td>
-                              <td className="py-2 px-3 text-slate-400">{link.category}</td>
+                              <td className="py-2 px-3 text-muted-foreground">{link.category}</td>
                               <td className="py-2 px-3 truncate max-w-[200px]" title={link.url}>
                                 <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline flex items-center gap-1 font-mono text-[10px]"><Link2 className="h-3 w-3 shrink-0" /> {link.url}</a>
                               </td>
                               <td className="py-2 px-3">
                                 <Select value={link.visibility} onValueChange={v => handleUpdateLinkVisibility(detailProject.id, link.id, link.title, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-[#152e23]"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
                                     <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
@@ -1878,13 +1878,13 @@ function CampaignStrategyPageContent() {
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <a href={link.url} target="_blank" rel="noopener noreferrer">
-                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-slate-400 hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" aria-label="External Link" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /></Button>
                                 </a>
                               </td>
                             </tr>
                           ))}
                           {workspaceLinks.length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-8 text-slate-500 italic">No workspace links shared yet.</td></tr>
+                            <tr><td colSpan={5} className="text-center py-8 text-muted-foreground italic">No workspace links shared yet.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1923,21 +1923,21 @@ function CampaignStrategyPageContent() {
                     <p className="text-[10px] text-muted-foreground">Track project risks, blockers and mitigation strategies</p>
                   </div>
                   {/* Risk input form */}
-                  <Card className="bg-[#091510] border-[#152e23]">
+                  <Card className="bg-card border-border">
                     <CardContent className="p-4 space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="sm:col-span-2 space-y-1">
                           <label className="text-[10px] text-muted-foreground uppercase font-semibold">Risk Description</label>
                           <Input
                             placeholder="Describe the risk or blocker..."
-                            className="h-8 text-xs bg-black/20 border-[#152e23]"
+                            className="h-8 text-xs bg-black/20 border-border"
                             id={`risk-title-${detailProject.id}`}
                           />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground uppercase font-semibold">Impact Level</label>
                           <Select defaultValue="medium">
-                            <SelectTrigger className="h-8 text-xs bg-black/20 border-[#152e23]">
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1954,7 +1954,7 @@ function CampaignStrategyPageContent() {
                         <textarea
                           rows={2}
                           placeholder="How will this risk be mitigated?"
-                          className="w-full h-16 text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                          className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
                         />
                       </div>
                       <div className="flex justify-end">
@@ -2002,13 +2002,13 @@ function CampaignStrategyPageContent() {
                     <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Internal Notes</h4>
                     <p className="text-[10px] text-muted-foreground">Private team-facing notes — not visible to client</p>
                   </div>
-                  <Card className="bg-[#091510] border-[#152e23]">
+                  <Card className="bg-card border-border">
                     <CardContent className="p-4 space-y-3">
                       <textarea
                         rows={4}
                         placeholder="Add an internal note for your team... (e.g. client prefers dark theme, PM confirmed budget extension)"
                         id={`note-text-${detailProject.id}`}
-                        className="w-full text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                        className="w-full text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
                       />
                       <div className="flex justify-end">
                         <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
@@ -2056,21 +2056,21 @@ function CampaignStrategyPageContent() {
                     <p className="text-[10px] text-muted-foreground">Track blockages, external tasks, or resources required</p>
                   </div>
                   {/* Dependency logging form */}
-                  <Card className="bg-[#091510] border-[#152e23]">
+                  <Card className="bg-card border-border">
                     <CardContent className="p-4 space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="sm:col-span-2 space-y-1">
                           <label className="text-[10px] text-muted-foreground uppercase font-semibold">Dependency Name / Title</label>
                           <Input
                             placeholder="e.g. Payment Gateway Credentials, Domain Delegation..."
-                            className="h-8 text-xs bg-black/20 border-[#152e23]"
+                            className="h-8 text-xs bg-black/20 border-border"
                             id={`dep-title-${detailProject.id}`}
                           />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground uppercase font-semibold">Criticality</label>
                           <Select defaultValue="high">
-                            <SelectTrigger className="h-8 text-xs bg-black/20 border-[#152e23]">
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -2087,7 +2087,7 @@ function CampaignStrategyPageContent() {
                           rows={2}
                           id={`dep-notes-${detailProject.id}`}
                           placeholder="Specify who is responsible and what is needed..."
-                          className="w-full h-16 text-xs bg-black/20 border border-[#152e23] rounded-lg px-3 py-2 text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                          className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
                         />
                       </div>
                       <div className="flex justify-end">
@@ -2134,7 +2134,7 @@ function CampaignStrategyPageContent() {
             <TabsContent value="workspace-approvals" className="mt-4 space-y-4">
               {detailProject && (
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-[#152e23] pb-2">
+                  <div className="flex justify-between items-center border-b border-border pb-2">
                     <div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Approvals Queue</h4>
                       <p className="text-[10px] text-muted-foreground mt-0.5">Track sign-offs, SOW approvals, and budget adjustments</p>
@@ -2147,11 +2147,11 @@ function CampaignStrategyPageContent() {
                       { id: 'app-milestone-1', name: 'Milestone 1 Deliverable Approval', requester: 'Project Manager', status: 'approved' },
                       { id: 'app-milestone-2', name: 'Milestone 2 Deliverable Approval', requester: 'Project Manager', status: 'pending' },
                     ].map(approval => (
-                      <Card key={approval.id} className="bg-[#091510]/40 border-[#152e23] hover:border-gold/15 transition-all">
+                      <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all">
                         <CardContent className="p-3.5 flex items-center justify-between gap-4">
                           <div>
                             <p className="text-xs font-semibold text-slate-200">{approval.name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-slate-400 font-medium">{approval.requester}</span></p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-muted-foreground font-medium">{approval.requester}</span></p>
                           </div>
                           <div className="flex items-center gap-2">
                             {approval.status === 'approved' ? (

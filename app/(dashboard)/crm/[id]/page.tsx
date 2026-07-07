@@ -644,7 +644,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           </Card>
 
           {/* Related Records Summary Panel */}
-          <Card className="border-border/40 bg-[#0a1612]/10 backdrop-blur-sm">
+          <Card className="border-border/40 bg-card backdrop-blur-sm">
             <CardContent className="p-5 space-y-4">
               <h3 className="text-sm font-semibold flex items-center gap-1.5 text-gold border-b border-border/20 pb-2">
                 <Briefcase className="h-4 w-4 text-gold" />
@@ -691,7 +691,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <span className="text-muted-foreground">Unpaid Invoices</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-slate-300">
+                    <span className="font-semibold text-muted-foreground">
                       {formatCurrency(documents.filter(d => d.type === 'Invoice' && d.status !== 'paid').reduce((acc, curr) => acc + (curr.amount || 0), 0))}
                     </span>
                     <Link href={`/documents/invoices?client=${encodeURIComponent(client.business || client.name)}`} className="text-gold hover:underline font-medium">
@@ -735,7 +735,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
           {/* Portal Access Card — Founder & Admin only */}
           {isPrivileged && (
-            <Card className="border-[#1E3A2F]/60">
+            <Card className="border-border">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <MonitorSmartphone className="h-4 w-4 text-gold" />

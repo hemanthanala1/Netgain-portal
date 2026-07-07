@@ -82,7 +82,7 @@ export function PublishDialog({
               <p className="text-muted-foreground text-xs leading-relaxed">
                 This document will become visible in the client's portal. The client will be able to view, download, and digitally sign it (if applicable).
               </p>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-muted-foreground font-medium">
                 Version: {currentVersion || 1}
               </p>
             </div>

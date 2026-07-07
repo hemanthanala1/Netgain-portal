@@ -379,8 +379,8 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
   // Error state for expired or cancelled token
   if (!docToken || docToken.error) {
     return (
-      <div className="min-h-screen bg-background text-white flex flex-col justify-center items-center p-4">
-        <Card className="max-w-md w-full border-red-500/20 bg-card text-white">
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center p-4">
+        <Card className="max-w-md w-full border-red-500/20 bg-card text-foreground">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
               <AlertTriangle className="h-6 w-6" />
@@ -407,7 +407,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       <div className="border-b border-border bg-background/85 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-white shadow-md">N</div>
+            <div className="h-8 w-8 rounded-lg gold-gradient flex items-center justify-center font-bold text-foreground shadow-md">N</div>
             <div>
               <p className="text-sm font-bold text-foreground tracking-wide">NETGAIN STUDIO</p>
               <p className="text-[9px] text-[#D4AF37]/80 tracking-widest -mt-0.5">BUSINESS OS</p>
@@ -416,7 +416,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="h-8 text-xs border-border text-muted-foreground hover:text-white bg-transparent gap-1.5 font-bold"
+              className="h-8 text-xs border-border text-muted-foreground hover:text-foreground bg-transparent gap-1.5 font-bold"
               onClick={() => router.push(`/sign/dashboard/${token}`)}
             >
               <Building2 className="h-3.5 w-3.5 text-[#D4AF37]" /> View Documents Hub
@@ -434,7 +434,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       <div className="max-w-7xl mx-auto px-4 pt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Side: Document Preview IFrame (65% width) */}
         <div className="lg:col-span-8 space-y-6">
-          <Card className="border-border bg-card text-white overflow-hidden shadow-xl">
+          <Card className="border-border bg-card text-foreground overflow-hidden shadow-xl">
             <CardHeader className="border-b border-border py-4 px-6 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-[#D4AF37]" />
@@ -474,7 +474,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
         <div className="lg:col-span-4 space-y-6">
           {/* Audit / Completed Seal if signed */}
           {signedRecord ? (
-            <Card className="border-emerald-500/20 bg-emerald-500/5 text-white shadow-lg">
+            <Card className="border-emerald-500/20 bg-emerald-500/5 text-foreground shadow-lg">
               <CardContent className="pt-6 text-center space-y-4">
                 <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 animate-pulse">
                   <ShieldCheck className="h-8 w-8" />
@@ -507,7 +507,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
           ) : (
             <>
               {/* Signing Form Card */}
-              <Card className="border-border bg-card text-white shadow-xl">
+              <Card className="border-border bg-card text-foreground shadow-xl">
                 <CardHeader className="border-b border-border pb-4">
                   <CardTitle className="text-lg font-bold flex items-center gap-2">
                     <Shield className="h-5 w-5 text-[#D4AF37]" /> E-Signature Portal
@@ -602,14 +602,14 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                         <button
                           type="button"
                           onClick={() => setSigType('draw')}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-white'}`}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'draw' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                           <PenTool className="h-3 w-3" /> Draw
                         </button>
                         <button
                           type="button"
                           onClick={() => setSigType('type')}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-white'}`}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md font-medium transition-all ${sigType === 'type' ? 'bg-[#D4AF37] text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                           <Type className="h-3 w-3" /> Type
                         </button>
@@ -650,7 +650,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               type="button"
                               onClick={clearCanvas}
                               variant="outline"
-                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-white bg-transparent"
+                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                             >
                               Clear
                             </Button>
@@ -658,7 +658,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               type="button"
                               onClick={undoCanvas}
                               variant="outline"
-                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-white bg-transparent"
+                              className="h-7 px-2 text-[10px] border-border text-muted-foreground hover:text-foreground bg-transparent"
                               disabled={drawHistory.length === 0}
                             >
                               Undo
@@ -693,7 +693,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                               key={font.value}
                               type="button"
                               onClick={() => { setSelectedFont(font.value); setTypeSaved(false); }}
-                              className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-white' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                              className={`py-1 px-1.5 border rounded-md text-[10px] text-center font-medium transition-all ${selectedFont === font.value ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}
                             >
                               {font.name}
                             </button>
@@ -732,13 +732,13 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   <div className="border-t border-border pt-4 space-y-3">
                     <div className="flex items-center gap-1.5">
                       <Shield className="h-4 w-4 text-[#D4AF37]" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-white">Verification Method</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Verification Method</h3>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setOtpMethod('email')}
-                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'email' ? 'border-[#D4AF37] bg-[#D4AF37]/5 text-white' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                        className={`p-2 border rounded-lg text-left transition-all ${otpMethod === 'email' ? 'border-[#D4AF37] bg-[#D4AF37]/5 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'}`}
                       >
                         <p className="text-xs font-bold">Email OTP</p>
                         <p className="text-[10px] text-muted-foreground/80 mt-0.5">Coming Soon</p>
@@ -797,9 +797,9 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
       {/* Reject/Revision Request Dialog Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <Card className="max-w-md w-full border-border bg-card text-white">
+          <Card className="max-w-md w-full border-border bg-card text-foreground">
             <CardHeader className="border-b border-border pb-4">
-              <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-400" /> Request Revision
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
@@ -815,7 +815,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   value={rejectNotes}
                   onChange={e => setRejectNotes(e.target.value)}
                   placeholder="Describe the changes or corrections required..."
-                  className="w-full bg-background border border-border rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-white"
+                  className="w-full bg-background border border-border rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37] placeholder-slate-600 text-foreground"
                 />
               </div>
               <div className="flex gap-2 justify-end pt-2">
@@ -823,7 +823,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   type="button"
                   variant="outline"
                   onClick={() => setShowRejectModal(false)}
-                  className="h-9 text-xs border-border text-muted-foreground hover:text-white bg-transparent"
+                  className="h-9 text-xs border-border text-muted-foreground hover:text-foreground bg-transparent"
                 >
                   Cancel
                 </Button>
@@ -831,7 +831,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
                   type="button"
                   onClick={handleRejectDocument}
                   disabled={rejecting}
-                  className="h-9 text-xs bg-red-600 hover:bg-red-700 text-white border-none font-bold"
+                  className="h-9 text-xs bg-red-500 hover:bg-red-600 text-white border-none font-bold"
                 >
                   {rejecting ? 'Submitting...' : 'Decline & Submit'}
                 </Button>

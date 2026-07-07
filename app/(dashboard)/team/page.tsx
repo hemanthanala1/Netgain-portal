@@ -495,7 +495,7 @@ export default function TeamPage() {
               <div className="space-y-3">
                 {recentActivity.map((a, i) => (
                   <div key={i} className="flex gap-3">
-                    <div className="h-6 w-6 rounded-full gold-gradient flex items-center justify-center shrink-0"><span className="text-[10px] font-bold text-white">{getInitials(a.user)}</span></div>
+                    <div className="h-6 w-6 rounded-full gold-gradient flex items-center justify-center shrink-0"><span className="text-[10px] font-bold text-foreground">{getInitials(a.user)}</span></div>
                     <div><p className="text-xs"><span className="font-medium">{a.user}</span> {a.action}</p><p className="text-[10px] text-muted-foreground">{a.time}</p></div>
                   </div>
                 ))}
@@ -577,7 +577,7 @@ export default function TeamPage() {
 
             return (
               <>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0a1612]/20 p-3 rounded-xl border border-border/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-3 rounded-xl border border-border/40">
                   <div>
                     <h3 className="text-sm font-bold text-foreground">Interactive Permission Matrix</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">Customize fine-grained CRUD and workflow actions for team roles</p>
@@ -621,7 +621,7 @@ export default function TeamPage() {
                           {MODULES.map(mod => {
                             return (
                               <tr key={mod} className="hover:bg-muted/10 transition-colors">
-                                <td className="py-3.5 px-4 font-semibold text-slate-300 border-r border-border/10">
+                                <td className="py-3.5 px-4 font-semibold text-muted-foreground border-r border-border/10">
                                   {MODULE_LABELS[mod] || mod}
                                 </td>
                                 {OPERATIONS.map(op => {
@@ -633,7 +633,7 @@ export default function TeamPage() {
                                         checked={hasPerm}
                                         disabled={isAdmin}
                                         onChange={() => handleTogglePermission(activeRole.id, mod, op)}
-                                        className="h-4.5 w-4.5 rounded border-border/80 bg-[#0a1612]/30 text-gold focus:ring-gold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        className="h-4.5 w-4.5 rounded border-border/80 bg-card text-gold focus:ring-gold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                         aria-label={`Toggle ${op} permission for ${mod}`}
                                       />
                                     </td>

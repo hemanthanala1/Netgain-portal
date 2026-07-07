@@ -42,11 +42,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }>
   open:        { label: 'Open',        color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',     icon: Inbox },
   in_progress: { label: 'In Progress', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', icon: Clock },
   resolved:    { label: 'Resolved',    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle2 },
-  closed:      { label: 'Closed',      color: 'text-slate-400 bg-slate-500/10 border-slate-500/20', icon: Archive },
+  closed:      { label: 'Closed',      color: 'text-muted-foreground bg-slate-500/10 border-slate-500/20', icon: Archive },
 }
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  low:    { label: 'Low',    color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
+  low:    { label: 'Low',    color: 'text-muted-foreground bg-slate-500/10 border-slate-500/20' },
   medium: { label: 'Medium', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   high:   { label: 'High',   color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   urgent: { label: 'Urgent', color: 'text-red-400 bg-red-500/10 border-red-500/20' },
@@ -242,7 +242,7 @@ function SupportListContent() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-[#0a1612]/30 rounded-xl border border-border/50">
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-card rounded-xl border border-border/50">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -328,7 +328,7 @@ function SupportListContent() {
                             return next
                           })
                         }}
-                        className="h-4 w-4 rounded border-border/60 bg-[#0a1612]/30 text-gold focus:ring-gold cursor-pointer"
+                        className="h-4 w-4 rounded border-border/60 bg-card text-gold focus:ring-gold cursor-pointer"
                         aria-label={`Select ticket: ${ticket.title}`}
                       />
                     </div>
@@ -365,7 +365,7 @@ function SupportListContent() {
 
                         <div className="flex flex-col items-end gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                           <Select value={status} onValueChange={(v) => updateStatus(ticket.id, v)}>
-                            <SelectTrigger className={cn('h-7 text-[10px] border px-2 py-0 w-28 bg-[#0a1612]/30', statusCfg.color)}>
+                            <SelectTrigger className={cn('h-7 text-[10px] border px-2 py-0 w-28 bg-card', statusCfg.color)}>
                               <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -376,7 +376,7 @@ function SupportListContent() {
                           </Select>
 
                           <Select value={ticket.assigned_to || 'unassigned'} onValueChange={(v) => handleAssign(ticket.id, v)}>
-                            <SelectTrigger className="h-7 text-[10px] border border-border/60 bg-[#0a1612]/30 text-muted-foreground w-28 px-2 py-0">
+                            <SelectTrigger className="h-7 text-[10px] border border-border/60 bg-card text-muted-foreground w-28 px-2 py-0">
                               <SelectValue placeholder="Assignee" />
                             </SelectTrigger>
                             <SelectContent>
@@ -408,7 +408,7 @@ function SupportListContent() {
                           </Button>
                         )}
                         {status !== 'closed' && (
-                          <Button size="sm" variant="ghost" className="h-7 text-[10px] text-muted-foreground hover:text-slate-300"
+                          <Button size="sm" variant="ghost" className="h-7 text-[10px] text-muted-foreground hover:text-muted-foreground"
                             onClick={e => { e.stopPropagation(); updateStatus(ticket.id, 'closed') }}>
                             <Archive className="h-3 w-3 mr-1" /> Close
                           </Button>
@@ -461,7 +461,7 @@ function SupportListContent() {
             {/* Original Message */}
             <div>
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">Original Message</Label>
-              <div className="bg-black/20 p-4 rounded-lg border border-border/40 text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+              <div className="bg-black/20 p-4 rounded-lg border border-border/40 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                 {selectedTicket.message}
               </div>
             </div>
@@ -470,7 +470,7 @@ function SupportListContent() {
             {selectedTicket.reply && (
               <div>
                 <Label className="text-xs font-semibold text-emerald-400/80 uppercase tracking-wide mb-2 block">Your Reply (Sent)</Label>
-                <div className="bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/20 text-sm text-slate-300 whitespace-pre-wrap italic leading-relaxed">
+                <div className="bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/20 text-sm text-muted-foreground whitespace-pre-wrap italic leading-relaxed">
                   "{selectedTicket.reply}"
                 </div>
               </div>
@@ -584,7 +584,7 @@ function SupportListContent() {
                 <h4 className="font-bold text-sm text-foreground mb-1">{peekTicket.title}</h4>
                 <p className="text-muted-foreground">From: {peekTicket.client_id}</p>
               </div>
-              <div className="bg-[#0a1612]/30 p-3 rounded-lg border border-border/40 max-h-36 overflow-y-auto whitespace-pre-wrap">
+              <div className="bg-card p-3 rounded-lg border border-border/40 max-h-36 overflow-y-auto whitespace-pre-wrap">
                 {peekTicket.message}
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -701,7 +701,7 @@ function SupportListContent() {
           <Button 
             size="sm" 
             variant="ghost" 
-            className="h-8 text-xs text-muted-foreground hover:text-white"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => setSelectedTicketIds(new Set())}
           >
             Cancel

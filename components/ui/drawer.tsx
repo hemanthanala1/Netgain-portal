@@ -55,7 +55,7 @@ export function Drawer({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
           {/* Backdrop Click */}
           <motion.div
             initial={{ opacity: 0 }}

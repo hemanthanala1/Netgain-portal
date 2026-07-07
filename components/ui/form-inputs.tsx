@@ -28,18 +28,18 @@ export function FieldWrapper({
   return (
     <div className={cn("space-y-1.5 w-full", className)}>
       {label && (
-        <Label className="text-xs font-semibold text-foreground/90 flex items-center gap-1">
+        <Label className="text-xs font-semibold text-muted-foreground/90 flex items-center gap-1">
           {label}
           {required && <span className="text-destructive font-bold">*</span>}
         </Label>
       )}
       {children}
       {error ? (
-        <p className="text-[11px] font-medium text-destructive leading-none mt-1 animate-pulse">
+        <p className="text-[11px] font-semibold text-destructive mt-1">
           {error}
         </p>
       ) : helperText ? (
-        <p className="text-[11px] text-muted-foreground leading-normal mt-1">
+        <p className="text-[11px] text-muted-foreground/75 leading-normal mt-1">
           {helperText}
         </p>
       ) : null}

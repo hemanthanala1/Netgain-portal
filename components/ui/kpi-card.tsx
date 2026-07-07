@@ -111,26 +111,26 @@ export function KPICard({
         onClick && "cursor-pointer hover:shadow-lg active:scale-[0.99] group"
       )}
     >
-      <CardContent className="p-5">
+      <CardContent className="p-6">
         <div className="flex justify-between items-start">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-semibold uppercase tracking-wide">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-bold uppercase tracking-widest">
               <span>{title}</span>
               {tooltip && (
                 <div className="relative group/tooltip inline-block">
-                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-help" />
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-help" />
                   <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2 rounded-lg bg-popover border border-border text-[10px] text-popover-foreground leading-normal shadow-md font-medium opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-200 z-50">
                     {tooltip}
                   </div>
                 </div>
               )}
             </div>
-            <p className="text-2xl font-bold tracking-tight text-foreground group-hover:text-gold transition-colors duration-200">{value}</p>
+            <p className="text-3xl font-extrabold tracking-tight text-foreground group-hover:text-gold transition-colors duration-200 mt-1">{value}</p>
           </div>
           {renderSparkline()}
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
+        <div className="mt-5 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1">
             {change !== undefined && (
               <span className={cn(

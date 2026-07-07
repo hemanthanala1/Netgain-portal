@@ -128,7 +128,7 @@ export function ShareDialog({
             onClick={() => toggleMethod('whatsapp')}
             className={`flex items-center gap-3 w-full p-4 rounded-xl border-2 transition-all ${methods.includes('whatsapp') ? 'border-[#25D366] bg-[#25D366]/5' : 'border-border hover:border-[#25D366]/30'}`}
           >
-            <div className={`p-2 rounded-lg ${methods.includes('whatsapp') ? 'bg-[#25D366] text-white' : 'bg-muted text-muted-foreground'}`}><MessageSquare className="h-5 w-5" /></div>
+            <div className={`p-2 rounded-lg ${methods.includes('whatsapp') ? 'bg-[#25D366] text-foreground' : 'bg-muted text-muted-foreground'}`}><MessageSquare className="h-5 w-5" /></div>
             <div className="text-left">
               <p className="font-semibold text-sm">Send via WhatsApp</p>
               <p className="text-xs text-muted-foreground">Send document link to WhatsApp.</p>
@@ -139,7 +139,7 @@ export function ShareDialog({
             onClick={() => toggleMethod('sms')}
             className={`flex items-center gap-3 w-full p-4 rounded-xl border-2 transition-all ${methods.includes('sms') ? 'border-blue-500 bg-blue-500/5' : 'border-border hover:border-blue-500/30'}`}
           >
-            <div className={`p-2 rounded-lg ${methods.includes('sms') ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}><Phone className="h-5 w-5" /></div>
+            <div className={`p-2 rounded-lg ${methods.includes('sms') ? 'bg-blue-500 text-foreground' : 'bg-muted text-muted-foreground'}`}><Phone className="h-5 w-5" /></div>
             <div className="text-left">
               <p className="font-semibold text-sm">Send via SMS</p>
               <p className="text-xs text-muted-foreground">Send document link via text message.</p>

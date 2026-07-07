@@ -31,10 +31,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Sidebar onMobileCloseAction={() => setMobileMenuOpen(false)} />
         </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0 bg-muted/20">
           <TopBar onMenuClickAction={() => setMobileMenuOpen(true)} />
-          <main className="flex-1 overflow-y-auto bg-background">
-            <div className="p-4 md:p-6 max-w-[1600px] mx-auto animate-fade-in">
+          <main className="flex-1 overflow-y-auto">
+            <div className="p-6 md:p-8 max-w-[1440px] mx-auto animate-fade-in transition-all duration-300">
               {children}
             </div>
           </main>

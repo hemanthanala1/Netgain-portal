@@ -306,7 +306,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
             <div className="flex items-center gap-2">
               <Input 
                 type="number" 
-                className="w-28 h-7 text-right text-xs bg-[#0b1b15] text-gold font-bold border-gold/30" 
+                className="w-28 h-7 text-right text-xs bg-muted/30 text-gold font-bold border-gold/30" 
                 value={form.customSubtotal ?? subtotal} 
                 onChange={e => {
                   const val = Number(e.target.value)
