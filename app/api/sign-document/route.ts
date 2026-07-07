@@ -222,22 +222,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to log to timeline:', timelineError.message)
     }
 
-    // 6. Save current document state in `document_versions`
-    const { error: verError } = await supabase
-      .from('document_versions')
-      .insert({
-        document_type: docType,
-        document_id: docId,
-        version: currentVersion,
-        document_data: docRecord,
-        created_by: tokenRecord.created_by
-      })
-
-    if (verError) {
-      console.error('Failed to backup version details:', verError.message)
-    }
-
-    // 7. Update status and lock the document
+    // 6. Update status and lock the document
     const signedAt = new Date().toISOString()
     const updatedHistory = [
       ...(docRecord.history || []),
@@ -245,14 +230,20 @@ export async function POST(request: NextRequest) {
       { date: signedAt.split('T')[0], action: 'Status changed to signed' }
     ]
 
+    const updateData: any = {
+      status: 'signed',
+      signed_at: signedAt,
+      is_locked: true,
+      history: updatedHistory
+    }
+
+    let finalDocRecord = { ...docRecord, ...updateData, signed_by: clientName }
+
     const { error: updateDocError } = await supabase
       .from(tableName)
       .update({
-        status: 'signed',
-        signed_at: signedAt,
-        signed_by: clientName,
-        is_locked: true,
-        history: updatedHistory
+        ...updateData,
+        signed_by: clientName
       })
       .eq('id', docId)
 
@@ -260,16 +251,27 @@ export async function POST(request: NextRequest) {
       // Fallback: try without signed_by if column doesn't exist
       const { error: fallbackErr } = await supabase
         .from(tableName)
-        .update({
-          status: 'signed',
-          signed_at: signedAt,
-          is_locked: true,
-          history: updatedHistory
-        })
+        .update(updateData)
         .eq('id', docId)
       if (fallbackErr) {
         throw new Error(`Failed to update document status: ${fallbackErr.message}`)
       }
+      finalDocRecord = { ...docRecord, ...updateData }
+    }
+
+    // 7. Save current document state in `document_versions`
+    const { error: verError } = await supabase
+      .from('document_versions')
+      .upsert({
+        document_type: docType,
+        document_id: docId,
+        version: currentVersion,
+        document_data: finalDocRecord,
+        created_by: clientName || tokenRecord.created_by || 'Client'
+      }, { onConflict: 'document_type,document_id,version' })
+
+    if (verError) {
+      console.error('Failed to backup version details:', verError.message)
     }
 
     // 8. Invalidate / mark the signing token as used

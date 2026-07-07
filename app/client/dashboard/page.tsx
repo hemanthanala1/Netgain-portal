@@ -956,19 +956,26 @@ export default function ClientDashboardPage() {
         { date: new Date().toISOString().split('T')[0], action: 'Status changed to signed' }
       ]
 
+      const signedAt = new Date().toISOString()
+      const updateData: any = {
+        status: 'signed',
+        is_locked: true,
+        signed_at: signedAt,
+        ip_address: ip,
+        browser: browser,
+        device: device,
+        history: updatedHistory
+      }
+
+      let finalDocRecord = { ...selectedDoc.raw, ...updateData, signed_by: signerName }
+
       let updateDocError: any = null
       try {
         const { error } = await supabase
           .from(tableName)
           .update({
-            status: 'signed',
-            is_locked: true,
-            signed_at: new Date().toISOString(),
-            signed_by: signerName,
-            ip_address: ip,
-            browser: browser,
-            device: device,
-            history: updatedHistory
+            ...updateData,
+            signed_by: signerName
           })
           .eq('id', selectedDoc.id)
         updateDocError = error
@@ -980,17 +987,25 @@ export default function ClientDashboardPage() {
         // Fallback: try without signed_by if column doesn't exist
         const { error: fallbackErr } = await supabase
           .from(tableName)
-          .update({
-            status: 'signed',
-            is_locked: true,
-            signed_at: new Date().toISOString(),
-            ip_address: ip,
-            browser: browser,
-            device: device,
-            history: updatedHistory
-          })
+          .update(updateData)
           .eq('id', selectedDoc.id)
         if (fallbackErr) throw fallbackErr
+        finalDocRecord = { ...selectedDoc.raw, ...updateData }
+      }
+
+      // Save signed state in document_versions
+      try {
+        await supabase
+          .from('document_versions')
+          .upsert({
+            document_type: docType,
+            document_id: selectedDoc.id,
+            version: currentVersion,
+            document_data: finalDocRecord,
+            created_by: signerName || 'Client'
+          }, { onConflict: 'document_type,document_id,version' })
+      } catch (verErr) {
+        console.error('Failed to update signed version details:', verErr)
       }
 
       // 7. Update timeline

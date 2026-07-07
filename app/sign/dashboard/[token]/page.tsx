@@ -423,16 +423,19 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                   </CardContent>
 
                   <div className="border-t border-[#1E3A2F]/60 bg-black/20 p-4 flex gap-2">
-                    {isCompleted ? (
-                      <Button
-                        asChild
-                        className="w-full h-8 text-xs font-bold bg-[#1E3A2F] border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
-                      >
-                        <a href={`/api/document-pdf?token=${docTokenKey}`} download>
-                          <Download className="h-3 w-3" /> Download Signed
-                        </a>
-                      </Button>
-                    ) : isRevision ? (
+                    {isCompleted ? (() => {
+                      const cacheBuster = doc.raw?.signed_at ? new Date(doc.raw.signed_at).getTime() : new Date().getTime()
+                      return (
+                        <Button
+                          asChild
+                          className="w-full h-8 text-xs font-bold bg-[#1E3A2F] border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                        >
+                          <a href={`/api/document-pdf?token=${docTokenKey}&v=${cacheBuster}`} download>
+                            <Download className="h-3 w-3" /> Download Signed
+                          </a>
+                        </Button>
+                      )
+                    })() : isRevision ? (
                       <div className="w-full text-center text-xs py-1.5 text-red-400/80 bg-red-950/20 rounded-md border border-red-500/10">
                         Awaiting team revision
                       </div>
@@ -451,7 +454,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                           variant="outline"
                           className="h-8 text-xs border-[#1E3A2F] text-slate-300 bg-transparent hover:bg-white/5"
                         >
-                          <a href={`/api/document-pdf?token=${docTokenKey}`} target="_blank" rel="noreferrer">
+                          <a href={`/api/document-pdf?token=${docTokenKey}&v=${doc.raw?.signed_at ? new Date(doc.raw.signed_at).getTime() : new Date().getTime()}`} target="_blank" rel="noreferrer">
                             Review
                           </a>
                         </Button>
