@@ -1272,7 +1272,7 @@ function CampaignStrategyPageContent() {
                       <Card className="bg-card border-border">
                         <CardContent className="p-3.5 space-y-1">
                           <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
-                          <p className="text-xl font-bold text-slate-200">142.5 hrs</p>
+                          <p className="text-xl font-bold text-foreground">142.5 hrs</p>
                           <p className="text-[9px] text-muted-foreground">Estimated: 200 hrs</p>
                         </CardContent>
                       </Card>
@@ -1337,7 +1337,7 @@ function CampaignStrategyPageContent() {
                               onChange={() => handleToggleMilestone(detailProject, idx)}
                               className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
                             />
-                            <span className={`text-sm ${isDone ? 'line-through text-muted-foreground' : 'text-slate-200 font-semibold'}`}>{cleanLabel}</span>
+                            <span className={`text-sm ${isDone ? 'line-through text-muted-foreground' : 'text-foreground font-semibold'}`}>{cleanLabel}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Button 
@@ -1543,7 +1543,7 @@ function CampaignStrategyPageContent() {
                             return (
                               <tr key={req.id} className="border-b border-border hover:bg-[#11241c]/10">
                                 <td className="py-2.5 px-3">
-                                  <p className="font-semibold text-slate-200">{req.title}</p>
+                                  <p className="font-semibold text-foreground">{req.title}</p>
                                   {req.description && <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{req.description}</p>}
                                 </td>
                                 <td className="py-2.5 px-3"><span className="px-1.5 py-0.5 rounded border border-border bg-black/20 text-muted-foreground text-[10px]">{req.category}</span></td>
@@ -1647,7 +1647,7 @@ function CampaignStrategyPageContent() {
                         <tbody>
                           {workspaceFiles.map((file: any) => (
                             <tr key={file.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={file.name}>{file.name}</td>
+                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={file.name}>{file.name}</td>
                               <td className="py-2 px-3 text-muted-foreground">{file.category}</td>
                               <td className="py-2 px-3 text-muted-foreground">V{file.version}</td>
                               <td className="py-2 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
@@ -1755,7 +1755,7 @@ function CampaignStrategyPageContent() {
                         <tbody>
                           {workspaceReports.map((rep: any) => (
                             <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
+                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
                               <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
                               <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
                               <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
@@ -1859,7 +1859,7 @@ function CampaignStrategyPageContent() {
                           {workspaceLinks.map((link: any) => (
                             <tr key={link.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3">
-                                <p className="font-semibold text-slate-200">{link.title}</p>
+                                <p className="font-semibold text-foreground">{link.title}</p>
                                 {link.description && <p className="text-[10px] text-muted-foreground">{link.description}</p>}
                               </td>
                               <td className="py-2 px-3 text-muted-foreground">{link.category}</td>
@@ -2150,7 +2150,7 @@ function CampaignStrategyPageContent() {
                       <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all">
                         <CardContent className="p-3.5 flex items-center justify-between gap-4">
                           <div>
-                            <p className="text-xs font-semibold text-slate-200">{approval.name}</p>
+                            <p className="text-xs font-semibold text-foreground">{approval.name}</p>
                             <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-muted-foreground font-medium">{approval.requester}</span></p>
                           </div>
                           <div className="flex items-center gap-2">

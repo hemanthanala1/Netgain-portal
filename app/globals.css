@@ -7,28 +7,28 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
+    --background: 216 20% 95%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 170 88% 13%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 20% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 24% 95%;
+    --primary: 153 52% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 153 31% 49%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 216 20% 97%;
     --muted-foreground: 215 16% 47%;
-    --accent: 210 20% 92%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 153 30% 92%;
+    --accent-foreground: 153 52% 25%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 170 88% 13%;
-    --radius: 0.625rem;
-    --sidebar-bg: 210 40% 98%;
-    --sidebar-border: 214 20% 88%;
+    --border: 214 20% 92%;
+    --input: 214 20% 92%;
+    --ring: 153 52% 25%;
+    --radius: 1.25rem;
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-border: 214 20% 92%;
   }
 
   .dark {
@@ -38,10 +38,10 @@
     --card-foreground: 213 31% 91%;
     --popover: 222 47% 13%;
     --popover-foreground: 213 31% 91%;
-    --primary: 168 75% 38%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 222 35% 20%;
-    --secondary-foreground: 213 31% 91%;
+    --primary: 153 52% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 153 31% 60%;
+    --secondary-foreground: 0 0% 100%;
     --muted: 222 35% 18%;
     --muted-foreground: 215 20% 58%;
     --accent: 222 35% 18%;
@@ -50,7 +50,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 222 30% 22%;
     --input: 222 30% 22%;
-    --ring: 168 75% 38%;
+    --ring: 153 52% 40%;
     --sidebar-bg: 222 47% 9%;
     --sidebar-border: 222 30% 18%;
   }
@@ -111,10 +111,21 @@
     color: hsl(var(--foreground));
   }
   .sidebar-item.active {
-    background-color: hsla(var(--primary), 0.1);
+    background-color: hsla(var(--primary), 0.08);
     color: hsl(var(--primary));
     font-weight: 600;
-    box-shadow: inset 3px 0 0 hsl(var(--primary));
+    position: relative;
+    overflow: hidden;
+  }
+  .sidebar-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: hsl(var(--primary));
+    border-radius: 0 4px 4px 0;
   }
   .dark .sidebar-item.active {
     background-color: hsla(var(--primary), 0.15);
@@ -122,8 +133,8 @@
 
   /* ── Stat / KPI Cards ── */
   .stat-card {
-    @apply relative overflow-hidden rounded-xl border border-border/70 bg-card p-5 transition-all duration-200;
-    box-shadow: 0 1px 3px 0 rgba(0,0,0,0.04), 0 1px 2px -1px rgba(0,0,0,0.04);
+    @apply relative overflow-hidden rounded-[20px] border border-border/70 bg-card p-5 transition-all duration-200;
+    box-shadow: 0 4px 20px -2px rgba(0,0,0,0.03);
   }
   .stat-card:hover {
     border-color: hsl(var(--border));
@@ -133,12 +144,12 @@
 
   /* ── Page header ── */
   .page-header { @apply mb-8; }
-  .page-title  { @apply text-2xl font-bold tracking-tight text-foreground; }
-  .page-description { @apply text-muted-foreground mt-1 text-sm; }
+  .page-title  { @apply text-3xl font-semibold tracking-tight text-foreground; }
+  .page-description { @apply text-muted-foreground mt-1.5 text-[15px]; }
 
   /* ── Section titles (within pages) ── */
   .section-title {
-    @apply text-sm font-semibold text-foreground/80 tracking-tight;
+    @apply text-base font-semibold text-foreground/90 tracking-tight;
   }
 
   /* ── Data table wrapper ── */

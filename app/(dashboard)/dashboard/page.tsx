@@ -756,7 +756,7 @@ export default function DashboardPage() {
               Role View:
             </span>
             <Select value={currentRole} onValueChange={(val) => setRoleOverride(val)}>
-              <SelectTrigger className="h-8 text-[11px] w-40 bg-black/30 border-gold/30 hover:border-gold/60 text-gold font-bold">
+              <SelectTrigger className="h-8 text-[11px] w-40 bg-gold/10 border-gold/30 hover:border-gold/60 text-gold font-bold">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

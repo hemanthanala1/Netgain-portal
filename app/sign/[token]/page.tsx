@@ -450,7 +450,7 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
               <Button
                 asChild
                 variant="outline"
-                className="h-8 text-xs gap-1 border-border text-muted-foreground hover:bg-white/5 bg-transparent"
+                className="h-8 text-xs gap-1 border-border text-muted-foreground hover:bg-accent bg-transparent"
               >
                 <a href={`/api/document-pdf?token=${token}&v=${pdfVersion}`} target="_blank" rel="noreferrer">
                   <Download className="h-3 w-3" /> Download PDF

@@ -9,12 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Search, Plus, Download, Trash2, Pencil, Loader2, HandshakeIcon, Send, History, Globe, FileText } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, HandshakeIcon } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
@@ -139,7 +140,7 @@ function AgreementsPageContent() {
       sortable: true,
       cell: (a: Agreement) => (
         <div>
-          <a href={`/crm?search=${encodeURIComponent(a.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+          <a href={`/crm?search=${encodeURIComponent(a.client)}`} className="font-medium text-xs text-foreground hover:text-gold transition-colors hover:underline decoration-dotted">
             {a.client}
           </a>
           <p className="text-[10px] text-muted-foreground">{a.contact}</p>
@@ -182,21 +183,34 @@ function AgreementsPageContent() {
       accessor: 'actions',
       className: 'text-right',
       cell: (a: Agreement) => (
-        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(a)}><History className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(a)} disabled={downloadingId === a.id}>
-            {downloadingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(a); resetForm(a, companyDocs); setShowCreate(true); }}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${a.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(a)}>
-            <Globe className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })}><Send className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(a.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+        <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border">
+              <DropdownMenuItem onClick={() => setHistoryDoc(a)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(a)} disabled={downloadingId === a.id} className="cursor-pointer gap-2">
+                {downloadingId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setEditItem(a); resetForm(a, companyDocs); setShowCreate(true); }} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Pencil className="h-4 w-4" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPublishDoc(a)} className={`cursor-pointer gap-2 ${a.published ? 'text-purple-400 focus:text-purple-400' : ''}`}>
+                <Globe className="h-4 w-4" /> Publish to Client Portal
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShareDoc({ id: a.id, title: `${a.docId} - ${a.client}` })} className="cursor-pointer gap-2 text-emerald-400 focus:text-emerald-400">
+                <Send className="h-4 w-4" /> Send to client
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDeleteId(a.id)} className="cursor-pointer gap-2 text-red-400 focus:text-red-400 focus:bg-red-400/10">
+                <Trash2 className="h-4 w-4" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )
     }

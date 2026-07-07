@@ -1313,23 +1313,23 @@ export default function ClientDashboardPage() {
       </div>
     )
   }
-
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col md:flex-row font-sans relative overflow-hidden">
-      {/* Mobile Sidebar overlay */}
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background sm:p-4 md:p-6 lg:p-8 font-sans">
+      <div className="flex flex-1 overflow-hidden bg-card rounded-none sm:rounded-[2.5rem] shadow-none sm:shadow-xl border-0 sm:border sm:border-border/50 ring-0 sm:ring-1 sm:ring-black/5 relative">
+        {/* Mobile Sidebar overlay */}
+        {mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 rounded-[2.5rem]"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
 
-      {/* Sidebar Navigation */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 overflow-hidden",
-        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-        sidebarCollapsed ? 'w-60 md:w-[72px]' : 'w-64'
-      )}>
+        {/* Sidebar Navigation */}
+        <aside className={cn(
+          "fixed inset-y-0 left-0 z-50 border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-bg))] flex flex-col shrink-0 transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 overflow-hidden",
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          sidebarCollapsed ? 'w-60 md:w-[72px]' : 'w-64'
+        )}>
         <div className="flex h-16 items-center justify-between px-4 shrink-0 border-b border-[hsl(var(--sidebar-border))]">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="relative shrink-0">
@@ -1435,8 +1435,8 @@ export default function ClientDashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-background relative">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-background px-4 shadow-sm sm:px-6">
+      <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-transparent relative">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-transparent px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(true)}
@@ -1462,7 +1462,7 @@ export default function ClientDashboardPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               variant="outline"
-              className="border-border text-foreground/90 bg-card hover:bg-white/5 h-8 text-xs gap-2"
+              className="border-border text-foreground/90 bg-card hover:bg-accent h-8 text-xs gap-2"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
               Sync
@@ -1555,7 +1555,7 @@ export default function ClientDashboardPage() {
                         <CardContent className="p-4 flex items-center justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <p className="text-xs font-bold text-slate-200 truncate">{proj.title}</p>
+                              <p className="text-xs font-bold text-foreground truncate">{proj.title}</p>
                               <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold capitalize', healthColor)}>{healthLabel}</span>
                             </div>
                             <p className="text-[10px] text-muted-foreground">PM: {proj.pm || 'Netgain Team'}</p>
@@ -1694,7 +1694,7 @@ export default function ClientDashboardPage() {
               {/* Account Timeline */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Account Timeline</h3>
-                <Card className="bg-card border-border/80 max-h-[500px] flex flex-col">
+                <Card className="bg-card border-border/80 flex flex-col">
                   <CardContent className="p-4 overflow-y-auto no-scrollbar flex-1">
                     <UniversalTimeline
                       entries={[
@@ -1740,7 +1740,7 @@ export default function ClientDashboardPage() {
                           comment: `Status: ${m.status}`,
                           module: 'Meetings'
                         }))
-                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 15)}
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6)}
                       compact
                     />
                     {docs.length === 0 && notifications.length === 0 && (
@@ -2515,7 +2515,7 @@ export default function ClientDashboardPage() {
                             </Button>
                           )}
                           
-                          <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-border bg-transparent text-foreground/90 hover:bg-white/5 h-9">
+                          <Button onClick={() => setShowRevisionModal(true)} variant="outline" className="w-full text-xs border-border bg-transparent text-foreground/90 hover:bg-accent h-9">
                             Request Changes
                           </Button>
                           <Button onClick={handleDeclineDoc} variant="outline" className="w-full text-xs border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 bg-transparent h-9">
@@ -2803,6 +2803,7 @@ export default function ClientDashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }

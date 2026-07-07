@@ -337,7 +337,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
           <Button
             onClick={loadDashboardData}
             variant="outline"
-            className="border-border text-muted-foreground bg-card hover:bg-white/5 h-9"
+            className="border-border text-muted-foreground bg-card hover:bg-accent h-9"
           >
             <RefreshCw className="h-3.5 w-3.5 mr-2" /> Refresh Hub
           </Button>
@@ -451,7 +451,7 @@ export default function ClientDashboard({ params }: { params: { token: string } 
                         <Button
                           asChild
                           variant="outline"
-                          className="h-8 text-xs border-border text-muted-foreground bg-transparent hover:bg-white/5"
+                          className="h-8 text-xs border-border text-muted-foreground bg-transparent hover:bg-accent"
                         >
                           <a href={`/api/document-pdf?token=${docTokenKey}&v=${doc.raw?.signed_at ? new Date(doc.raw.signed_at).getTime() : new Date().getTime()}`} target="_blank" rel="noreferrer">
                             Review

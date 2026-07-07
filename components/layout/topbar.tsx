@@ -214,7 +214,7 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+        <Button variant="outline" size="icon" className="h-10 w-10 rounded-full border-border/60 bg-transparent text-muted-foreground shadow-none hover:bg-accent/50" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
           <Sun className="h-[18px] w-[18px] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-[18px] w-[18px] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
@@ -222,7 +222,7 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
         {/* ── Notifications ── */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 relative rounded-lg">
+            <Button variant="outline" size="icon" className="h-10 w-10 relative rounded-full border-border/60 bg-transparent text-muted-foreground shadow-none hover:bg-accent/50">
               <Bell className="h-[18px] w-[18px]" />
               {unreadCount > 0 && (
                 <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
@@ -311,36 +311,22 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
           </PopoverContent>
         </Popover>
 
-        {/* ── Quick Add ── */}
-        <div className="hidden md:block mx-1 w-px h-5 bg-border" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="h-9 gap-1.5 rounded-lg px-3 bg-primary hover:bg-primary/90 text-primary-foreground hidden md:flex font-medium">
-              <Plus className="h-[18px] w-[18px]" />
-              <span>Create</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border" sideOffset={8}>
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-2 py-1.5">Quick Actions</DropdownMenuLabel>
-            {QUICK_ADD_ITEMS.map(item => (
-              <DropdownMenuItem key={item.label} asChild className="rounded-md mx-1 my-0.5 cursor-pointer">
-                <Link href={item.href}>{item.label}</Link>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* ── Quick Add Removed ── */}
 
         {/* ── Profile ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-full hover:bg-muted p-1 pr-2 transition-colors ml-1 focus-ring">
-              <Avatar className="h-8 w-8 ring-1 ring-border">
+            <button className="flex items-center gap-3 rounded-full hover:bg-accent/50 p-1 pr-3 transition-colors ml-1 focus-ring border border-transparent hover:border-border/60">
+              <Avatar className="h-10 w-10 ring-1 ring-border shadow-sm">
                 {user?.avatar_url && <AvatarImage src={user.avatar_url} />}
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+              <div className="hidden lg:flex flex-col items-start text-left mr-1">
+                <span className="text-sm font-semibold leading-tight text-foreground">{user?.name || 'User'}</span>
+                <span className="text-[10px] text-muted-foreground">{user?.email || 'email@example.com'}</span>
+              </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-lg border-border p-1" sideOffset={8}>

@@ -89,12 +89,12 @@ export function FounderIntelligence({ metrics }: FounderIntelligenceProps) {
   }, [metrics])
 
   // SVG Circular progress params
-  const radius = 36
+  const radius = 44
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (healthScore / 100) * circumference
 
   return (
-    <Card className="border-gold/20 bg-gradient-to-br from-black/40 via-gold/3 to-black/60 shadow-lg relative overflow-hidden">
+    <Card className="border-gold/20 bg-gradient-to-br from-background via-gold/5 to-muted dark:from-black/40 dark:via-gold/3 dark:to-black/60 shadow-lg relative overflow-hidden">
       <div className="absolute inset-0 bg-noise opacity-[0.02]" />
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gold">
@@ -119,9 +119,9 @@ export function FounderIntelligence({ metrics }: FounderIntelligenceProps) {
                   strokeLinecap="round"
                 />
               </svg>
-              <div className="text-center z-10">
-                <p className="text-2xl font-black text-foreground">{healthScore}</p>
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Health Score</p>
+              <div className="text-center z-10 flex flex-col items-center justify-center mt-1">
+                <p className="text-3xl font-black text-foreground leading-none">{healthScore}</p>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mt-1">Health Score</p>
               </div>
             </div>
             <p className="text-xs font-bold mt-2 text-foreground">{healthLabel}</p>
@@ -132,9 +132,9 @@ export function FounderIntelligence({ metrics }: FounderIntelligenceProps) {
             <p className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground">Quick Action Insights</p>
             <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
               {insights.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-2.5 text-xs p-2 rounded bg-card/45 border border-border/30 animate-fade-in">
-                  {item.type === 'success' && <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />}
-                  {item.type === 'warning' && <AlertTriangle className="h-4 w-4 text-rose-400 mt-0.5 shrink-0" />}
+                <div key={idx} className="flex items-start gap-2.5 text-xs p-2 rounded bg-background/80 dark:bg-card/45 border border-border/50 animate-fade-in">
+                  {item.type === 'success' && <CheckCircle className="h-4 w-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />}
+                  {item.type === 'warning' && <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" />}
                   {item.type === 'info' && <Sparkles className="h-4 w-4 text-cyan-400 mt-0.5 shrink-0" />}
                   <span className="text-muted-foreground leading-relaxed">{item.text}</span>
                 </div>

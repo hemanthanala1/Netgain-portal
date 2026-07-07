@@ -1089,7 +1089,7 @@ export default function CampaignStrategyPage() {
                         <tbody>
                           {workspaceFiles.map((file: any) => (
                             <tr key={file.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={file.name}>{file.name}</td>
+                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={file.name}>{file.name}</td>
                               <td className="py-2 px-3 text-muted-foreground">{file.category}</td>
                               <td className="py-2 px-3 text-muted-foreground">V{file.version}</td>
                               <td className="py-2 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
@@ -1197,7 +1197,7 @@ export default function CampaignStrategyPage() {
                         <tbody>
                           {workspaceReports.map((rep: any) => (
                             <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-slate-200 truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
+                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
                               <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
                               <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
                               <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
@@ -1301,7 +1301,7 @@ export default function CampaignStrategyPage() {
                           {workspaceLinks.map((link: any) => (
                             <tr key={link.id} className="border-b border-border hover:bg-[#11241c]/10">
                               <td className="py-2 px-3">
-                                <p className="font-semibold text-slate-200">{link.title}</p>
+                                <p className="font-semibold text-foreground">{link.title}</p>
                                 {link.description && <p className="text-[10px] text-muted-foreground">{link.description}</p>}
                               </td>
                               <td className="py-2 px-3 text-muted-foreground">{link.category}</td>
@@ -1346,7 +1346,7 @@ export default function CampaignStrategyPage() {
                     {workspaceTimeline.map((item, idx) => (
                       <div key={item.id || idx} className="relative text-xs">
                         <div className="absolute -left-[20px] top-1 h-2 w-2 rounded-full bg-gold border border-black" />
-                        <div className="flex justify-between font-bold text-slate-200">
+                        <div className="flex justify-between font-bold text-foreground">
                           <span className="text-xs font-semibold">{item.action}</span>
                           <span className="text-[10px] text-muted-foreground font-normal">{new Date(item.created_at).toLocaleString('en-IN')}</span>
                         </div>

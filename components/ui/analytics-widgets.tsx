@@ -19,6 +19,7 @@ import {
 } from 'recharts'
 import { ChartContainer } from './chart-container'
 import { formatCurrency } from '@/lib/utils'
+import { Resizable } from 're-resizable'
 
 // Helpers
 const exportToCSV = (filename: string, headers: string[], rows: any[][]) => {
@@ -220,7 +221,7 @@ export function InvoiceStatusChart({ data, loading = false }: InvoiceStatusChart
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="space-y-2 text-xs w-full max-w-[160px]">
+        <div className="space-y-2 text-xs w-full max-w-[160px] pr-4 sm:pr-0">
           {data.map((d, i) => (
             <div key={i} className="flex items-center justify-between gap-2 border-b border-border/10 pb-1">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -530,8 +531,14 @@ interface ProjectProfitabilityProps {
 
 export function ProjectProfitabilityTable({ projects }: ProjectProfitabilityProps) {
   return (
-    <Card className="border-border bg-card overflow-hidden">
-      <CardHeader className="py-3.5 px-4 border-b border-border/60">
+    <Resizable
+      minWidth={200}
+      minHeight={200}
+      className="z-10 bg-card rounded-xl"
+      enable={{ top: true, right: true, bottom: true, left: true, topRight: true, bottomRight: true, bottomLeft: true, topLeft: true }}
+    >
+      <Card className="w-full h-full border-border bg-transparent overflow-auto">
+        <CardHeader className="py-3.5 px-4 border-b border-border/60">
         <CardTitle className="text-xs font-semibold text-gold">Project Profitability Matrix</CardTitle>
       </CardHeader>
       <div className="overflow-x-auto">
@@ -564,7 +571,8 @@ export function ProjectProfitabilityTable({ projects }: ProjectProfitabilityProp
           </tbody>
         </table>
       </div>
-    </Card>
+      </Card>
+    </Resizable>
   )
 }
 
@@ -575,8 +583,14 @@ interface EmployeeUtilizationProps {
 
 export function EmployeeUtilizationList({ utilization }: EmployeeUtilizationProps) {
   return (
-    <Card className="border-border bg-card overflow-hidden">
-      <CardHeader className="py-3.5 px-4 border-b border-border/60">
+    <Resizable
+      minWidth={200}
+      minHeight={200}
+      className="z-10 bg-card rounded-xl"
+      enable={{ top: true, right: true, bottom: true, left: true, topRight: true, bottomRight: true, bottomLeft: true, topLeft: true }}
+    >
+      <Card className="w-full h-full border-border bg-transparent overflow-auto">
+        <CardHeader className="py-3.5 px-4 border-b border-border/60">
         <CardTitle className="text-xs font-semibold text-gold">Team Utilization & Bandwidth</CardTitle>
       </CardHeader>
       <div className="overflow-x-auto">
@@ -608,6 +622,7 @@ export function EmployeeUtilizationList({ utilization }: EmployeeUtilizationProp
           </tbody>
         </table>
       </div>
-    </Card>
+      </Card>
+    </Resizable>
   )
 }

@@ -482,7 +482,7 @@ export default function BlueprintEnginePage() {
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-gold" />
                           <div>
-                            <p className="font-semibold text-slate-200">{h.fileName || `PRD v${idx + 1}`}</p>
+                            <p className="font-semibold text-foreground">{h.fileName || `PRD v${idx + 1}`}</p>
                             <p className="text-[10px] text-muted-foreground">{formatDate(h.date)} {h.by ? `by ${h.by}` : ''}</p>
                           </div>
                         </div>

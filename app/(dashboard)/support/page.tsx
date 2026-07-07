@@ -574,7 +574,7 @@ function SupportListContent() {
 
       {/* Peek Ticket Dialog */}
       <Dialog open={!!peekTicket} onOpenChange={(open) => !open && setPeekTicket(null)}>
-        <DialogContent className="bg-[#040d0a] border-border text-slate-200 max-w-lg">
+        <DialogContent className="bg-[#040d0a] border-border text-foreground max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-gold text-base flex items-center gap-1.5"><HelpCircle className="h-5 w-5" /> Ticket Peek</DialogTitle>
           </DialogHeader>
@@ -667,7 +667,7 @@ function SupportListContent() {
           <Button 
             size="sm" 
             variant="ghost" 
-            className="h-8 text-xs text-muted-foreground hover:text-slate-200"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
             onClick={async () => {
               const ids = Array.from(selectedTicketIds)
               if (isSupabaseConfigured()) {

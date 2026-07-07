@@ -351,7 +351,7 @@ export default function FinancePage() {
                 .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .slice(0, 5)
                 .map((t: any, i) => (
-                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-accent transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-full bg-red-500/10 text-red-400 shrink-0">
                       <ArrowDownRight className="h-4 w-4" />
@@ -435,7 +435,7 @@ export default function FinancePage() {
                   </div>
                 )}
                 {expenses.map(e => (
-                  <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
+                  <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-accent transition-colors group">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{e.title}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -483,7 +483,7 @@ export default function FinancePage() {
                   </div>
                 )}
                 {salaries.map(s => (
-                  <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-white/5 transition-colors group">
+                  <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-accent transition-colors group">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{s.employee}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-1">

@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Download, Archive, Copy, FolderOpen, FileText, Receipt, ClipboardList, HandshakeIcon, FolderKanban, ArchiveRestore, Loader2, Trash2, Tag, Database, Plus, Eye, Expand, HardDrive } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Search, Plus, Download, Copy, Archive, ArchiveRestore, MoreHorizontal, Loader2, Folder, File, Eye, ClipboardList, HandshakeIcon, FolderKanban, Trash2, Tag, Database, Expand, HardDrive, FileText, Receipt, FolderOpen } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buildPdfPayload } from '@/lib/pdf-payload-builder'
@@ -214,37 +215,25 @@ function VaultListContent() {
       accessor: 'actions',
       className: 'text-right',
       cell: (doc: VaultDoc) => (
-        <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 text-gold hover:bg-gold/10" 
-            onClick={() => handleDownload(doc)}
-            disabled={downloadingId === doc.id}
-          >
-            {downloadingId === doc.id ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-gold" />
-            ) : (
-              <Download className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 text-muted-foreground hover:text-foreground" 
-            onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }}
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-7 w-7 text-muted-foreground hover:text-foreground" 
-            onClick={() => doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc)} 
-            title={doc.status === 'archived' ? 'Unarchive' : 'Archive'}
-          >
-            {doc.status === 'archived' ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-          </Button>
+        <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border">
+              <DropdownMenuItem onClick={() => handleDownload(doc)} disabled={downloadingId === doc.id} className="cursor-pointer gap-2">
+                {downloadingId === doc.id ? <Loader2 className="h-4 w-4 animate-spin text-gold" /> : <Download className="h-4 w-4" />} Download
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(doc.docId); toast({ title: 'Copied ID', description: doc.docId }) }} className="cursor-pointer gap-2">
+                <Copy className="h-4 w-4" /> Copy ID
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => doc.status === 'archived' ? handleUnarchive(doc) : handleArchive(doc)} className="cursor-pointer gap-2">
+                {doc.status === 'archived' ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />} {doc.status === 'archived' ? 'Unarchive' : 'Archive'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )
     }
@@ -1222,7 +1211,7 @@ function VaultListContent() {
               <span className="text-muted-foreground font-medium">Vault Storage</span>
               <span className="text-[#D4AF37] font-mono">{usedStorageMB.toFixed(1)} MB / 2 GB</span>
             </div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
               <div className="h-full gold-gradient rounded-full" style={{ width: `${storagePercentage}%` }} />
             </div>
           </div>
@@ -1246,12 +1235,12 @@ function VaultListContent() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
                     isActive 
                       ? 'bg-card border-[#D4AF37]/40 text-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.1)]' 
-                      : 'bg-card border-border text-muted-foreground hover:text-slate-200 hover:bg-card'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-card'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                   {folder.label}
-                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-slate-800 text-muted-foreground'}`}>
+                  <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'bg-muted text-muted-foreground'}`}>
                     {count}
                   </span>
                 </button>
@@ -1302,7 +1291,7 @@ function VaultListContent() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
-              className="w-full max-w-xl bg-[#07110E] border-l border-border h-full flex flex-col justify-between shadow-2xl overflow-y-auto text-slate-100 z-50"
+              className="w-full max-w-xl bg-background border-l border-border h-full flex flex-col justify-between shadow-2xl overflow-y-auto text-foreground z-50"
             >
               {/* Drawer Header */}
               <div className="border-b border-border p-5 flex justify-between items-center bg-card">
@@ -1353,7 +1342,7 @@ function VaultListContent() {
                               handleAddTag(selectedDoc.id);
                             }
                           }}
-                          className="bg-transparent text-[10px] text-foreground w-16 outline-none placeholder:text-slate-600"
+                          className="bg-transparent text-[10px] text-foreground w-16 outline-none placeholder:text-muted-foreground"
                         />
                         <Plus className="h-3 w-3 text-muted-foreground cursor-pointer hover:text-[#D4AF37]" onClick={() => handleAddTag(selectedDoc.id)} />
                       </div>
@@ -1381,7 +1370,7 @@ function VaultListContent() {
                       { l: 'Signed', active: ['signed', 'completed'].includes(selectedDoc.status.toLowerCase()) }
                     ].map((step, idx) => (
                       <div key={idx} className="space-y-1.5">
-                        <div className={`h-1.5 rounded-full transition-all duration-300 ${step.active ? 'gold-gradient' : 'bg-slate-800'}`} />
+                        <div className={`h-1.5 rounded-full transition-all duration-300 ${step.active ? 'gold-gradient' : 'bg-muted'}`} />
                         <p className={step.active ? 'text-[#D4AF37] font-semibold' : ''}>{step.l}</p>
                       </div>
                     ))}
@@ -1392,7 +1381,7 @@ function VaultListContent() {
                 <div className="bg-card border border-border rounded-xl p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">Approvals & Operations</h3>
-                    <Badge variant="outline" className="text-[9px] border-slate-700 text-muted-foreground capitalize">
+                    <Badge variant="outline" className="text-[9px] border-border text-muted-foreground capitalize">
                       Role: {user?.role || 'Guest'}
                     </Badge>
                   </div>
@@ -1486,7 +1475,7 @@ function VaultListContent() {
 
                     {/* Completed / Locked State */}
                     {['signed', 'completed'].includes(selectedDoc.status.toLowerCase()) && (
-                      <div className="w-full text-center py-2 px-3 bg-emerald-950/20 border border-emerald-500/10 rounded-lg text-emerald-400 text-xs font-medium flex items-center justify-center gap-1.5">
+                      <div className="w-full text-center py-2 px-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-700 dark:text-emerald-400 text-xs font-medium flex items-center justify-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4" /> This document is complete and locked.
                       </div>
                     )}
@@ -1616,7 +1605,7 @@ function VaultListContent() {
                         return (
                           <div key={entry.id || idx} className="relative space-y-0.5">
                             {/* Dot overlay */}
-                            <div className="absolute -left-[20px] top-1.5 h-2 w-2 rounded-full bg-[#D4AF37] border-4 border-[#07110E]" />
+                            <div className="absolute -left-[20px] top-1.5 h-2 w-2 rounded-full bg-[#D4AF37] border-4 border-background" />
                             <div className="flex justify-between font-bold text-muted-foreground">
                               <span className="capitalize">{entry.event.replace('_', ' ')}</span>
                               <span className="text-[10px] text-muted-foreground font-normal">{dateStr}</span>
@@ -1670,7 +1659,7 @@ function VaultListContent() {
                     {comparisonResult.map((res, idx) => (
                       <tr
                         key={idx}
-                        className={`border-b border-border hover:bg-white/5 transition-colors ${res.changed ? 'bg-amber-500/5 text-amber-300' : 'text-muted-foreground'}`}
+                        className={`border-b border-border hover:bg-accent transition-colors ${res.changed ? 'bg-amber-500/5 text-amber-300' : 'text-muted-foreground'}`}
                       >
                         <td className="py-2.5 font-bold">{res.label}</td>
                         <td className="py-2.5 font-mono truncate max-w-[200px]" title={res.val1}>{res.val1}</td>
@@ -1737,7 +1726,7 @@ function VaultListContent() {
       {/* File Preview Modal Overlay */}
       {previewDoc && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-[#07110E] border border-border rounded-xl overflow-hidden shadow-2xl">
+          <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-background border border-border rounded-xl overflow-hidden shadow-2xl">
             {/* Modal Header */}
             <div className="flex justify-between items-center p-4 border-b border-border bg-card">
               <div className="flex items-center gap-3">
@@ -1773,19 +1762,10 @@ function VaultListContent() {
                   <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
                 </div>
               </div>
-              <div className="w-full max-w-2xl bg-white h-full max-h-[600px] mt-12 shadow-2xl rounded-sm p-8 flex flex-col items-center justify-center opacity-80 border border-slate-300">
-                <div className="w-24 h-24 mb-6 rounded-full bg-slate-100 flex items-center justify-center">
-                  <Eye className="h-10 w-10 text-muted-foreground" />
-                </div>
-                <h4 className="text-xl font-bold text-slate-800 mb-2 font-serif">{previewDoc.title}</h4>
-                <p className="text-muted-foreground font-medium mb-6">Generated on {formatDate(previewDoc.date)} for {previewDoc.client}</p>
-                <div className="w-3/4 space-y-4">
-                  <div className="h-3 bg-slate-100 rounded w-full" />
-                  <div className="h-3 bg-slate-100 rounded w-5/6" />
-                  <div className="h-3 bg-slate-100 rounded w-4/6" />
-                </div>
-                <div className="mt-8 px-4 py-2 bg-slate-100 rounded text-muted-foreground text-xs font-mono">
-                  Protected Document View
+              <div className="w-full h-full mt-12 bg-white rounded-sm overflow-hidden shadow-2xl relative">
+                <iframe src="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf#toolbar=0" className="w-full h-full" title="Document Preview" />
+                <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/60 text-white rounded text-[10px] font-mono tracking-wider backdrop-blur-sm">
+                  SIMULATED PREVIEW
                 </div>
               </div>
             </div>

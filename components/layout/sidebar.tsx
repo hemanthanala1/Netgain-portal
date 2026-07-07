@@ -81,7 +81,7 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
     <motion.aside
       animate={{ width: isExpanded ? 256 : 72 }}
       transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      className="relative flex h-screen flex-col bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] overflow-hidden shrink-0"
+      className="relative flex h-full flex-col bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] overflow-hidden shrink-0"
     >
       {/* ── Logo / Brand ── */}
       <div className="flex h-16 items-center justify-between px-4 shrink-0 border-b border-[hsl(var(--sidebar-border))]">

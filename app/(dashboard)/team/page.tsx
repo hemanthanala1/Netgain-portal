@@ -585,7 +585,7 @@ export default function TeamPage() {
                   <div className="flex items-center gap-2">
                     <Label className="text-xs text-muted-foreground shrink-0">Configure Role:</Label>
                     <Select value={matrixRoleId || activeRole.id} onValueChange={setMatrixRoleId}>
-                      <SelectTrigger className="h-8.5 w-48 text-xs border-border/60 bg-background/30 focus-visible:ring-gold text-slate-200">
+                      <SelectTrigger className="h-8.5 w-48 text-xs border-border/60 bg-background/30 focus-visible:ring-gold text-foreground">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -609,7 +609,7 @@ export default function TeamPage() {
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr className="border-b border-border/70 bg-muted/20">
-                            <th className="py-3 px-4 text-left font-bold text-slate-200 min-w-40 border-r border-border/10">Module / Resource</th>
+                            <th className="py-3 px-4 text-left font-bold text-foreground min-w-40 border-r border-border/10">Module / Resource</th>
                             {OPERATIONS.map(op => (
                               <th key={op} className="py-3 px-2 text-center font-bold text-gold uppercase tracking-wider min-w-20">
                                 {OPERATION_LABELS[op]}

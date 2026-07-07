@@ -169,7 +169,7 @@ export function GlobalSearch() {
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search ERP (clients, invoices, projects, files)..."
-          className="pl-9 pr-8 bg-card/60 border-border text-xs focus-visible:ring-primary/40 h-8 w-full"
+          className="pl-9 pr-8 bg-accent/40 border-none rounded-full text-xs focus-visible:ring-primary/40 h-10 w-full shadow-none"
         />
         {loading ? (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />

@@ -7,6 +7,7 @@ import { Badge } from './badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select'
 import { Maximize2, Minimize2, Download, RefreshCw, AlertTriangle, FileBarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Resizable } from 're-resizable'
 
 interface ChartContainerProps {
   title: string
@@ -109,10 +110,16 @@ export function ChartContainer({
   }
 
   const containerContent = (
-    <Card className={cn(
-      "border border-border/40 bg-card/60 backdrop-blur-sm shadow-sm transition-all duration-300",
-      isFullscreen && "fixed inset-0 z-[9999] w-screen h-screen rounded-none bg-background/95 p-6 flex flex-col justify-between overflow-y-auto"
-    )}>
+    <Resizable
+      minWidth={200}
+      minHeight={200}
+      className="z-10 bg-card/60 rounded-xl"
+      enable={{ top: true, right: true, bottom: true, left: true, topRight: true, bottomRight: true, bottomLeft: true, topLeft: true }}
+    >
+      <Card className={cn(
+        "w-full h-full border border-border/40 bg-transparent backdrop-blur-sm shadow-sm transition-all duration-300 overflow-auto",
+        isFullscreen && "fixed inset-0 z-[9999] w-screen h-screen rounded-none bg-background/95 p-6 flex flex-col justify-between overflow-y-auto"
+      )}>
       <CardHeader className={cn("p-4 pb-2 border-b border-border/20", isFullscreen && "px-0 pt-0")}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-0.5">
@@ -181,7 +188,8 @@ export function ChartContainer({
       <CardContent className={cn("p-4 pt-4 flex-1 flex items-center justify-center", isFullscreen && "px-0 py-6 overflow-hidden")}>
         {renderContent()}
       </CardContent>
-    </Card>
+      </Card>
+    </Resizable>
   )
 
   return containerContent

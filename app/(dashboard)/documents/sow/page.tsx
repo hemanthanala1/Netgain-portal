@@ -12,10 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
-import { Search, Plus, Download, Pencil, Trash2, Loader2, Send, History, Globe, FileText } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal } from 'lucide-react'
 import { formatCurrency, formatDate, generateDocId, getDocStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
 import { useUser } from '@/components/user-provider'
@@ -130,7 +131,7 @@ function SOWPageContent() {
       sortable: true,
       cell: (s: SOW) => (
         <div>
-          <a href={`/crm?search=${encodeURIComponent(s.client)}`} className="font-medium text-xs text-slate-200 hover:text-gold transition-colors hover:underline decoration-dotted">
+          <a href={`/crm?search=${encodeURIComponent(s.client)}`} className="font-medium text-xs text-foreground hover:text-gold transition-colors hover:underline decoration-dotted">
             {s.client}
           </a>
           <p className="text-[10px] text-muted-foreground">{s.contact}</p>
@@ -173,21 +174,34 @@ function SOWPageContent() {
       accessor: 'actions',
       className: 'text-right',
       cell: (s: SOW) => (
-        <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" aria-label="History" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="History" onClick={() => setHistoryDoc(s)}><History className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7" title="Download" onClick={() => handleDownload(s)} disabled={downloadingId === s.id}>
-            {downloadingId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Edit" className="h-7 w-7 text-blue-400 hover:text-blue-400" title="Edit" onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Publish to Client Portal" className={`h-7 w-7 ${s.published ? 'text-purple-400 hover:text-purple-300' : 'text-muted-foreground hover:text-gold'}`} title="Publish to Client Portal" onClick={() => setPublishDoc(s)}>
-            <Globe className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Send to client" className="h-7 w-7 text-emerald-400 hover:text-emerald-400" title="Send to client" onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })}><Send className="h-3.5 w-3.5" /></Button>
-          <Button variant="ghost" size="icon" aria-label="Delete" className="h-7 w-7 text-red-400 hover:text-red-400" title="Delete" onClick={() => setDeleteId(s.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+        <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border">
+              <DropdownMenuItem onClick={() => setHistoryDoc(s)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(s)} disabled={downloadingId === s.id} className="cursor-pointer gap-2">
+                {downloadingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Pencil className="h-4 w-4" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPublishDoc(s)} className={`cursor-pointer gap-2 ${s.published ? 'text-purple-400 focus:text-purple-400' : ''}`}>
+                <Globe className="h-4 w-4" /> Publish to Client Portal
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShareDoc({ id: s.id, title: `${s.docId} - ${s.client}` })} className="cursor-pointer gap-2 text-emerald-400 focus:text-emerald-400">
+                <Send className="h-4 w-4" /> Send to client
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDeleteId(s.id)} className="cursor-pointer gap-2 text-red-400 focus:text-red-400 focus:bg-red-400/10">
+                <Trash2 className="h-4 w-4" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )
     }

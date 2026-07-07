@@ -493,7 +493,7 @@ export default function ServicesPage() {
           <h1 className="text-2xl font-bold tracking-tight">Services Library</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Centralized pricing, deliverables, and service data — single source of truth.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
             <a href="/api/generate-sample-services" target="_blank" rel="noopener noreferrer">
               <FileText className="h-4 w-4" /> Download Sample
