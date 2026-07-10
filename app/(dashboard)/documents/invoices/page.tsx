@@ -14,12 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
-import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Receipt } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Receipt, Eye } from 'lucide-react'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
 import { UniversalTimeline } from '@/components/ui/version-timeline'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFounderProfile } from '@/lib/founder-helper'
@@ -142,6 +143,9 @@ function InvoicesPageContent() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Invoice | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const { toast } = useToast()
 
   const columns = useMemo(() => [
@@ -240,8 +244,11 @@ function InvoicesPageContent() {
               <DropdownMenuItem onClick={() => setHistoryDoc(inv)} className="cursor-pointer gap-2">
                 <History className="h-4 w-4" /> History
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(inv)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id} className="cursor-pointer gap-2">
-                {downloadingId === inv.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download
+                {downloadingId === inv.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openEdit(inv)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
                 <Pencil className="h-4 w-4" /> Edit
@@ -692,7 +699,8 @@ function InvoicesPageContent() {
     docId: string, 
     paymentScheduleId?: string,
     paymentScheduleEntry?: string,
-    dueDate?: string
+    dueDate?: string,
+    isPreview: boolean = false
   ) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     
@@ -897,9 +905,28 @@ function InvoicesPageContent() {
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
     a.download = `Invoice_${docId}_${inv.client.replace(/\s+/g, '_')}.pdf`
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(inv: Invoice) {
+    setPreviewDoc(inv)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId, inv.paymentScheduleId, inv.paymentScheduleEntry, inv.due, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   async function handleDownload(inv: Invoice) {
@@ -2300,6 +2327,16 @@ function InvoicesPageContent() {
         visibilityStatus={publishDoc?.visibility_status || 'visible'}
         currentVersion={publishDoc?.published_version || 1}
         onAction={handlePublishAction}
+      />
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Invoice - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
       />
     </div>
   )

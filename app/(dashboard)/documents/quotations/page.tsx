@@ -15,7 +15,8 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
@@ -376,8 +377,10 @@ function QuotationsPageContent() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Quote | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const { toast } = useToast()
-
   const columns = useMemo(() => [
     {
       header: 'Quote ID',
@@ -483,6 +486,9 @@ function QuotationsPageContent() {
             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border">
               <DropdownMenuItem onClick={() => setHistoryDoc(q)} className="cursor-pointer gap-2">
                 <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(q)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload(q)} disabled={downloadingId === q.id} className="cursor-pointer gap-2">
                 {downloadingId === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
@@ -826,7 +832,7 @@ function QuotationsPageContent() {
     setForm(f => ({ ...f, selectedIds: f.selectedIds.includes(id) ? f.selectedIds.filter(x => x !== id) : [...f.selectedIds, id] }))
   }
 
-  async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string) {
+  async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string, isPreview: boolean = false) {
     const svcs = servicesData.filter(s => svcIds.includes(s.id))
     
     let sub = 0
@@ -956,9 +962,28 @@ function QuotationsPageContent() {
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
     a.download = `Quotation_${docId}_${data.client.replace(/\s+/g, '_')}.pdf`
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(q: Quote) {
+    setPreviewDoc(q)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await buildAndDownloadPdf(q, q.serviceIds, q.discountPct, q.gstPct, q.projectTitle, q.docId, (q as any).paymentScheduleId, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   async function handleDownload(q: Quote) {
@@ -1662,6 +1687,16 @@ function QuotationsPageContent() {
         visibilityStatus={publishDoc?.visibility_status || 'visible'}
         currentVersion={publishDoc?.published_version || 1}
         onAction={handlePublishAction}
+      />
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Quotation - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
       />
     </div>
   )

@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
-import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
 import { formatCurrency, formatDate, generateDocId, getDocStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -88,6 +89,9 @@ function SOWPageContent() {
   const [editItem, setEditItem] = useState<SOW | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<SOW | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
@@ -185,8 +189,11 @@ function SOWPageContent() {
               <DropdownMenuItem onClick={() => setHistoryDoc(s)} className="cursor-pointer gap-2">
                 <History className="h-4 w-4" /> History
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(s)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload(s)} disabled={downloadingId === s.id} className="cursor-pointer gap-2">
-                {downloadingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download
+                {downloadingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { setEditItem(s); resetForm(s, companyDocs); setShowCreate(true); }} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
                 <Pencil className="h-4 w-4" /> Edit
@@ -664,25 +671,47 @@ function SOWPageContent() {
     }
   }
 
-  async function downloadSowPdf(sow: SOW, forceClientSide = false) {
+  async function downloadSowPdf(sow: SOW, forceClientSide = false, isPreview = false) {
     if ((sow.status === 'signed' || sow.status === 'completed' || sow.signed_at) && !forceClientSide) {
       const cacheBuster = sow.signed_at ? new Date(sow.signed_at).getTime() : new Date().getTime()
       const res = await fetch(`/api/document-pdf?id=${sow.id}&type=SOW&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
       const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
       a.download = `SOW_${sow.docId}_${sow.client.replace(/\s+/g, '_')}.pdf`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      return
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
     }
 
     const payload = buildPayload({ ...sow, value: String(sow.value), email: '', businessType: '', startDate: '', confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.', customTerms: sow.customTerms || '' }, sow.client, sow.project, sow.docId)
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
     a.download = `SOW_${sow.docId}_${sow.client.replace(/\s+/g, '_')}.pdf`
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(sow: SOW) {
+    setPreviewDoc(sow)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await downloadSowPdf(sow, false, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   async function handleDownload(sow: SOW) {
@@ -1288,6 +1317,16 @@ function SOWPageContent() {
         visibilityStatus={publishDoc?.visibility_status || 'visible'}
         currentVersion={publishDoc?.published_version || 1}
         onAction={handlePublishAction}
+      />
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Scope of Work - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
       />
     </div>
   )

@@ -163,6 +163,15 @@ function SettingsPageContent() {
     taxRateTDS: '10'
   })
 
+  const [payment, setPayment] = useState({
+    razorpayEnabled: false,
+    razorpayMode: 'test',
+    razorpayKeyId: '',
+    razorpaySecretKey: '',
+    razorpayWebhookSecret: '',
+    currency: 'INR'
+  })
+
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
   const [googleEmail, setGoogleEmail] = useState<string | null>(null)
   const [testingChannel, setTestingChannel] = useState<string | null>(null)
@@ -224,6 +233,7 @@ function SettingsPageContent() {
       if (data.comm)     setComm(c => ({ ...c, ...data.comm }))
       if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
       if (data.docs)     setDocs(d => ({ ...d, ...data.docs }))
+      if (data.payment)  setPayment(p => ({ ...p, ...data.payment }))
       if (data.isGoogleConnected !== undefined) setIsGoogleConnected(data.isGoogleConnected)
       if (data.googleEmail !== undefined) setGoogleEmail(data.googleEmail)
 
@@ -353,7 +363,7 @@ function SettingsPageContent() {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ company, founder, bank, comm, ai, docs }),
+        body: JSON.stringify({ company, founder, bank, comm, ai, docs, payment }),
       })
       if (!res.ok) throw new Error('Save failed')
       
@@ -417,6 +427,7 @@ function SettingsPageContent() {
           <TabsTrigger value="company" className="gap-1.5"><Building2 className="h-3.5 w-3.5" />Company</TabsTrigger>
           <TabsTrigger value="founder" className="gap-1.5"><User className="h-3.5 w-3.5" />Founder</TabsTrigger>
           <TabsTrigger value="bank" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Banking</TabsTrigger>
+          <TabsTrigger value="payment" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Payment Gateway</TabsTrigger>
           <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Documents & Billing</TabsTrigger>
           <TabsTrigger value="comms" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" />Communications</TabsTrigger>
           <TabsTrigger value="ai" className="gap-1.5"><Cpu className="h-3.5 w-3.5" />AI Engine</TabsTrigger>
@@ -1300,6 +1311,46 @@ function SettingsPageContent() {
                   </table>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── PAYMENT GATEWAY ────────────────────────────────── */}
+        <TabsContent value="payment">
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><CreditCard className="h-4 w-4 text-gold" />Razorpay Integration</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <FieldRow label="Enable Razorpay" hint="Allow clients to pay invoices directly via Razorpay">
+                <Select value={payment.razorpayEnabled ? 'true' : 'false'} onValueChange={(v) => setPayment({ ...payment, razorpayEnabled: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Environment" hint="Use Test for development, Live for production">
+                <Select value={payment.razorpayMode} onValueChange={(v) => setPayment({ ...payment, razorpayMode: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="test">Test Mode</SelectItem>
+                    <SelectItem value="live">Live Mode</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Razorpay Key ID">
+                <Input value={payment.razorpayKeyId} onChange={e => setPayment({ ...payment, razorpayKeyId: e.target.value })} placeholder="rzp_test_..." />
+              </FieldRow>
+              <FieldRow label="Razorpay Secret Key">
+                <SecretField id="rzp_secret" value={payment.razorpaySecretKey} onChange={v => setPayment({ ...payment, razorpaySecretKey: v })} placeholder="secret_..." showKey={showKey} setShowKey={setShowKey} />
+              </FieldRow>
+              <FieldRow label="Webhook Secret" hint="Used to verify webhook events from Razorpay">
+                <SecretField id="rzp_webhook" value={payment.razorpayWebhookSecret} onChange={v => setPayment({ ...payment, razorpayWebhookSecret: v })} placeholder="webhook_secret..." showKey={showKey} setShowKey={setShowKey} />
+              </FieldRow>
+              <FieldRow label="Currency">
+                <Input value={payment.currency} onChange={e => setPayment({ ...payment, currency: e.target.value })} placeholder="INR" />
+              </FieldRow>
             </CardContent>
           </Card>
         </TabsContent>

@@ -15,7 +15,8 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, HandshakeIcon } from 'lucide-react'
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye, HandshakeIcon } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
 import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
@@ -96,6 +97,9 @@ function AgreementsPageContent() {
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Agreement | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Agreement | null>(null)
   const [publishDoc, setPublishDoc] = useState<Agreement | null>(null)
@@ -193,6 +197,9 @@ function AgreementsPageContent() {
             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-border">
               <DropdownMenuItem onClick={() => setHistoryDoc(a)} className="cursor-pointer gap-2">
                 <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(a)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload(a)} disabled={downloadingId === a.id} className="cursor-pointer gap-2">
                 {downloadingId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
@@ -527,16 +534,19 @@ function AgreementsPageContent() {
     return parts.join('\n\n')
   }
 
-  async function downloadPdf(agr: Agreement, forceClientSide = false) {
+  async function downloadPdf(agr: Agreement, forceClientSide = false, isPreview = false) {
     if ((agr.status === 'signed' || agr.status === 'completed' || agr.signed_at) && !forceClientSide) {
       const cacheBuster = agr.signed_at ? new Date(agr.signed_at).getTime() : new Date().getTime()
       const res = await fetch(`/api/document-pdf?id=${agr.id}&type=Agreement&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
       const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
       a.download = `Agreement_${agr.docId}_${agr.client.replace(/\s+/g, '_')}.pdf`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      return
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
     }
 
     let sub = Number(agr.value) || 0
@@ -582,9 +592,28 @@ function AgreementsPageContent() {
     const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
     const blob = await res.blob()
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
     a.download = `Agreement_${agr.docId}_${agr.client.replace(/\s+/g, '_')}.pdf`
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(agr: Agreement) {
+    setPreviewDoc(agr)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await downloadPdf(agr, false, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   async function handleDownload(agr: Agreement) {
@@ -1337,6 +1366,16 @@ function AgreementsPageContent() {
         visibilityStatus={publishDoc?.visibility_status || 'visible'}
         currentVersion={publishDoc?.published_version || 1}
         onAction={handlePublishAction}
+      />
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Agreement - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
       />
     </div>
   )

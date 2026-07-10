@@ -700,6 +700,91 @@ export default function ClientDashboardPage() {
     } catch (err) { console.error(err) }
   }
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) return resolve(true)
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
+
+  const handleRazorpayPayment = async (doc: ClientDoc) => {
+    try {
+      const res = await loadRazorpayScript()
+      if (!res) {
+        return toast({ title: 'Payment Failed', description: 'Razorpay SDK failed to load. Are you online?', variant: 'destructive' })
+      }
+
+      toast({ title: 'Initializing Payment...' })
+      
+      const orderRes = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: doc.docId, amount: doc.amount })
+      })
+      
+      const orderData = await orderRes.json()
+      
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || 'Failed to create order')
+      }
+
+      const options = {
+        key: companySettings?.payment?.razorpayKeyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: companySettings?.company?.name || 'Netgain Studio',
+        description: `Payment for Invoice ${doc.docId}`,
+        order_id: orderData.orderId,
+        handler: async function (response: any) {
+          toast({ title: 'Processing Payment...' })
+          
+          try {
+            const verifyRes = await fetch('/api/razorpay/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                invoiceId: doc.docId
+              })
+            })
+            
+            if (verifyRes.ok) {
+              toast({ title: '✅ Payment Successful!', description: 'Your invoice has been marked as paid.' })
+              fetchClientData(true) // Refresh data
+              if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, status: 'paid' } as any)
+            } else {
+              const verifyData = await verifyRes.json()
+              toast({ title: 'Payment Verification Failed', description: verifyData.error, variant: 'destructive' })
+            }
+          } catch (err) {
+            toast({ title: 'Payment Error', description: 'Could not verify payment', variant: 'destructive' })
+          }
+        },
+        prefill: {
+          name: session?.name || '',
+          email: session?.email || '',
+        },
+        theme: {
+          color: '#D4AF37'
+        }
+      }
+
+      const paymentObject = new (window as any).Razorpay(options)
+      paymentObject.on('payment.failed', function (response: any) {
+        toast({ title: 'Payment Failed', description: response.error.description, variant: 'destructive' })
+      })
+      paymentObject.open()
+    } catch (err: any) {
+      toast({ title: 'Payment Error', description: err.message, variant: 'destructive' })
+    }
+  }
+
   const openDoc = (doc: ClientDoc) => { setSelectedDoc(doc); trackActivity(doc, 'view') }
 
   const handleDeclineDoc = async () => {
@@ -2584,9 +2669,15 @@ export default function ClientDashboardPage() {
                       {/* Invoices specific pay action if unpaid */}
                       {currentDoc.type === 'Invoice' && currentDoc.status !== 'paid' && (
                         <div className="pt-2">
-                          <Button onClick={() => toast({ title: 'Pay Now integration coming soon!' })} variant="default" className="w-full text-xs font-semibold gap-2 h-9">
-                            Pay Now (Future)
-                          </Button>
+                          {companySettings?.payment?.razorpayEnabled ? (
+                            <Button onClick={() => handleRazorpayPayment(currentDoc)} variant="gold" className="w-full text-xs font-semibold gap-2 h-9 text-black">
+                              Pay with Razorpay
+                            </Button>
+                          ) : (
+                            <Button variant="outline" className="w-full text-xs font-semibold gap-2 h-9" disabled>
+                              Online Payment Disabled
+                            </Button>
+                          )}
                         </div>
                       )}
                     </CardContent>

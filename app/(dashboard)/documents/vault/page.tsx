@@ -264,6 +264,8 @@ function VaultListContent() {
   // File Vault Enhancements
   const [selectedFolder, setSelectedFolder] = useState('all')
   const [previewDoc, setPreviewDoc] = useState<VaultDoc | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [customTags, setCustomTags] = useState<Record<string, string[]>>({})
   const [newTag, setNewTag] = useState('')
 
@@ -624,7 +626,7 @@ function VaultListContent() {
     }
   }, [])
 
-  const generateAndSavePdf = async (payload: any, filenamePrefix: string) => {
+  const generateAndSavePdf = async (payload: any, filenamePrefix: string, isPreview: boolean = false) => {
     const res = await fetch('/api/generate-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -635,15 +637,19 @@ function VaultListContent() {
       throw new Error(e.error || 'PDF generation failed')
     }
     const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
+    a.href = url
     a.download = `${filenamePrefix.replace(/\s+/g, '_')}.pdf`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
   }
 
-  const downloadQuotation = async (doc: VaultDoc) => {
+  const downloadQuotation = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       client: doc.client,
       project_title: doc.title,
@@ -718,11 +724,10 @@ function VaultListContent() {
         customTerms: raw.custom_terms || '',
       },
     }
-
-    await generateAndSavePdf(payload, `Quotation_${raw.doc_id || doc.docId}_${raw.client}`)
+    return await generateAndSavePdf(payload, `Quotation_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
   }
 
-  const downloadInvoice = async (doc: VaultDoc) => {
+  const downloadInvoice = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       client: doc.client,
       amount: doc.amount,
@@ -820,10 +825,10 @@ function VaultListContent() {
       },
     }
 
-    await generateAndSavePdf(payload, `Invoice_${raw.doc_id || doc.docId}_${raw.client}`)
+    return await generateAndSavePdf(payload, `Invoice_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
   }
 
-  const downloadSow = async (doc: VaultDoc) => {
+  const downloadSow = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       client: doc.client,
       project: doc.title,
@@ -838,10 +843,13 @@ function VaultListContent() {
       const res = await fetch(`/api/document-pdf?id=${doc.id}&type=SOW&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
       const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
       a.download = `SOW_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      return
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
     }
 
     const clientName = raw.client
@@ -897,10 +905,10 @@ function VaultListContent() {
       },
     }
 
-    await generateAndSavePdf(payload, `SOW_${raw.doc_id || doc.docId}_${raw.client}`)
+    return await generateAndSavePdf(payload, `SOW_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
   }
 
-  const downloadAgreement = async (doc: VaultDoc) => {
+  const downloadAgreement = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       client: doc.client,
       type: doc.title,
@@ -915,10 +923,13 @@ function VaultListContent() {
       const res = await fetch(`/api/document-pdf?id=${doc.id}&type=Agreement&v=${cacheBuster}`)
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
       const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
       a.download = `Agreement_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      return
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
     }
 
     const content = [
@@ -973,10 +984,10 @@ function VaultListContent() {
       },
     }
 
-    await generateAndSavePdf(payload, `Agreement_${raw.doc_id || doc.docId}_${raw.client}`)
+    return await generateAndSavePdf(payload, `Agreement_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
   }
 
-  const downloadPrd = async (doc: VaultDoc) => {
+  const downloadPrd = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       title: doc.title,
       client: doc.client,
@@ -1006,10 +1017,10 @@ function VaultListContent() {
     const content = buildPrdContent(formForPrd)
     const payload = { docType: 'PRD' as const, clientName: raw.client, projectTitle: raw.title, content, items: [], subtotal: 0, discountTotal: 0, grandTotal: 0 }
     
-    await generateAndSavePdf(payload, `PRD_${raw.title}`)
+    return await generateAndSavePdf(payload, `PRD_${raw.title}`, isPreview)
   }
 
-  const downloadMarketing = async (doc: VaultDoc) => {
+  const downloadMarketing = async (doc: VaultDoc, isPreview: boolean = false) => {
     const raw = doc.raw || {
       client: doc.client,
       title: doc.title,
@@ -1047,8 +1058,37 @@ function VaultListContent() {
     const content = buildReportContent(formForReport)
     const payload = { docType: 'MarketingReport' as const, clientName: raw.client, projectTitle: `Marketing Report — ${extra.period}`, content, items: [], subtotal: 0, discountTotal: 0, grandTotal: 0 }
     
-    await generateAndSavePdf(payload, `MarketingReport_${raw.client}_${extra.period}`)
+    return await generateAndSavePdf(payload, `MarketingReport_${raw.client}_${extra.period}`, isPreview)
   }
+
+  const handlePreviewLoad = async (doc: VaultDoc) => {
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      let url = null
+      if (doc.type === 'Quotation') url = await downloadQuotation(doc, true)
+      else if (doc.type === 'Invoice') url = await downloadInvoice(doc, true)
+      else if (doc.type === 'SOW') url = await downloadSow(doc, true)
+      else if (doc.type === 'Agreement') url = await downloadAgreement(doc, true)
+      else if (doc.type === 'PRD') url = await downloadPrd(doc, true)
+      else if (doc.type === 'Marketing') url = await downloadMarketing(doc, true)
+      
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (err) {
+      console.error('Preview error', err)
+      toast({ title: 'Preview Failed', description: 'Could not load document preview', variant: 'destructive' })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (previewDoc) {
+      handlePreviewLoad(previewDoc)
+    } else {
+      setPreviewBlobUrl(null)
+    }
+  }, [previewDoc])
 
   const handleDownload = async (doc: VaultDoc) => {
     setDownloadingId(doc.id)
@@ -1748,45 +1788,19 @@ function VaultListContent() {
               </div>
             </div>
             {/* Modal Body / iframe Placeholder */}
-            <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center p-8 relative overflow-hidden">
-              {/* Fake PDF Toolbar */}
-              <div className="absolute top-0 left-0 right-0 h-12 bg-[#2D2D2D] border-b border-[#3D3D3D] flex items-center justify-between px-4 text-xs text-[#9CA3AF]">
-                <div className="flex items-center gap-4">
-                  <span>Page 1 of 4</span>
-                  <div className="w-px h-4 bg-[#4B5563]" />
-                  <span>{previewDoc.amount > 0 ? formatCurrency(previewDoc.amount) : 'Standard'}</span>
+            <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center relative overflow-hidden">
+              {previewLoading ? (
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <RefreshCw className="h-8 w-8 animate-spin text-[#D4AF37]" />
+                  <p className="text-sm font-medium text-muted-foreground tracking-wide">Generating Document Preview...</p>
                 </div>
-                <div className="flex gap-2">
-                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
-                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
-                  <div className="w-6 h-6 rounded bg-[#3D3D3D]" />
+              ) : previewBlobUrl ? (
+                <iframe src={`${previewBlobUrl}#view=FitH`} className="w-full h-full border-0 bg-white" />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <p className="text-sm font-semibold text-muted-foreground">Failed to load document preview</p>
                 </div>
-              </div>
-              <div className="w-full h-full mt-12 bg-white rounded-sm overflow-hidden shadow-2xl relative">
-                <div className="w-full h-full flex flex-col items-center overflow-y-auto bg-muted/10 py-10 px-4 no-scrollbar">
-                  <div className="w-full max-w-3xl bg-white shadow-sm border border-black/10 aspect-[1/1.414] p-12 sm:p-20 flex flex-col">
-                    <div className="flex justify-between items-start mb-16">
-                      <div className="h-10 w-40 bg-muted/60 rounded" />
-                      <div className="h-10 w-10 bg-muted/40 rounded-full" />
-                    </div>
-                    <div className="h-6 w-2/3 bg-muted/80 rounded mb-6" />
-                    <div className="h-4 w-1/3 bg-muted/40 rounded mb-12" />
-                    <div className="space-y-5 flex-1">
-                      <div className="h-3 w-full bg-muted/30 rounded" />
-                      <div className="h-3 w-full bg-muted/30 rounded" />
-                      <div className="h-3 w-11/12 bg-muted/30 rounded" />
-                      <div className="h-3 w-full bg-muted/30 rounded" />
-                      <div className="h-3 w-4/5 bg-muted/30 rounded" />
-                      <div className="h-3 w-full bg-muted/30 rounded" />
-                      <div className="h-3 w-full bg-muted/30 rounded" />
-                      <div className="h-3 w-10/12 bg-muted/30 rounded" />
-                    </div>
-                  </div>
-                </div>
-                <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/60 text-white rounded text-[10px] font-mono tracking-wider backdrop-blur-sm z-10">
-                  SIMULATED PREVIEW
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

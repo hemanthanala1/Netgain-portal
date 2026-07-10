@@ -17,7 +17,8 @@ const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, s
 
 const SENSITIVE_FIELDS = {
   comm: ['smtpPass', 'waToken', 'resendApiKey', 'sendgridApiKey', 'twilioAuthToken', 'msg91Authkey', 'textlocalApiKey', 'twilioWaToken', 'googleAccessToken', 'googleRefreshToken'],
-  ai: ['claudeKey', 'openaiKey', 'geminiKey']
+  ai: ['claudeKey', 'openaiKey', 'geminiKey'],
+  payment: ['razorpaySecretKey', 'razorpayWebhookSecret']
 }
 
 function isMaskedValue(val: string) {
@@ -25,7 +26,7 @@ function isMaskedValue(val: string) {
   return /^[•\*]+$/.test(val)
 }
 
-function maskSensitiveData(comm: any, ai: any) {
+function maskSensitiveData(comm: any, ai: any, payment: any) {
   const safeComm = { ...comm }
   SENSITIVE_FIELDS.comm.forEach(field => {
     if (safeComm[field]) {
@@ -40,7 +41,14 @@ function maskSensitiveData(comm: any, ai: any) {
     }
   })
 
-  return { comm: safeComm, ai: safeAi }
+  const safePayment = { ...payment }
+  SENSITIVE_FIELDS.payment.forEach(field => {
+    if (safePayment[field]) {
+      safePayment[field] = '••••••••'
+    }
+  })
+
+  return { comm: safeComm, ai: safeAi, payment: safePayment }
 }
 
 // GET — load settings
@@ -68,13 +76,14 @@ export async function GET(request: NextRequest) {
       }
 
       if (data) {
-        const masked = maskSensitiveData(data.comm || {}, data.ai || {})
+        const masked = maskSensitiveData(data.comm || {}, data.ai || {}, data.payment || {})
         return NextResponse.json({
           company: data.company,
           founder: data.founder,
           bank: data.bank,
           comm: { ...data.comm, ...masked.comm },
           ai: { ...data.ai, ...masked.ai },
+          payment: { ...data.payment, ...masked.payment },
           docs: data.docs,
           isGoogleConnected: !!(data.comm?.googleRefreshToken || data.comm?.googleAccessToken || (data as any).google_oauth),
           googleEmail: data.comm?.googleEmail || null,
@@ -108,11 +117,12 @@ export async function GET(request: NextRequest) {
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8')
       const parsed = JSON.parse(raw)
-      const masked = maskSensitiveData(parsed.comm || {}, parsed.ai || {})
+      const masked = maskSensitiveData(parsed.comm || {}, parsed.ai || {}, parsed.payment || {})
       return NextResponse.json({
         ...parsed,
         comm: { ...parsed.comm, ...masked.comm },
         ai: { ...parsed.ai, ...masked.ai },
+        payment: { ...parsed.payment, ...masked.payment },
         isGoogleConnected: !!(parsed.comm?.googleRefreshToken || parsed.comm?.googleAccessToken || parsed.google_oauth),
         googleEmail: parsed.comm?.googleEmail || null
       })
@@ -129,13 +139,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { company, founder, bank, comm, ai, docs } = body
+    const { company, founder, bank, comm, ai, docs, payment } = body
 
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '')
 
     let existingComm: any = {}
     let existingAi: any = {}
+    let existingPayment: any = {}
 
     if (supabase && token) {
       const { data: { user }, error: authError } = await supabase.auth.getUser(token)
@@ -146,13 +157,14 @@ export async function POST(request: NextRequest) {
 
       const { data: existingData } = await supabase
         .from('company_settings')
-        .select('comm, ai')
+        .select('comm, ai, payment')
         .eq('user_id', user.id)
         .maybeSingle()
 
       if (existingData) {
         existingComm = existingData.comm || {}
         existingAi = existingData.ai || {}
+        existingPayment = existingData.payment || {}
       }
 
       // Process comm fields, merging with existing to preserve keys like Google tokens
@@ -179,6 +191,20 @@ export async function POST(request: NextRequest) {
         }
       })
 
+      // Process payment fields
+      const processedPayment = { ...existingPayment, ...payment }
+      if (payment) {
+        SENSITIVE_FIELDS.payment.forEach(field => {
+          if (isMaskedValue(payment[field])) {
+            processedPayment[field] = existingPayment[field] || ''
+          } else if (payment[field]) {
+            processedPayment[field] = encrypt(payment[field])
+          } else if (payment[field] === '') {
+            processedPayment[field] = ''
+          }
+        })
+      }
+
       const { error } = await supabase
         .from('company_settings')
         .upsert({
@@ -188,6 +214,7 @@ export async function POST(request: NextRequest) {
           bank: bank || {},
           comm: processedComm,
           ai: processedAi,
+          payment: processedPayment,
           docs: docs || {},
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' })
@@ -243,6 +270,7 @@ export async function POST(request: NextRequest) {
           bank: bank || {}, 
           comm: processedComm, 
           ai: processedAi, 
+          payment: processedPayment,
           docs: docs || {}, 
           updatedAt: new Date().toISOString() 
         }
@@ -261,6 +289,7 @@ export async function POST(request: NextRequest) {
         existing = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
         existingComm = existing.comm || {}
         existingAi = existing.ai || {}
+        existingPayment = existing.payment || {}
       } catch (_) {}
     }
 
@@ -288,6 +317,20 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Process payment fields
+    const processedPayment = { ...existingPayment, ...payment }
+    if (payment) {
+      SENSITIVE_FIELDS.payment.forEach(field => {
+        if (isMaskedValue(payment[field])) {
+          processedPayment[field] = existingPayment[field] || ''
+        } else if (payment[field]) {
+          processedPayment[field] = encrypt(payment[field])
+        } else if (payment[field] === '') {
+          processedPayment[field] = ''
+        }
+      })
+    }
+
     const merged = { 
       ...existing, 
       company, 
@@ -295,6 +338,7 @@ export async function POST(request: NextRequest) {
       bank, 
       comm: processedComm, 
       ai: processedAi, 
+      payment: processedPayment,
       docs, 
       updatedAt: new Date().toISOString() 
     }
