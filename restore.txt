@@ -1,0 +1,500 @@
+Created At: 2026-07-10T15:44:29Z
+Completed At: 2026-07-10T15:44:31Z
+The following changes were made by the replace_file_content tool to: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -569,6 +569,117 @@
+     }
+   }
+ 
++  const handleLogRisk = async (projectId: string) => {
++    const titleEl = document.getElementById(`risk-title-${projectId}`) as HTMLInputElement
++    const impactEl = document.getElementById(`risk-impact-${projectId}`) as HTMLSelectElement | HTMLInputElement
++    const mitigationEl = document.getElementById(`risk-mitigation-${projectId}`) as HTMLTextAreaElement
++    
++    if (!titleEl?.value?.trim()) return
++
++    try {
++      const { error } = await supabase.from('project_risks').insert({
++        project_id: projectId,
++        title: titleEl.value.trim(),
++        impact: impactEl?.value || 'Medium',
++        mitigation: mitigationEl?.value?.trim() || '',
++        visibility: 'Internal Only'
++      })
++
++      if (error) throw error
++      
++      toast({ title: 'Risk logged successfully' })
++      logWorkspaceActivity(projectId, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
++      
++      titleEl.value = ''
++      if (mitigationEl) mitigationEl.value = ''
++      
++      fetchProjectWorkspaceData(projectId)
++    } catch (e: any) {
++      toast({ title: 'Error logging risk', description: e.message, variant: 'destructive' })
++    }
++  }
++
++  const handleLogDependency = async (projectId: string) => {
++    const titleEl = document.getElementById(`dep-title-${projectId}`) as HTMLInputElement
++    const notesEl = document.getElementById(`dep-notes-${projectId}`) as HTMLTextAreaElement
++    
++    if (!titleEl?.value?.trim()) return
++
++    try {
++      const { error } = await supabase.from('project_dependencies').insert({
++        project_id: projectId,
++        dependent_on: titleEl.value.trim(),
++        description: notesEl?.value?.trim() || '',
++        visibility: 'Internal Only'
++      })
++
++      if (error) throw error
++      
++      toast({ title: 'Dependency logged successfully' })
++      logWorkspaceActivity(projectId, 'Dependency Logged', `Dependency: ${titleEl.value.trim()}`)
++      
++      titleEl.value = ''
++      if (notesEl) notesEl.value = ''
++      
++      fetchProjectWorkspaceData(projectId)
++    } catch (e: any) {
++      toast({ title: 'Error logging dependency', description: e.message, variant: 'destructive' })
++    }
++  }
++
++  const handleAddNote = async (projectId: string) => {
++    const el = document.getElementById(`note-text-${projectId}`) as HTMLTextAreaElement
++    if (!el?.value?.trim()) return
++
++    try {
++      const { error } = await supabase.from('project_notes').insert({
++        project_id: projectId,
++        author: 'Admin Team',
++        content: el.value.trim(),
++        visibility: 'Internal Only'
++      })
++
++      if (error) throw error
++      
++      toast({ title: 'Note saved successfully' })
++      logWorkspaceActivity(projectId, 'Internal Note Added', el.value.trim())
++      
++      el.value = ''
++      
++      fetchProjectWorkspaceData(projectId)
++    } catch (e: any) {
++      toast({ title: 'Error saving note', description: e.message, variant: 'destructive' })
++    }
++  }
++
++  const handleRequestApproval = async (projectId: string, clientName: string) => {
++    const titleEl = document.getElementById(`approval-title-${projectId}`) as HTMLInputElement
++    const descEl = document.getElementById(`approval-desc-${projectId}`) as HTMLTextAreaElement
++    
++    if (!titleEl?.value?.trim()) return
++
++    try {
++      const { error } = await supabase.from('project_approvals').insert({
++        project_id: projectId,
++        title: titleEl.value.trim(),
++        description: descEl?.value?.trim() || ''
++      })
++
++      if (error) throw error
++      
++      toast({ title: 'Approval requested successfully' })
++      logWorkspaceActivity(projectId, 'Approval Requested', `Requested approval for: ${titleEl.value.trim()}`)
++      notifyClient(clientName, `Action Required: Project Approval`, `We have requested your approval for: ${titleEl.value.trim()}`)
++      
++      titleEl.value = ''
++      if (descEl) descEl.value = ''
++      
++      fetchProjectWorkspaceData(projectId)
++    } catch (e: any) {
++      toast({ title: 'Error requesting approval', description: e.message, variant: 'destructive' })
++    }
++  }
++
+   const handleUploadReport = async (projectId: string, clientName: string) => {
+     if (!uploadReportFile || !reportTitle.trim()) return
+     setUploadingReportState(true)
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+---
+
+Created At: 2026-07-10T15:44:55Z
+Completed At: 2026-07-10T15:44:58Z
+The following changes were made by the multi_replace_file_content tool to: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -2084,14 +2084,7 @@
+                         />
+                       </div>
+                       <div className="flex justify-end">
+-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+-                          const titleEl = document.getElementById(`risk-title-${detailProject.id}`) as HTMLInputElement
+-                          if (titleEl?.value?.trim()) {
+-                            logWorkspaceActivity(detailProject.id, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
+-                            titleEl.value = ''
+-                            toast({ title: 'Risk logged to project timeline' })
+-                          }
+-                        }}>
++                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleLogRisk(detailProject.id)}>
+                           Log Risk
+                         </Button>
+                       </div>
+@@ -2098,20 +2098,26 @@
+                   </Card>
+-                  {/* Risk timeline from activity log */}
+-                  <div className="space-y-2">
+-                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Logged Risks from Timeline</p>
+-                    <UniversalTimeline
+-                      entries={workspaceTimeline
+-                        .filter((t: any) => t.action?.toLowerCase().includes('risk'))
+-                        .map((t: any) => ({
+-                          action: t.action,
+-                          actionType: 'note' as const,
+-                          by: t.user_name,
+-                          date: t.created_at,
+-                          comment: t.notes
+-                        }))}
+-                      compact
+-                    />
+-                    {workspaceTimeline.filter((t: any) => t.action?.toLowerCase().includes('risk')).length === 0 && (
++                  {/* Risk list */}
++                  <div className="space-y-2">
++                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Logged Risks</p>
++                    <div className="space-y-2">
++                      {workspaceRisks.map((risk: any) => (
++                        <div key={risk.id} className="flex gap-2.5 items-start text-xs border border-border p-3 rounded-lg bg-black/10">
++                          <span className={`font-bold shrink-0 mt-0.5 ${risk.impact === 'High' || risk.impact === 'critical' ? 'text-red-400' : risk.impact === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>▪</span>
++                          <div className="flex-1">
++                            <div className="flex justify-between">
++                              <p className="text-foreground/90 font-semibold">{risk.title}</p>
++                              <span className="text-[10px] text-muted-foreground">{new Date(risk.created_at).toLocaleDateString()}</span>
++                            </div>
++                            {risk.mitigation && <p className="text-[10px] text-muted-foreground mt-1">Mitigation: {risk.mitigation}</p>}
++                            <div className="flex gap-2 mt-2">
++                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Impact: {risk.impact}</span>
++                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Status: {risk.status}</span>
++                            </div>
++                          </div>
++                        </div>
++                      ))}
++                    </div>
++                    {workspaceRisks.length === 0 && (
+                       <p className="text-xs text-muted-foreground italic text-center py-4">No risks logged yet. Use the form above to log risks.</p>
+                     )}
+                   </div>
+@@ -2135,14 +2135,7 @@
+                         className="w-full text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                       />
+                       <div className="flex justify-end">
+-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+-                          const el = document.getElementById(`note-text-${detailProject.id}`) as HTMLTextAreaElement
+-                          if (el?.value?.trim()) {
+-                            logWorkspaceActivity(detailProject.id, 'Internal Note Added', el.value.trim())
+-                            el.value = ''
+-                            toast({ title: 'Note saved to project timeline' })
+-                          }
+-                        }}>
++                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleAddNote(detailProject.id)}>
+                           Save Note
+                         </Button>
+                       </div>
+@@ -2149,20 +2149,19 @@
+                   </Card>
+-                  {/* Notes from timeline */}
++                  {/* Notes List */}
+                   <div className="space-y-2">
+                     <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Saved Notes</p>
+-                    <UniversalTimeline
+-                      entries={workspaceTimeline
+-                        .filter((t: any) => t.action?.includes('Internal Note'))
+-                        .map((t: any) => ({
+-                          action: t.action,
+-                          actionType: 'note' as const,
+-                          by: t.user_name,
+-                          date: t.created_at,
+-                          comment: t.notes
+-                        }))}
+-                      compact
+-                    />
+-                    {workspaceTimeline.filter((t: any) => t.action?.includes('Internal Note')).length === 0 && (
++                    <div className="space-y-2">
++                      {workspaceNotes.map((note: any) => (
++                        <div key={note.id} className="text-xs border border-border p-3 rounded-lg bg-black/10">
++                          <p className="text-foreground/90">{note.content}</p>
++                          <div className="flex justify-between items-center mt-2">
++                            <span className="text-[9px] text-muted-foreground font-semibold">{note.author}</span>
++                            <span className="text-[9px] text-muted-foreground">{new Date(note.created_at).toLocaleString()}</span>
++                          </div>
++                        </div>
++                      ))}
++                    </div>
++                    {workspaceNotes.length === 0 && (
+                       <p className="text-xs text-muted-foreground italic text-center py-4">No internal notes yet. Add notes above.</p>
+                     )}
+                   </div>
+@@ -2213,17 +2213,7 @@
+                         />
+                       </div>
+                       <div className="flex justify-end">
+-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+-                          const titleEl = document.getElementById(`dep-title-${detailProject.id}`) as HTMLInputElement
+-                          const notesEl = document.getElementById(`dep-notes-${detailProject.id}`) as HTMLTextAreaElement
+-                          if (titleEl?.value?.trim()) {
+-                            const noteStr = `Dependency: ${titleEl.value.trim()}. Details: ${notesEl?.value?.trim() || 'None'}`
+-                            logWorkspaceActivity(detailProject.id, 'Dependency Logged', noteStr)
+-                            titleEl.value = ''
+-                            if (notesEl) notesEl.value = ''
+-                            toast({ title: 'Dependency logged to project timeline' })
+-                          }
+-                        }}>
++                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleLogDependency(detailProject.id)}>
+                           Log Dependency
+                         </Button>
+                       </div>
+@@ -2230,20 +2230,25 @@
+                   </Card>
+-                  {/* Dependency list from activity log */}
++                  {/* Dependency list */}
+                   <div className="space-y-2">
+                     <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Active Dependencies</p>
+-                    <UniversalTimeline
+-                      entries={workspaceTimeline
+-                        .filter((t: any) => t.action?.includes('Dependency'))
+-                        .map((t: any) => ({
+-                          action: t.action,
+-                          actionType: 'note' as const,
+-                          by: t.user_name,
+-                          date: t.created_at,
+-                          comment: t.notes
+-                        }))}
+-                      compact
+-                    />
+-                    {workspaceTimeline.filter((t: any) => t.action?.includes('Dependency')).length === 0 && (
++                    <div className="space-y-2">
++                      {workspaceDependencies.map((dep: any) => (
++                        <div key={dep.id} className="flex gap-2.5 items-start text-xs border border-border p-3 rounded-lg bg-black/10">
++                          <span className={`font-bold shrink-0 mt-0.5 text-blue-400`}>▪</span>
++                          <div className="flex-1">
++                            <div className="flex justify-between">
++                              <p className="text-foreground/90 font-semibold">{dep.dependent_on}</p>
++                              <span className="text-[10px] text-muted-foreground">{new Date(dep.created_at).toLocaleDateString()}</span>
++                            </div>
++                            {dep.description && <p className="text-[10px] text-muted-foreground mt-1">{dep.description}</p>}
++                            <div className="flex gap-2 mt-2">
++                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Status: {dep.status}</span>
++                            </div>
++                          </div>
++                        </div>
++                      ))}
++                    </div>
++                    {workspaceDependencies.length === 0 && (
+                       <p className="text-xs text-muted-foreground italic text-center py-4">No active dependencies logged yet. Log dependencies above.</p>
+                     )}
+                   </div>
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+---
+
+Created At: 2026-07-10T16:00:34Z
+Completed At: 2026-07-10T16:00:34Z
+File Path: `file:///c:/Users/heman/Downloads/Netgain%20Operating%20Portal/netgain-portal/app/%28dashboard%29/projects/page.tsx`
+Total Lines: 2605
+Total Bytes: 144382
+Showing lines 550 to 600
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+550:       formData.append('uploadedBy', 'Admin Team')
+551: 
+552:       const res = await fetch('/api/project-files/upload', {
+553:         method: 'POST',
+554:         body: formData
+555:       })
+556:       const data = await res.json()
+557:       if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+558: 
+559:       await supabase.from('project_files').insert({
+560:         project_id: projectId,
+561:         name: data.fileName || uploadFile.name,
+562:         file_path: data.url,
+563:         category: fileCategory,
+564:         version: parseInt(fileVersion) || 1,
+565:         visibility: fileVisibility,
+566:         uploaded_by: 'Admin Team'
+567:       })
+568: 
+569:       toast({ title: 'File uploaded successfully', description: uploadFile.name })
+570:       setUploadFile(null)
+571: 
+572:       fetchProjectWorkspaceData(projectId)
+573:       await logWorkspaceActivity(projectId, 'File Uploaded', `Uploaded ${uploadFile.name} (${fileCategory}) - Visibility: ${fileVisibility}`)
+574: 
+575:       if (fileVisibility === 'Published to Client') {
+576:         await notifyClient(clientName, 'New Project File Published', `We have uploaded a new file to your workspace: ${uploadFile.name}`)
+577:       }
+578:     } catch (e: any) {
+579:       toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
+580:     } finally {
+581:       setUploadingFileState(false)
+582:     }
+583:   }
+584: 
+585:   const handleLogRisk = async (projectId: string) => {
+586:     const titleEl = document.getElementById(`risk-title-${projectId}`) as HTMLInputElement
+587:     const impactEl = document.getElementById(`risk-impact-${projectId}`) as HTMLSelectElement | HTMLInputElement
+588:     const mitigationEl = document.getElementById(`risk-mitigation-${projectId}`) as HTMLTextAreaElement
+589:     
+590:     if (!titleEl?.value?.trim()) return
+591: 
+592:     try {
+593:       const { error } = await supabase.from('project_risks').insert({
+594:         project_id: projectId,
+595:         title: titleEl.value.trim(),
+596:         impact: impactEl?.value || 'Medium',
+597:         mitigation: mitigationEl?.value?.trim() || '',
+598:         visibility: 'Internal Only'
+599:       })
+600: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+
+---
+
+Created At: 2026-07-10T16:00:52Z
+Completed At: 2026-07-10T16:00:55Z
+The following changes were made by the replace_file_content tool to: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -582,6 +582,40 @@
+     }
+   }
+ 
++  const handleLogTimesheet = async (projectId: string, clientName: string) => {
++    if (!tsTeamMemberId) {
++      toast({ title: 'Validation Error', description: 'Please select a team member.', variant: 'destructive' })
++      return
++    }
++    const hrs = parseFloat(tsHours)
++    if (isNaN(hrs) || hrs <= 0) {
++      toast({ title: 'Validation Error', description: 'Please enter valid hours.', variant: 'destructive' })
++      return
++    }
++
++    try {
++      const { error } = await supabase.from('project_timesheets').insert({
++        project_id: projectId,
++        team_member_id: tsTeamMemberId,
++        date: tsDate,
++        hours: hrs,
++        billable: tsBillable,
++        notes: tsNotes
++      })
++
++      if (error) throw error
++
++      toast({ title: 'Timesheet Logged', description: `Successfully logged ${hrs} hours.` })
++      setTsHours('1.0')
++      setTsNotes('')
++      setTsTeamMemberId('')
++      fetchProjectWorkspaceData(projectId)
++      await logWorkspaceActivity(projectId, 'Timesheet Logged', `Logged ${hrs} hours on ${tsDate}.`)
++    } catch (e: any) {
++      toast({ title: 'Error Logging Time', description: e.message, variant: 'destructive' })
++    }
++  }
++
+   const handleLogRisk = async (projectId: string) => {
+     const titleEl = document.getElementById(`risk-title-${projectId}`) as HTMLInputElement
+     const impactEl = document.getElementById(`risk-impact-${projectId}`) as HTMLSelectElement | HTMLInputElement
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+---
+
+Created At: 2026-07-10T16:42:05Z
+Completed At: 2026-07-10T16:42:05Z
+File Path: `file:///c:/Users/heman/Downloads/Netgain%20Operating%20Portal/netgain-portal/app/%28dashboard%29/projects/page.tsx`
+Total Lines: 2703
+Total Bytes: 150756
+Showing lines 600 to 645
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+600:         date: tsDate,
+601:         hours: hrs,
+602:         billable: tsBillable,
+603:         notes: tsNotes
+604:       })
+605: 
+606:       if (error) throw error
+607: 
+608:       toast({ title: 'Timesheet Logged', description: `Successfully logged ${hrs} hours.` })
+609:       setTsHours('1.0')
+610:       setTsNotes('')
+611:       setTsTeamMemberId('')
+612:       fetchProjectWorkspaceData(projectId)
+613:       await logWorkspaceActivity(projectId, 'Timesheet Logged', `Logged ${hrs} hours on ${tsDate}.`)
+614:     } catch (e: any) {
+615:       toast({ title: 'Error Logging Time', description: e.message, variant: 'destructive' })
+616:     }
+617:   }
+618: 
+619:   const handleLogRisk = async (projectId: string) => {
+620:     const titleEl = document.getElementById(`risk-title-${projectId}`) as HTMLInputElement
+621:     const impactEl = document.getElementById(`risk-impact-${projectId}`) as HTMLSelectElement | HTMLInputElement
+622:     const mitigationEl = document.getElementById(`risk-mitigation-${projectId}`) as HTMLTextAreaElement
+623:     
+624:     if (!titleEl?.value?.trim()) return
+625: 
+626:     try {
+627:       const { error } = await supabase.from('project_risks').insert({
+628:         project_id: projectId,
+629:         title: titleEl.value.trim(),
+630:         impact: impactEl?.value || 'Medium',
+631:         mitigation: mitigationEl?.value?.trim() || '',
+632:         visibility: 'Internal Only'
+633:       })
+634: 
+635:       if (error) throw error
+636:       
+637:       toast({ title: 'Risk logged successfully' })
+638:       logWorkspaceActivity(projectId, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
+639:       
+640:       titleEl.value = ''
+641:       if (mitigationEl) mitigationEl.value = ''
+642:       
+643:       fetchProjectWorkspaceData(projectId)
+644:     } catch (e: any) {
+645:       toast({ title: 'Error logging risk', description: e.message, variant: 'destructive' })
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+
+---
+
+Created At: 2026-07-10T17:03:32Z
+Tool is running as a background task with task id: 4ee5602f-8f0f-4781-a9a8-811fff27c166/task-1710
+Task Description: python -c "
+import json
+path = r'C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\.system_generated\logs\transcript_full.jsonl'
+output = []
+with open(path, 'r', encoding='utf-8') as f:
+    for line in f:
+        if 'handleLogRisk' in line:
+            data = json.loads(line)
+            content = data.get('content', '')
+            if 'handleLogRisk' in content:
+                output.append(content)
+
+with open('restore.txt', 'w', encoding='utf-8') as out:
+    for o in output:
+        out.write(o + '\n\n---\n\n')
+"
+Task logs are available at: file:///C:/Users/heman/.gemini/antigravity-ide/brain/4ee5602f-8f0f-4781-a9a8-811fff27c166/.system_generated/tasks/task-1710.log
+
+---
+

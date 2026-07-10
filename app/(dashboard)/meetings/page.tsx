@@ -48,6 +48,8 @@ function MeetingsListContent() {
   const [syncing, setSyncing] = useState(false)
   const searchParams = useSearchParams()
 
+  const [bookingUrl, setBookingUrl] = useState<string>('')
+
   const fetchMeetings = useCallback(async () => {
     try {
       setLoading(true)
@@ -59,6 +61,13 @@ function MeetingsListContent() {
 
       if (error) throw error
       setMeetings(data || [])
+
+      const { data: settingsData } = await supabase.from('company_settings').select('settings').single()
+      if (settingsData?.settings?.company?.calBookingUrl) {
+        setBookingUrl(settingsData.settings.company.calBookingUrl)
+      } else {
+        setBookingUrl(process.env.NEXT_PUBLIC_CAL_BOOKING_URL || '')
+      }
     } catch (err: any) {
       toast({
         title: 'Error loading meetings',
@@ -294,6 +303,16 @@ function MeetingsListContent() {
           icon: RefreshCw,
           disabled: syncing || loading
         }}
+        secondaryActions={
+          bookingUrl ? (
+            <Button variant="outline" asChild className="border-gold/30 text-gold hover:bg-gold/10">
+              <a href={bookingUrl} target="_blank" rel="noopener noreferrer">
+                <Calendar className="mr-2 h-4 w-4" />
+                Book a Meeting
+              </a>
+            </Button>
+          ) : null
+        }
       />
 
       {/* Summary Stat Cards */}

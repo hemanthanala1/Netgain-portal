@@ -36,6 +36,7 @@ import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 import { DataTable } from '@/components/ui/data-table'
 import { TableSkeleton } from '@/components/ui/skeletons'
 import { logSystemActivity } from '@/lib/activity-helper'
+import { useUser } from '@/components/user-provider'
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
@@ -64,6 +65,15 @@ function CampaignStrategyPageContent() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
+  const { user } = useUser()
+  
+  const [teamMembersList, setTeamMembersList] = useState<any[]>([])
+  const [newRiskAssignee, setNewRiskAssignee] = useState('')
+  const [newDepAssignee, setNewDepAssignee] = useState('')
+  const [newNoteAssignee, setNewNoteAssignee] = useState('')
+  const [quickAssigneeId, setQuickAssigneeId] = useState('')
+
+  const canSelfAssign = user?.permissions?.includes('all') || user?.permissions?.includes('self_assign')
 
   const columns = useMemo(() => [
     {
@@ -692,6 +702,11 @@ function CampaignStrategyPageContent() {
           if (settings?.docs?.projectTypes) {
             setProjectTypes(settings.docs.projectTypes)
           }
+
+          // Fetch team members globally
+          const { data: teamMembers } = await supabase.from('team_members').select('id, name, role').order('name')
+          if (teamMembers) setTeamMembersList(teamMembers)
+
         } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
       setLoading(false)
@@ -1936,8 +1951,8 @@ function CampaignStrategyPageContent() {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground uppercase font-semibold">Impact Level</label>
-                          <Select defaultValue="medium">
-                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border">
+                          <Select defaultValue="medium" onValueChange={() => {}} >
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border" id={`risk-impact-${detailProject.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1949,21 +1964,50 @@ function CampaignStrategyPageContent() {
                           </Select>
                         </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Mitigation Plan</label>
-                        <textarea
-                          rows={2}
-                          placeholder="How will this risk be mitigated?"
-                          className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Mitigation Plan</label>
+                          <textarea
+                            rows={2}
+                            id={`risk-mitigation-${detailProject.id}`}
+                            placeholder="How will this risk be mitigated?"
+                            className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Assign To</label>
+                          <Select value={newRiskAssignee} onValueChange={setNewRiskAssignee}>
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Unassigned</SelectItem>
+                              {teamMembersList.map((tm: any) => (
+                                (!canSelfAssign && user?.name === tm.name) ? null : <SelectItem key={tm.id} value={tm.id}>{tm.name} ({tm.role})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="flex justify-end">
-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={async () => {
                           const titleEl = document.getElementById(`risk-title-${detailProject.id}`) as HTMLInputElement
-                          if (titleEl?.value?.trim()) {
-                            logWorkspaceActivity(detailProject.id, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
+                          const mitigationEl = document.getElementById(`risk-mitigation-${detailProject.id}`) as HTMLTextAreaElement
+                          if (!titleEl?.value?.trim()) return
+                          try {
+                            await supabase.from('project_risks').insert({
+                              project_id: detailProject.id,
+                              title: titleEl.value.trim(),
+                              impact: 'medium',
+                              mitigation: mitigationEl?.value?.trim() || '',
+                              assignee_id: newRiskAssignee && newRiskAssignee !== 'none' ? newRiskAssignee : null,
+                              visibility: 'Internal Only'
+                            })
+                            await logWorkspaceActivity(detailProject.id, 'Risk Logged', `Risk: ${titleEl.value.trim()}${newRiskAssignee && newRiskAssignee !== 'none' ? ` — Assigned to team member` : ''}`)
                             titleEl.value = ''
-                            toast({ title: 'Risk logged to project timeline' })
+                            if (mitigationEl) mitigationEl.value = ''
+                            setNewRiskAssignee('')
+                            toast({ title: 'Risk logged successfully' })
+                          } catch (e: any) {
+                            toast({ title: 'Error logging risk', description: e.message, variant: 'destructive' })
                           }
                         }}>
                           Log Risk
@@ -2010,12 +2054,37 @@ function CampaignStrategyPageContent() {
                         id={`note-text-${detailProject.id}`}
                         className="w-full text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
                       />
-                      <div className="flex justify-end">
-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1 flex-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Assign To</label>
+                          <Select value={newNoteAssignee} onValueChange={setNewNoteAssignee}>
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Unassigned</SelectItem>
+                              {teamMembersList.map((tm: any) => (
+                                (!canSelfAssign && user?.name === tm.name) ? null : <SelectItem key={tm.id} value={tm.id}>{tm.name} ({tm.role})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button variant="gold" size="sm" className="h-7 text-xs mt-4" onClick={async () => {
                           const el = document.getElementById(`note-text-${detailProject.id}`) as HTMLTextAreaElement
-                          if (el?.value?.trim()) {
-                            logWorkspaceActivity(detailProject.id, 'Internal Note Added', el.value.trim())
+                          if (!el?.value?.trim()) return
+                          try {
+                            await supabase.from('project_notes').insert({
+                              project_id: detailProject.id,
+                              content: el.value.trim(),
+                              assignee_id: newNoteAssignee && newNoteAssignee !== 'none' ? newNoteAssignee : null,
+                              created_by: user?.name || 'Admin Team'
+                            })
+                            await logWorkspaceActivity(detailProject.id, 'Internal Note Added', el.value.trim())
                             el.value = ''
+                            setNewNoteAssignee('')
+                            toast({ title: 'Note saved successfully' })
+                          } catch (e: any) {
+                            await logWorkspaceActivity(detailProject.id, 'Internal Note Added', el.value.trim())
+                            el.value = ''
+                            setNewNoteAssignee('')
                             toast({ title: 'Note saved to project timeline' })
                           }
                         }}>
@@ -2081,24 +2150,54 @@ function CampaignStrategyPageContent() {
                           </Select>
                         </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-muted-foreground uppercase font-semibold">Details & Assignee</label>
-                        <textarea
-                          rows={2}
-                          id={`dep-notes-${detailProject.id}`}
-                          placeholder="Specify who is responsible and what is needed..."
-                          className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Details & Notes</label>
+                          <textarea
+                            rows={2}
+                            id={`dep-notes-${detailProject.id}`}
+                            placeholder="Specify what is needed and any context..."
+                            className="w-full h-16 text-xs bg-black/20 border border-border rounded-lg px-3 py-2 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-gold/50"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Assign To</label>
+                          <Select value={newDepAssignee} onValueChange={setNewDepAssignee}>
+                            <SelectTrigger className="h-8 text-xs bg-black/20 border-border"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Unassigned</SelectItem>
+                              {teamMembersList.map((tm: any) => (
+                                (!canSelfAssign && user?.name === tm.name) ? null : <SelectItem key={tm.id} value={tm.id}>{tm.name} ({tm.role})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="flex justify-end">
-                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => {
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={async () => {
                           const titleEl = document.getElementById(`dep-title-${detailProject.id}`) as HTMLInputElement
                           const notesEl = document.getElementById(`dep-notes-${detailProject.id}`) as HTMLTextAreaElement
-                          if (titleEl?.value?.trim()) {
-                            const noteStr = `Dependency: ${titleEl.value.trim()}. Details: ${notesEl?.value?.trim() || 'None'}`
-                            logWorkspaceActivity(detailProject.id, 'Dependency Logged', noteStr)
+                          if (!titleEl?.value?.trim()) return
+                          try {
+                            await supabase.from('project_dependencies').insert({
+                              project_id: detailProject.id,
+                              title: titleEl.value.trim(),
+                              criticality: 'high',
+                              notes: notesEl?.value?.trim() || '',
+                              assignee_id: newDepAssignee && newDepAssignee !== 'none' ? newDepAssignee : null
+                            })
+                            const noteStr = `Dependency: ${titleEl.value.trim()}${newDepAssignee && newDepAssignee !== 'none' ? ` — Assigned to team member` : ''}`
+                            await logWorkspaceActivity(detailProject.id, 'Dependency Logged', noteStr)
                             titleEl.value = ''
                             if (notesEl) notesEl.value = ''
+                            setNewDepAssignee('')
+                            toast({ title: 'Dependency logged successfully' })
+                          } catch (e: any) {
+                            const noteStr = `Dependency: ${titleEl.value.trim()}. Details: ${notesEl?.value?.trim() || 'None'}`
+                            await logWorkspaceActivity(detailProject.id, 'Dependency Logged', noteStr)
+                            titleEl.value = ''
+                            if (notesEl) notesEl.value = ''
+                            setNewDepAssignee('')
                             toast({ title: 'Dependency logged to project timeline' })
                           }
                         }}>

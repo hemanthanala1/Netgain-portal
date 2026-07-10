@@ -594,11 +594,30 @@ function InvoicesPageContent() {
     ? form.customSubtotal
     : computedSubStandard
 
+  const handleCustomSubtotalChange = (val: number) => {
+    let newItems = form.items || []
+    if (newItems.length > 0 && hasRange && totalMaxPrice > totalMinPrice) {
+      const ratio = (val - totalMinPrice) / (totalMaxPrice - totalMinPrice)
+      newItems = newItems.map((item: any) => {
+        const svc = servicesData.find(s => s.id === item.service_id)
+        if (svc) {
+          const minP = svc.priceMin !== undefined ? svc.priceMin : svc.price
+          const maxP = svc.priceMax !== undefined ? svc.priceMax : svc.price
+          const range = maxP - minP
+          const scaledPrice = Math.round(minP + ratio * range)
+          return { ...item, unit_price: scaledPrice, total: scaledPrice * (item.quantity || 1) }
+        }
+        return item
+      })
+    }
+    setForm({ ...form, customSubtotal: val, items: newItems })
+  }
+
   const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
   const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
 
   const subtotal = form.items && form.items.length > 0
-    ? lineItemsSubtotal
+    ? (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : lineItemsSubtotal) + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
     : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0))
 
   const discAmt = form.items && form.items.length > 0
@@ -1531,8 +1550,8 @@ function InvoicesPageContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
-                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue || ''} placeholder="0" onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
                   <div className="flex flex-col gap-2">
@@ -1548,7 +1567,7 @@ function InvoicesPageContent() {
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
+                              handleCustomSubtotalChange(val)
                             }}
                           />
                           <span className="text-xs text-muted-foreground">
@@ -1563,7 +1582,7 @@ function InvoicesPageContent() {
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
+                              handleCustomSubtotalChange(val)
                             }}
                           />
                         </div>
@@ -1576,7 +1595,7 @@ function InvoicesPageContent() {
                           min={totalMinPrice} 
                           max={totalMaxPrice} 
                           value={form.customSubtotal ?? computedSubStandard} 
-                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
                           className="w-full accent-gold bg-muted/30" 
                         />
                       </div>
@@ -1843,8 +1862,8 @@ function InvoicesPageContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue} onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
-                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue || ''} placeholder="0" onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
                   <div className="flex flex-col gap-2">
@@ -1860,7 +1879,7 @@ function InvoicesPageContent() {
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
+                              handleCustomSubtotalChange(val)
                             }}
                           />
                           <span className="text-xs text-muted-foreground">
@@ -1875,7 +1894,7 @@ function InvoicesPageContent() {
                             value={form.customSubtotal ?? computedSubStandard} 
                             onChange={e => {
                               const val = Number(e.target.value)
-                              setForm({ ...form, customSubtotal: val })
+                              handleCustomSubtotalChange(val)
                             }}
                           />
                         </div>
@@ -1888,7 +1907,7 @@ function InvoicesPageContent() {
                           min={totalMinPrice} 
                           max={totalMaxPrice} 
                           value={form.customSubtotal ?? computedSubStandard} 
-                          onChange={e => setForm({ ...form, customSubtotal: Number(e.target.value) })}
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
                           className="w-full accent-gold bg-muted/30" 
                         />
                       </div>

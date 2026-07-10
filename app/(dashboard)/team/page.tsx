@@ -37,7 +37,7 @@ const initialRoles = [
   { id: 'role-employee', name: 'Employee', isSystem: true, permissions: ['projects', 'prd', 'meetings'] },
 ]
 
-const MODULES = ['crm', 'services', 'documents', 'projects', 'prd', 'marketing', 'finance', 'meetings', 'communications', 'team', 'settings']
+const MODULES = ['crm', 'services', 'documents', 'projects', 'prd', 'marketing', 'finance', 'meetings', 'communications', 'team', 'settings', 'self_assign']
 
 const MODULE_LABELS: Record<string, string> = {
   crm: 'CRM Hub',
@@ -50,7 +50,8 @@ const MODULE_LABELS: Record<string, string> = {
   meetings: 'Meetings Hub',
   communications: 'Communication Center',
   team: 'Team Management',
-  settings: 'Portal Settings'
+  settings: 'Portal Settings',
+  self_assign: 'Self Assign Projects & Tasks'
 }
 
 const OPERATIONS = ['read', 'create', 'update', 'delete', 'approve', 'export', 'print', 'manage', 'share']

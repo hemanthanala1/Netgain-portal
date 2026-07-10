@@ -1,0 +1,2727 @@
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(auth)\login\page.tsx ===
+          // Set access cookies for middleware
+          document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in}`
+          document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${data.session.expires_in}`
+          document.cookie = `nbos-session=active; path=/`
+          toast({ title: 'Welcome back!', description: 'Logged in successfully.' })
+          window.location.href = '/dashboard'
+        }
+      } catch (err: any) {
+        toast({ title: 'Auth Error', description: err.message || 'An error occurred during login', variant: 'destructive' })
+      }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\login\page.tsx ===
+  // Clear any existing session when landing on login page
+  useEffect(() => {
+    localStorage.removeItem('netgain_client_session')
+  }, [])
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+  Sun, Moon
+} from 'lucide-react'
+import useSWR from 'swr'
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+  // ─── 3. Global document/project fetcher logic ───
+  const fetchClientDataSWR = async () => {
+    if (!session) return null
+    try {
+      const clientEmail = (session.email || '').toLowerCase().trim()
+      const clientCompany = (session.company || '').toLowerCase().trim()
+
+      const matchDoc = (doc: any) => {
+        const dClient = (doc.client || '').toLowerCase().trim()
+        const dEmail = (doc.email || doc.client_email || '').toLowerCase().trim()
+        return dClient === clientCompany || dClient === (session.name || '').toLowerCase().trim() || dEmail === clientEmail
+      }
+
+      // Fetch from Supabase tables
+      const [quosRes, sowsRes, agrsRes, invsRes, mrRes, projRes, notifRes, tokensRes, settingsRes, clientRes] = await Promise.all([
+        supabase.from('quotations').select('*'),
+        supabase.from('sows').select('*'),
+        supabase.from('agreements').select('*'),
+        supabase.from('invoices').select('*'),
+        supabase.from('marketing_reports').select('*'),
+        supabase.from('projects').select('*'),
+        supabase.from('client_notifications').select('*').or(`client_id.eq."${session.company}",client_id.eq."${session.email}"`).order('created_at', { ascending: false }),
+        supabase.from('document_tokens').select('*').eq('status', 'active'),
+        fetch('/api/settings').then(async res => {
+          if (!res.ok) return { data: null }
+          return { data: await res.json() }
+        }),
+        session.clientId ? supabase.from('crm_clients').select('website, address, gst').eq('id', session.clientId).maybeSingle() : Promise.resolve({ data: null })
+      ])
+      
+      const compSettings = settingsRes && settingsRes.data ? settingsRes.data : null
+      const clDetails = clientRes && clientRes.data ? clientRes.data : null
+
+      // Build token lookup map
+      const tokenMap = new Map<string, string>()
+      if (tokensRes.data) {
+        tokensRes.data.forEach((t: any) => {
+          tokenMap.set(`${t.document_type}_${t.document_id}`, t.token)
+        })
+      }
+
+      const combined: ClientDoc[] = []
+      ;(quosRes.data || []).filter(matchDoc).filter(q => q.published && q.visibility_status !== 'hidden').forEach(q => combined.push({
+        id: q.id, docId: q.doc_id, type: 'Quotation', title: q.project_title || 'Service Quotation', amount: Number(q.amount) || 0, status: q.status || 'published', date: q.created || q.created_at?.slice(0, 10), token: tokenMap.get(`Quotation_${q.id}`) || null, raw: q, published_version: q.published_version || 1, published_at: q.published_at || q.created_at, viewed_at: q.viewed_at, downloaded_at: q.downloaded_at, signed_at: q.signed_at, visibility_status: q.visibility_status || 'visible'
+      }))
+      ;(sowsRes.data || []).filter(matchDoc).filter(s => s.published && s.visibility_status !== 'hidden').forEach(s => combined.push({
+        id: s.id, docId: s.doc_id, type: 'SOW', title: s.project || 'Scope of Work', amount: Number(s.value) || 0, status: s.status || 'published', date: s.created || s.created_at?.slice(0, 10), token: tokenMap.get(`SOW_${s.id}`) || null, raw: s, published_version: s.published_version || 1, published_at: s.published_at || s.created_at, viewed_at: s.viewed_at, downloaded_at: s.downloaded_at, signed_at: s.signed_at, visibility_status: s.visibility_status || 'visible'
+      }))
+      ;(agrsRes.data || []).filter(matchDoc).filter(a => a.published && a.visibility_status !== 'hidden').forEach(a => combined.push({
+        id: a.id, docId: a.doc_id, type: 'Agreement', title: a.type || 'Service Agreement', amount: Number(a.value) || 0, status: a.status || 'published', date: a.created || a.created_at?.slice(0, 10), token: tokenMap.get(`Agreement_${a.id}`) || null, raw: a, published_version: a.published_version || 1, published_at: a.published_at || a.created_at, viewed_at: a.viewed_at, downloaded_at: a.downloaded_at, signed_at: a.signed_at, visibility_status: a.visibility_status || 'visible'
+      }))
+      ;(invsRes.data || []).filter(matchDoc).filter(i => i.published && i.visibility_status !== 'hidden').forEach(i => combined.push({
+        id: i.id, docId: i.doc_id, type: 'Invoice', title: `Tax Invoice — ${i.doc_id}`, amount: Number(i.amount) || 0, status: i.status || 'published', date: i.created || i.created_at?.slice(0, 10), token: tokenMap.get(`Invoice_${i.id}`) || null, raw: i, published_version: i.published_version || 1, published_at: i.published_at || i.created_at, viewed_at: i.viewed_at, downloaded_at: i.downloaded_at, signed_at: i.signed_at, visibility_status: i.visibility_status || 'visible'
+      }))
+      ;(mrRes.data || []).filter(matchDoc).filter(r => r.published && r.visibility_status !== 'hidden').forEach(r => {
+        let titleVal = 'Marketing Performance Report'
+        try { const parsed = JSON.parse(r.title); if (parsed && parsed.period) titleVal = `Marketing Report — ${parsed.period}` } catch {}
+        combined.push({
+          id: r.id, docId: r.doc_id, type: 'Marketing', title: titleVal, amount: 0, status: r.status || 'published', date: r.created || r.created_at?.slice(0, 10), token: null, raw: r, published_version: r.published_version || 1, published_at: r.published_at || r.created_at, viewed_at: r.viewed_at, downloaded_at: r.downloaded_at, signed_at: r.signed_at, visibility_status: r.visibility_status || 'visible'
+        })
+      })
+
+      const matchedProjects: Project[] = (projRes.data || []).filter(p => {
+        const docClient = (p.client || '').toLowerCase().trim()
+        return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
+      }).map((p: any) => {
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.', currentStage: '', sprintGoal: '' }
+        if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
+        return {
+          id: p.id,
+          docId: p.doc_id,
+          title: p.title,
+          client: p.client,
+          stack: p.stack || 'Custom Stack',
+          status: p.status || 'active',
+          created: p.created_at,
+          history: Array.isArray(p.history) ? p.history : [],
+          progress: Number(extra.progress) || 0,
+          milestones: Array.isArray(extra.milestones) ? extra.milestones : [],
+          budget: Number(extra.budget) || 0,
+          spent: Number(extra.spent) || 0,
+          timeline: extra.timeline,
+          pm: extra.pm,
+          currentStage: extra.currentStage || '',
+          sprintGoal: extra.sprintGoal || ''
+        }
+      })
+      
+      let reqList: any[] = []
+      let pFilesList: any[] = []
+      let pLinksList: any[] = []
+      let pRepsList: any[] = []
+      let pTimeList: any[] = []
+      let subsList: any[] = []
+
+      if (matchedProjects.length > 0) {
+        const projIds = matchedProjects.map(p => p.id)
+        const [reqs, pFiles, pLinks, pReps, pTime] = await Promise.all([
+          supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
+          supabase.from('project_files').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
+          supabase.from('project_links').select('*').in('project_id', projIds).order('published_at', { ascending: false }),
+          supabase.from('project_reports').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
+          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).order('created_at', { ascending: false })
+        ])
+
+        reqList = reqs.data || []
+        pFilesList = pFiles.data || []
+        pLinksList = pLinks.data || []
+        pRepsList = pReps.data || []
+        pTimeList = pTime.data || []
+
+        if (reqList.length > 0) {
+          const reqIds = reqList.map((r: any) => r.id)
+          const { data: subs } = await supabase.from('project_requirement_submissions').select('*').in('requirement_id', reqIds)
+          subsList = subs || []
+        }
+      }
+
+      // Fetch client meetings
+      const { data: meets } = await supabase.from('meetings').select('*').or(`client_email.eq."${clientEmail}",client_name.eq."${session.company}"`).order('meeting_date', { ascending: false })
+      
+      return {
+        compSettings,
+        clDetails,
+        docs: combined,
+        projects: matchedProjects,
+        reqList,
+        pFilesList,
+        pLinksList,
+        pRepsList,
+        pTimeList,
+        subsList,
+        meetsList: meets || [],
+        notifications: notifRes.data || []
+      }
+    } catch (err) {
+      console.error(err)
+      return null
+    }
+  }
+
+  const { data: swrData, mutate: refreshClientData } = useSWR(session ? ['client_data', session.email] : null, fetchClientDataSWR, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30000,
+  })
+
+  useEffect(() => {
+    if (swrData) {
+      if (swrData.compSettings) setCompanySettings(swrData.compSettings)
+      if (swrData.clDetails) setClientDetails(swrData.clDetails)
+      setDocs(swrData.docs)
+      setProjects(swrData.projects)
+      setWorkspaceRequirements(swrData.reqList)
+      setWorkspaceFiles(swrData.pFilesList)
+      setWorkspaceLinks(swrData.pLinksList)
+      setWorkspaceReports(swrData.pRepsList)
+      setWorkspaceTimeline(swrData.pTimeList)
+      setWorkspaceSubmissions(swrData.subsList)
+      setWorkspaceMeetings(swrData.meetsList)
+      setNotifications(swrData.notifications)
+      
+      if (swrData.projects.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(swrData.projects[0].id)
+      }
+      setLoading(false)
+    }
+  }, [swrData])
+
+  const fetchClientData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    await refreshClientData()
+    if (isRefresh) setRefreshing(false)
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\lib\utils.ts ===
+export function formatCurrency(amount: number): string {
+  return '₹ ' + new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\services\page.tsx ===
+        <Label>Base/Default Price (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\services\page.tsx ===
+        <Label>Quotation Max Price (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\services\page.tsx ===
+        <Label>Base/Default Price (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\services\page.tsx ===
+        <Label>Quotation Max Price (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                    <Label>Monthly Ad Budget (₹) *</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                    <Label>Custom Service Fee (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (₹)</Button>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                    <Label>Monthly Ad Budget (₹) *</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                    <Label>Custom Service Fee (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (₹)</Button>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+            <Label>Monthly Ad Budget (₹) *</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+            <Label>Custom Service Fee (₹)</Label>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\services\page.tsx ===
+                      <span className="text-sm font-bold text-gold flex items-center gap-1">
+                        {formatCurrency(svc.basePrice)}{svc.pricing === 'monthly' ? '/mo' : ''}
+                      </span>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-transparent relative">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-background/95 backdrop-blur px-4 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <button
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+              <div className="w-full h-full mt-12 bg-white rounded-sm overflow-hidden shadow-2xl relative">
+                <div className="w-full h-full flex flex-col items-center overflow-y-auto bg-muted/10 py-10 px-4 no-scrollbar">
+                  <div className="w-full max-w-3xl bg-white shadow-sm border border-black/10 aspect-[1/1.414] p-12 sm:p-20 flex flex-col">
+                    <div className="flex justify-between items-start mb-16">
+                      <div className="h-10 w-40 bg-muted/60 rounded" />
+                      <div className="h-10 w-10 bg-muted/40 rounded-full" />
+                    </div>
+                    <div className="h-6 w-2/3 bg-muted/80 rounded mb-6" />
+                    <div className="h-4 w-1/3 bg-muted/40 rounded mb-12" />
+                    <div className="space-y-5 flex-1">
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-11/12 bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-4/5 bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-10/12 bg-muted/30 rounded" />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/60 text-white rounded text-[10px] font-mono tracking-wider backdrop-blur-sm z-10">
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Create Database Migrations (`add_payment_gateway.sql`)
+- [x] Run Database Migrations (User to execute)
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Install `razorpay` npm package
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+    sowPrefix: 'SOW-',
+    taxRateTDS: '10'
+  })
+
+  const [payment, setPayment] = useState({
+    razorpayEnabled: false,
+    razorpayMode: 'test',
+    razorpayKeyId: '',
+    razorpaySecretKey: '',
+    razorpayWebhookSecret: '',
+    currency: 'INR'
+  })
+
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+      if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
+      if (data.docs)     setDocs(d => ({ ...d, ...data.docs }))
+      if (data.payment)  setPayment(p => ({ ...p, ...data.payment }))
+      if (data.isGoogleConnected !== undefined) setIsGoogleConnected(data.isGoogleConnected)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ company, founder, bank, comm, ai, docs, payment }),
+      })
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+          <TabsTrigger value="founder" className="gap-1.5"><User className="h-3.5 w-3.5" />Founder</TabsTrigger>
+          <TabsTrigger value="bank" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Banking</TabsTrigger>
+          <TabsTrigger value="payment" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Payment Gateway</TabsTrigger>
+          <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Documents & Billing</TabsTrigger>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── PAYMENT GATEWAY ────────────────────────────────── */}
+        <TabsContent value="payment">
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><CreditCard className="h-4 w-4 text-gold" />Razorpay Integration</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <FieldRow label="Enable Razorpay" hint="Allow clients to pay invoices directly via Razorpay">
+                <Select value={payment.razorpayEnabled ? 'true' : 'false'} onValueChange={(v) => setPayment({ ...payment, razorpayEnabled: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Environment" hint="Use Test for development, Live for production">
+                <Select value={payment.razorpayMode} onValueChange={(v) => setPayment({ ...payment, razorpayMode: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="test">Test Mode</SelectItem>
+                    <SelectItem value="live">Live Mode</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Razorpay Key ID">
+                <Input value={payment.razorpayKeyId} onChange={e => setPayment({ ...payment, razorpayKeyId: e.target.value })} placeholder="rzp_test_..." />
+              </FieldRow>
+              <FieldRow label="Razorpay Secret Key">
+                <SecretField id="rzp_secret" value={payment.razorpaySecretKey} onChange={v => setPayment({ ...payment, razorpaySecretKey: v })} placeholder="secret_..." showKey={showKey} setShowKey={setShowKey} />
+              </FieldRow>
+              <FieldRow label="Webhook Secret" hint="Used to verify webhook events from Razorpay">
+                <SecretField id="rzp_webhook" value={payment.razorpayWebhookSecret} onChange={v => setPayment({ ...payment, razorpayWebhookSecret: v })} placeholder="webhook_secret..." showKey={showKey} setShowKey={setShowKey} />
+              </FieldRow>
+              <FieldRow label="Currency">
+                <Input value={payment.currency} onChange={e => setPayment({ ...payment, currency: e.target.value })} placeholder="INR" />
+              </FieldRow>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+const SENSITIVE_FIELDS = {
+  comm: ['smtpPass', 'waToken', 'resendApiKey', 'sendgridApiKey', 'twilioAuthToken', 'msg91Authkey', 'textlocalApiKey', 'twilioWaToken', 'googleAccessToken', 'googleRefreshToken'],
+  ai: ['claudeKey', 'openaiKey', 'geminiKey'],
+  payment: ['razorpaySecretKey', 'razorpayWebhookSecret']
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+function maskSensitiveData(comm: any, ai: any, payment: any) {
+  const safeComm = { ...comm }
+  SENSITIVE_FIELDS.comm.forEach(field => {
+    if (safeComm[field]) {
+      safeComm[field] = '••••••••'
+    }
+  })
+
+  const safeAi = { ...ai }
+  SENSITIVE_FIELDS.ai.forEach(field => {
+    if (safeAi[field]) {
+      safeAi[field] = '••••••••'
+    }
+  })
+
+  const safePayment = { ...payment }
+  SENSITIVE_FIELDS.payment.forEach(field => {
+    if (safePayment[field]) {
+      safePayment[field] = '••••••••'
+    }
+  })
+
+  return { comm: safeComm, ai: safeAi, payment: safePayment }
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+      if (data) {
+        const masked = maskSensitiveData(data.comm || {}, data.ai || {}, data.payment || {})
+        return NextResponse.json({
+          company: data.company,
+          founder: data.founder,
+          bank: data.bank,
+          comm: { ...data.comm, ...masked.comm },
+          ai: { ...data.ai, ...masked.ai },
+          payment: { ...data.payment, ...masked.payment },
+          docs: data.docs,
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+    if (fs.existsSync(SETTINGS_PATH)) {
+      const raw = fs.readFileSync(SETTINGS_PATH, 'utf-8')
+      const parsed = JSON.parse(raw)
+      const masked = maskSensitiveData(parsed.comm || {}, parsed.ai || {}, parsed.payment || {})
+      return NextResponse.json({
+        ...parsed,
+        comm: { ...parsed.comm, ...masked.comm },
+        ai: { ...parsed.ai, ...masked.ai },
+        payment: { ...parsed.payment, ...masked.payment },
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+    const body = await request.json()
+    const { company, founder, bank, comm, ai, docs, payment } = body
+
+    const authHeader = request.headers.get('authorization')
+    const token = authHeader?.replace('Bearer ', '')
+
+    let existingComm: any = {}
+    let existingAi: any = {}
+    let existingPayment: any = {}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+      const { data: existingData } = await supabase
+        .from('company_settings')
+        .select('comm, ai, payment')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (existingData) {
+        existingComm = existingData.comm || {}
+        existingAi = existingData.ai || {}
+        existingPayment = existingData.payment || {}
+      }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+      // Process ai fields
+      const processedAi = { ...existingAi, ...ai }
+      SENSITIVE_FIELDS.ai.forEach(field => {
+        if (isMaskedValue(ai[field])) {
+          processedAi[field] = existingAi[field] || ''
+        } else if (ai[field]) {
+          processedAi[field] = encrypt(ai[field])
+        } else if (ai[field] === '') {
+          processedAi[field] = ''
+        }
+      })
+
+      // Process payment fields
+      const processedPayment = { ...existingPayment, ...payment }
+      if (payment) {
+        SENSITIVE_FIELDS.payment.forEach(field => {
+          if (isMaskedValue(payment[field])) {
+            processedPayment[field] = existingPayment[field] || ''
+          } else if (payment[field]) {
+            processedPayment[field] = encrypt(payment[field])
+          } else if (payment[field] === '') {
+            processedPayment[field] = ''
+          }
+        })
+      }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+          bank: bank || {},
+          comm: processedComm,
+          ai: processedAi,
+          payment: processedPayment,
+          docs: docs || {},
+          updated_at: new Date().toISOString()
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+          bank: bank || {}, 
+          comm: processedComm, 
+          ai: processedAi, 
+          payment: processedPayment,
+          docs: docs || {}, 
+          updatedAt: new Date().toISOString() 
+        }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+    if (fs.existsSync(SETTINGS_PATH)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
+        existingComm = existing.comm || {}
+        existingAi = existing.ai || {}
+        existingPayment = existing.payment || {}
+      } catch (_) {}
+    }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+    // Process ai fields
+    const processedAi = { ...existingAi, ...ai }
+    SENSITIVE_FIELDS.ai.forEach(field => {
+      if (isMaskedValue(ai[field])) {
+        processedAi[field] = existingAi[field] || ''
+      } else if (ai[field]) {
+        processedAi[field] = encrypt(ai[field])
+      } else if (ai[field] === '') {
+        processedAi[field] = ''
+      }
+    })
+
+    // Process payment fields
+    const processedPayment = { ...existingPayment, ...payment }
+    if (payment) {
+      SENSITIVE_FIELDS.payment.forEach(field => {
+        if (isMaskedValue(payment[field])) {
+          processedPayment[field] = existingPayment[field] || ''
+        } else if (payment[field]) {
+          processedPayment[field] = encrypt(payment[field])
+        } else if (payment[field] === '') {
+          processedPayment[field] = ''
+        }
+      })
+    }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\api\settings\route.ts ===
+      bank, 
+      comm: processedComm, 
+      ai: processedAi, 
+      payment: processedPayment,
+      docs, 
+      updatedAt: new Date().toISOString() 
+    }
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Update Admin Settings UI (`app/(dashboard)/settings/page.tsx`)
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Create Backend API Routes (`app/api/razorpay/create-order/route.ts`, `app/api/razorpay/verify/route.ts`, `app/api/webhooks/razorpay/route.ts`)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+    } catch (err) { console.error(err) }
+  }
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) return resolve(true)
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
+
+  const handleRazorpayPayment = async (doc: ClientDoc) => {
+    try {
+      const res = await loadRazorpayScript()
+      if (!res) {
+        return toast({ title: 'Payment Failed', description: 'Razorpay SDK failed to load. Are you online?', variant: 'destructive' })
+      }
+
+      toast({ title: 'Initializing Payment...' })
+      
+      const orderRes = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: doc.docId, amount: doc.amount })
+      })
+      
+      const orderData = await orderRes.json()
+      
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || 'Failed to create order')
+      }
+
+      const options = {
+        key: companySettings?.payment?.razorpayKeyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: companySettings?.company?.name || 'Netgain Studio',
+        description: `Payment for Invoice ${doc.docId}`,
+        order_id: orderData.orderId,
+        handler: async function (response: any) {
+          toast({ title: 'Processing Payment...' })
+          
+          try {
+            const verifyRes = await fetch('/api/razorpay/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                invoiceId: doc.docId
+              })
+            })
+            
+            if (verifyRes.ok) {
+              toast({ title: '✅ Payment Successful!', description: 'Your invoice has been marked as paid.' })
+              fetchClientData(true) // Refresh data
+              if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, status: 'paid' } as any)
+            } else {
+              const verifyData = await verifyRes.json()
+              toast({ title: 'Payment Verification Failed', description: verifyData.error, variant: 'destructive' })
+            }
+          } catch (err) {
+            toast({ title: 'Payment Error', description: 'Could not verify payment', variant: 'destructive' })
+          }
+        },
+        prefill: {
+          name: session?.name || '',
+          email: session?.email || '',
+        },
+        theme: {
+          color: '#D4AF37'
+        }
+      }
+
+      const paymentObject = new (window as any).Razorpay(options)
+      paymentObject.on('payment.failed', function (response: any) {
+        toast({ title: 'Payment Failed', description: response.error.description, variant: 'destructive' })
+      })
+      paymentObject.open()
+    } catch (err: any) {
+      toast({ title: 'Payment Error', description: err.message, variant: 'destructive' })
+    }
+  }
+
+  const openDoc = (doc: ClientDoc) => { setSelectedDoc(doc); trackActivity(doc, 'view') }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+                      {/* Invoices specific pay action if unpaid */}
+                      {currentDoc.type === 'Invoice' && currentDoc.status !== 'paid' && (
+                        <div className="pt-2">
+                          {companySettings?.payment?.razorpayEnabled ? (
+                            <Button onClick={() => handleRazorpayPayment(currentDoc)} variant="gold" className="w-full text-xs font-semibold gap-2 h-9 text-black">
+                              Pay with Razorpay
+                            </Button>
+                          ) : (
+                            <Button variant="outline" className="w-full text-xs font-semibold gap-2 h-9" disabled>
+                              Online Payment Disabled
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      await fetchClientData(true) 
+    } catch (err) { console.error(err) }
+  }
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Update Client Portal UI (`app/client/dashboard/page.tsx`)
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Verify functionality
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+  const [selectedFolder, setSelectedFolder] = useState('all')
+  const [previewDoc, setPreviewDoc] = useState<VaultDoc | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [customTags, setCustomTags] = useState<Record<string, string[]>>({})
+  const [newTag, setNewTag] = useState('')
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+  const generateAndSavePdf = async (payload: any, filenamePrefix: string, isPreview: boolean = false) => {
+    const res = await fetch('/api/generate-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}))
+      throw new Error(e.error || 'PDF generation failed')
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${filenamePrefix.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+  const downloadQuotation = async (doc: VaultDoc, isPreview: boolean = false) => {
+    const raw = doc.raw || {
+      client: doc.client,
+      project_title: doc.title,
+      amount: doc.amount,
+      status: doc.status,
+      created: doc.date,
+      doc_id: doc.docId
+    }
+    
+    const svcs = services.filter(s => (raw.service_ids || []).includes(s.id))
+    const sub = svcs.reduce((a, s) => a + s.price, 0)
+    const dAmt = Math.round(sub * (raw.discount_pct || 0) / 100)
+    const aft = sub - dAmt
+    const gAmt = Math.round(aft * (raw.gst_pct || 18) / 100)
+    const tot = aft + gAmt
+
+    const buildQuoteContent = (q: any, svList: any[]) => {
+      const lines = [
+        '## Why Netgain?',
+        'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
+        '',
+        '## Service Breakdown',
+        ...svList.flatMap((s: any, i: number) => [
+          `### ${i+1}. ${s.name}`,
+          s.description || 'Professional implementation adhering to industry best practices.',
+          ''
+        ]),
+        '## Value Proposition',
+        '- Direct access to experienced developers and strategists',
+        '- Transparent, scalable sprint-based delivery',
+        '- Continuous post-launch optimization'
+      ]
+      return lines.join('\n')
+    }
+
+    const payload = {
+      docType: 'Quotation' as const,
+      clientName: raw.client,
+      projectTitle: raw.project_title || 'Service Quotation',
+      content: buildQuoteContent(raw, svcs),
+      items: svcs.map(s => ({ description: s.name, amount: s.price })),
+      subtotal: sub,
+      discountTotal: dAmt,
+      grandTotal: tot
+    }
+    
+    return await generateAndSavePdf(payload, `Quotation_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    const buildQuoteContent = (q: any, svList: any[]) => {
+      const lines = [
+        '## Why Netgain?',
+        'We are a full-service digital growth agency specializing in high-converting digital experiences, data-driven marketing, and automation for modern businesses.',
+        '',
+        '## Service Breakdown',
+        ...svList.flatMap((s: any, i: number) => [
+          `### ${i+1}. ${s.name}`,
+          `**Category:** ${s.category}  |  **Timeline:** ${s.timeline}  |  **Model:** ${s.model === 'monthly' ? 'Monthly Recurring' : 'One-Time Fixed'}`,
+          '',
+          ...(s.deliverables?.map((d: any) => `- ${d}`) || []),
+          '',
+        ]),
+        '## Payment Terms',
+        `- One-time services: ${q.payment_terms_one_time || '50% advance to begin, 50% balance on final delivery'}`,
+        `- Monthly retainers: ${q.payment_terms_monthly || 'Full monthly fee payable in advance each cycle'}`,
+        '- Accepted: NEFT / IMPS / UPI / Cheque',
+        '',
+        q.notes ? `## Additional Notes\n${q.notes}` : '',
+        '',
+        '## Validity',
+        `This quotation is valid for **${q.validity_days !== undefined && q.validity_days !== null ? q.validity_days : 14} days** from the date of issue.`,
+      ]
+      return lines.join('\n')
+    }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+  const downloadInvoice = async (doc: VaultDoc, isPreview: boolean = false) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `Invoice_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
+  }
+
+  const downloadSow = async (doc: VaultDoc, isPreview: boolean = false) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `SOW_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
+  }
+
+  const downloadAgreement = async (doc: VaultDoc, isPreview: boolean = false) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `Agreement_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
+  }
+
+  const downloadPrd = async (doc: VaultDoc, isPreview: boolean = false) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `PRD_${raw.title}`, isPreview)
+  }
+
+  const downloadMarketing = async (doc: VaultDoc, isPreview: boolean = false) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `MarketingReport_${raw.client}_${extra.period}`, isPreview)
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    return await generateAndSavePdf(payload, `Quotation_${raw.doc_id || doc.docId}_${raw.client}`, isPreview)
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+  const handlePreviewLoad = async (doc: VaultDoc) => {
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      let url = null
+      if (doc.type === 'Quotation') url = await downloadQuotation(doc, true)
+      else if (doc.type === 'Invoice') url = await downloadInvoice(doc, true)
+      else if (doc.type === 'SOW') url = await downloadSow(doc, true)
+      else if (doc.type === 'Agreement') url = await downloadAgreement(doc, true)
+      else if (doc.type === 'PRD') url = await downloadPrd(doc, true)
+      else if (doc.type === 'Marketing') url = await downloadMarketing(doc, true)
+      
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (err) {
+      console.error('Preview error', err)
+      toast({ title: 'Preview Failed', description: 'Could not load document preview', variant: 'destructive' })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (previewDoc) {
+      handlePreviewLoad(previewDoc)
+    } else {
+      setPreviewBlobUrl(null)
+    }
+  }, [previewDoc])
+
+  const handleDownload = async (doc: VaultDoc) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+            {/* Modal Body / iframe Placeholder */}
+            <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center relative overflow-hidden">
+              {previewLoading ? (
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <RefreshCw className="h-8 w-8 animate-spin text-[#D4AF37]" />
+                  <p className="text-sm font-medium text-muted-foreground tracking-wide">Generating Document Preview...</p>
+                </div>
+              ) : previewBlobUrl ? (
+                <iframe src={`${previewBlobUrl}#view=FitH`} className="w-full h-full border-0 bg-white" />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <p className="text-sm font-semibold text-muted-foreground">Failed to load document preview</p>
+                </div>
+              )}
+            </div>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    if (doc.status === 'signed' || doc.status === 'completed' || raw.signed_at) {
+      const cacheBuster = raw.signed_at ? new Date(raw.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${doc.id}&type=SOW&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
+      a.download = `SOW_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
+    }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\vault\page.tsx ===
+    if (doc.status === 'signed' || doc.status === 'completed' || raw.signed_at) {
+      const cacheBuster = raw.signed_at ? new Date(raw.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${doc.id}&type=Agreement&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
+      a.download = `Agreement_${doc.docId || doc.id}_${doc.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
+    }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+  const [previewDoc, setPreviewDoc] = useState<Quote | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  // Subscriptions & Config
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+              <DropdownMenuItem onClick={() => setHistoryDoc(q)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(q)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(q)} disabled={downloadingId === q.id} className="cursor-pointer gap-2">
+                {downloadingId === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
+              </DropdownMenuItem>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+  async function buildAndDownloadPdf(data: Quote, svcIds: string[], disc: number, gst: number, title: string, docId: string, paymentScheduleId?: string, isPreview: boolean = false) {
+    const svcs = servicesData.filter(s => svcIds.includes(s.id))
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
+    a.download = `Quotation_${docId}_${data.client.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(q: Quote) {
+    setPreviewDoc(q)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await buildAndDownloadPdf(q, q.serviceIds, q.discountPct, q.gstPct, q.projectTitle, q.docId, (q as any).paymentScheduleId, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  async function handleDownload(q: Quote) {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Quotation - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
+      />
+    </div>
+  )
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+  const [previewDoc, setPreviewDoc] = useState<Quote | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const { toast } = useToast()
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Receipt, Eye } from 'lucide-react'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+import { UniversalTimeline } from '@/components/ui/version-timeline'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
+import { useUser } from '@/components/user-provider'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Invoice | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+              <DropdownMenuItem onClick={() => setHistoryDoc(inv)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(inv)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id} className="cursor-pointer gap-2">
+                {downloadingId === inv.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
+              </DropdownMenuItem>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+    docId: string, 
+    paymentScheduleId?: string,
+    paymentScheduleEntry?: string,
+    dueDate?: string,
+    isPreview: boolean = false
+  ) {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
+    a.download = `Invoice_${docId}_${inv.client.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(inv: Invoice) {
+    setPreviewDoc(inv)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await buildAndDownloadPdf(inv, inv.serviceIds, inv.discountType, inv.discountValue, inv.gstPct, inv.docId, inv.paymentScheduleId, inv.paymentScheduleEntry, inv.due, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  async function handleDownload(inv: Invoice) {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Invoice - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
+      />
+    </div>
+  )
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\sow\page.tsx ===
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\sow\page.tsx ===
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<SOW | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\sow\page.tsx ===
+              <DropdownMenuItem onClick={() => setHistoryDoc(s)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(s)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(s)} disabled={downloadingId === s.id} className="cursor-pointer gap-2">
+                {downloadingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
+              </DropdownMenuItem>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\sow\page.tsx ===
+  async function downloadSowPdf(sow: SOW, forceClientSide = false, isPreview = false) {
+    if ((sow.status === 'signed' || sow.status === 'completed' || sow.signed_at) && !forceClientSide) {
+      const cacheBuster = sow.signed_at ? new Date(sow.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${sow.id}&type=SOW&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
+      a.download = `SOW_${sow.docId}_${sow.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
+    }
+
+    const payload = buildPayload({ ...sow, value: String(sow.value), email: '', businessType: '', startDate: '', confidentiality: 'Both parties agree to maintain strict confidentiality of all shared information.', customTerms: sow.customTerms || '' }, sow.client, sow.project, sow.docId)
+    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
+    a.download = `SOW_${sow.docId}_${sow.client.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(sow: SOW) {
+    setPreviewDoc(sow)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await downloadSowPdf(sow, false, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\sow\page.tsx ===
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Scope of Work - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
+      />
+    </div>
+  )
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
+import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Agreement | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+              <DropdownMenuItem onClick={() => setHistoryDoc(a)} className="cursor-pointer gap-2">
+                <History className="h-4 w-4" /> History
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePreview(a)} className="cursor-pointer gap-2 text-blue-400 focus:text-blue-400">
+                <Eye className="h-4 w-4" /> Preview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload(a)} disabled={downloadingId === a.id} className="cursor-pointer gap-2">
+                {downloadingId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
+              </DropdownMenuItem>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+  async function downloadPdf(agr: Agreement, forceClientSide = false, isPreview = false) {
+    if ((agr.status === 'signed' || agr.status === 'completed' || agr.signed_at) && !forceClientSide) {
+      const cacheBuster = agr.signed_at ? new Date(agr.signed_at).getTime() : new Date().getTime()
+      const res = await fetch(`/api/document-pdf?id=${agr.id}&type=Agreement&v=${cacheBuster}`)
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      if (isPreview) return url
+      const a = document.createElement('a'); a.href = url
+      a.download = `Agreement_${agr.docId}_${agr.client.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      return url
+    }
+
+    let sub = Number(agr.value) || 0
+    let dAmt = 0
+    let tot = Number(agr.value) || 0
+    let pdfItems: any[] = []
+    let servicesStr = agr.services || ''
+
+    if (agr.items && agr.items.length > 0) {
+      sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+      const lineDisc = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+      dAmt = lineDisc
+      const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      tot = (sub - dAmt) + lineTax
+
+      servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
+      pdfItems = agr.items.map((item: any) => ({
+        serviceName: item.service_name,
+        finalPrice: item.total,
+        price: item.unit_price,
+        quantity: item.quantity,
+        category: 'Service',
+        pricing_model: 'fixed',
+        deliverables: item.description ? item.description.split('\n') : []
+      }))
+    }
+
+    const payload = {
+      docType: 'Agreement',
+      clientName: agr.contact || agr.client,
+      projectTitle: `${agr.type} — ${agr.client}`,
+      companyName: agr.client,
+      clientInfo: { business: agr.type, mobile: agr.phone },
+      content: buildContent({ ...agr, value: tot }, agr.client, tot, servicesStr),
+      items: pdfItems,
+      subtotal: sub,
+      discountTotal: dAmt,
+      grandTotal: tot,
+      docsSettings: {
+        customTerms: agr.customTerms || getAgreementTerms(agr, companyDocs)
+      }
+    }
+    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    if (isPreview) return url
+    const a = document.createElement('a'); a.href = url
+    a.download = `Agreement_${agr.docId}_${agr.client.replace(/\s+/g, '_')}.pdf`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return url
+  }
+
+  async function handlePreview(agr: Agreement) {
+    setPreviewDoc(agr)
+    setPreviewLoading(true)
+    setPreviewBlobUrl(null)
+    try {
+      const url = await downloadPdf(agr, false, true)
+      if (url) setPreviewBlobUrl(url as string)
+    } catch (e: any) {
+      toast({ title: 'Preview failed', description: e.message, variant: 'destructive' })
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal 
+        isOpen={!!previewDoc}
+        onClose={() => { setPreviewDoc(null); setPreviewBlobUrl(null); }}
+        onDownload={() => { if (previewDoc) handleDownload(previewDoc) }}
+        title={`Agreement - ${previewDoc?.client || ''}`}
+        subTitle={previewDoc?.docId || ''}
+        blobUrl={previewBlobUrl}
+        loading={previewLoading}
+      />
+    </div>
+  )
+}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\agreements\page.tsx ===
+import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye, HandshakeIcon } from 'lucide-react'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  
+  // Extra Workspace States
+  const [workspaceRisks, setWorkspaceRisks] = useState<any[]>([])
+  const [workspaceDependencies, setWorkspaceDependencies] = useState<any[]>([])
+  const [workspaceNotes, setWorkspaceNotes] = useState<any[]>([])
+  const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
+  
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+      const [reqs, files, links, reps, timeline, risks, deps, notes, approvals] = await Promise.all([
+        supabase.from('project_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_links').select('*').eq('project_id', projectId).order('published_at', { ascending: false }),
+        supabase.from('project_reports').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_risks').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_dependencies').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_notes').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_approvals').select('*').eq('project_id', projectId).order('requested_at', { ascending: false })
+      ])
+
+      const reqList = reqs.data || []
+      setWorkspaceRequirements(reqList)
+      setWorkspaceFiles(files.data || [])
+      setWorkspaceLinks(links.data || [])
+      setWorkspaceReports(reps.data || [])
+      setWorkspaceTimeline(timeline.data || [])
+      setWorkspaceRisks(risks.data || [])
+      setWorkspaceDependencies(deps.data || [])
+      setWorkspaceNotes(notes.data || [])
+      setWorkspaceApprovals(approvals.data || [])
+
+      if (reqList.length > 0) {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const handleLogRisk = async (projectId: string) => {
+    const titleEl = document.getElementById(`risk-title-${projectId}`) as HTMLInputElement
+    const impactEl = document.getElementById(`risk-impact-${projectId}`) as HTMLSelectElement | HTMLInputElement
+    const mitigationEl = document.getElementById(`risk-mitigation-${projectId}`) as HTMLTextAreaElement
+    
+    if (!titleEl?.value?.trim()) return
+
+    try {
+      const { error } = await supabase.from('project_risks').insert({
+        project_id: projectId,
+        title: titleEl.value.trim(),
+        impact: impactEl?.value || 'Medium',
+        mitigation: mitigationEl?.value?.trim() || '',
+        visibility: 'Internal Only'
+      })
+
+      if (error) throw error
+      
+      toast({ title: 'Risk logged successfully' })
+      logWorkspaceActivity(projectId, 'Risk Logged', `Risk: ${titleEl.value.trim()}`)
+      
+      titleEl.value = ''
+      if (mitigationEl) mitigationEl.value = ''
+      
+      fetchProjectWorkspaceData(projectId)
+    } catch (e: any) {
+      toast({ title: 'Error logging risk', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleLogDependency = async (projectId: string) => {
+    const titleEl = document.getElementById(`dep-title-${projectId}`) as HTMLInputElement
+    const notesEl = document.getElementById(`dep-notes-${projectId}`) as HTMLTextAreaElement
+    
+    if (!titleEl?.value?.trim()) return
+
+    try {
+      const { error } = await supabase.from('project_dependencies').insert({
+        project_id: projectId,
+        dependent_on: titleEl.value.trim(),
+        description: notesEl?.value?.trim() || '',
+        visibility: 'Internal Only'
+      })
+
+      if (error) throw error
+      
+      toast({ title: 'Dependency logged successfully' })
+      logWorkspaceActivity(projectId, 'Dependency Logged', `Dependency: ${titleEl.value.trim()}`)
+      
+      titleEl.value = ''
+      if (notesEl) notesEl.value = ''
+      
+      fetchProjectWorkspaceData(projectId)
+    } catch (e: any) {
+      toast({ title: 'Error logging dependency', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleAddNote = async (projectId: string) => {
+    const el = document.getElementById(`note-text-${projectId}`) as HTMLTextAreaElement
+    if (!el?.value?.trim()) return
+
+    try {
+      const { error } = await supabase.from('project_notes').insert({
+        project_id: projectId,
+        author: 'Admin Team',
+        content: el.value.trim(),
+        visibility: 'Internal Only'
+      })
+
+      if (error) throw error
+      
+      toast({ title: 'Note saved successfully' })
+      logWorkspaceActivity(projectId, 'Internal Note Added', el.value.trim())
+      
+      el.value = ''
+      
+      fetchProjectWorkspaceData(projectId)
+    } catch (e: any) {
+      toast({ title: 'Error saving note', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleRequestApproval = async (projectId: string, clientName: string) => {
+    const titleEl = document.getElementById(`approval-title-${projectId}`) as HTMLInputElement
+    const descEl = document.getElementById(`approval-desc-${projectId}`) as HTMLTextAreaElement
+    
+    if (!titleEl?.value?.trim()) return
+
+    try {
+      const { error } = await supabase.from('project_approvals').insert({
+        project_id: projectId,
+        title: titleEl.value.trim(),
+        description: descEl?.value?.trim() || ''
+      })
+
+      if (error) throw error
+      
+      toast({ title: 'Approval requested successfully' })
+      logWorkspaceActivity(projectId, 'Approval Requested', `Requested approval for: ${titleEl.value.trim()}`)
+      notifyClient(clientName, `Action Required: Project Approval`, `We have requested your approval for: ${titleEl.value.trim()}`)
+      
+      titleEl.value = ''
+      if (descEl) descEl.value = ''
+      
+      fetchProjectWorkspaceData(projectId)
+    } catch (e: any) {
+      toast({ title: 'Error requesting approval', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleUploadReport = async (projectId: string, clientName: string) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleLogRisk(detailProject.id)}>
+                          Log Risk
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Risk list */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Logged Risks</p>
+                    <div className="space-y-2">
+                      {workspaceRisks.map((risk: any) => (
+                        <div key={risk.id} className="flex gap-2.5 items-start text-xs border border-border p-3 rounded-lg bg-black/10">
+                          <span className={`font-bold shrink-0 mt-0.5 ${risk.impact === 'High' || risk.impact === 'critical' ? 'text-red-400' : risk.impact === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>▪</span>
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <p className="text-foreground/90 font-semibold">{risk.title}</p>
+                              <span className="text-[10px] text-muted-foreground">{new Date(risk.created_at).toLocaleDateString()}</span>
+                            </div>
+                            {risk.mitigation && <p className="text-[10px] text-muted-foreground mt-1">Mitigation: {risk.mitigation}</p>}
+                            <div className="flex gap-2 mt-2">
+                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Impact: {risk.impact}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Status: {risk.status}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {workspaceRisks.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No risks logged yet. Use the form above to log risks.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── INTERNAL NOTES TAB ── */}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleAddNote(detailProject.id)}>
+                          Save Note
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Notes List */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Saved Notes</p>
+                    <div className="space-y-2">
+                      {workspaceNotes.map((note: any) => (
+                        <div key={note.id} className="text-xs border border-border p-3 rounded-lg bg-black/10">
+                          <p className="text-foreground/90">{note.content}</p>
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-[9px] text-muted-foreground font-semibold">{note.author}</span>
+                            <span className="text-[9px] text-muted-foreground">{new Date(note.created_at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {workspaceNotes.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No internal notes yet. Add notes above.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+ 
+            {/* ── DEPENDENCIES TAB ── */}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                      <div className="flex justify-end">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleLogDependency(detailProject.id)}>
+                          Log Dependency
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Dependency list */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Active Dependencies</p>
+                    <div className="space-y-2">
+                      {workspaceDependencies.map((dep: any) => (
+                        <div key={dep.id} className="flex gap-2.5 items-start text-xs border border-border p-3 rounded-lg bg-black/10">
+                          <span className={`font-bold shrink-0 mt-0.5 text-blue-400`}>▪</span>
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <p className="text-foreground/90 font-semibold">{dep.dependent_on}</p>
+                              <span className="text-[10px] text-muted-foreground">{new Date(dep.created_at).toLocaleDateString()}</span>
+                            </div>
+                            {dep.description && <p className="text-[10px] text-muted-foreground mt-1">{dep.description}</p>}
+                            <div className="flex gap-2 mt-2">
+                              <span className="px-1.5 py-0.5 rounded bg-black/20 border border-border text-[9px] text-muted-foreground">Status: {dep.status}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {workspaceDependencies.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No active dependencies logged yet. Log dependencies above.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── APPROVALS TAB ── */}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                  <div className="flex justify-between items-center border-b border-border pb-2">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Approvals Queue</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Track sign-offs, SOW approvals, and budget adjustments</p>
+                    </div>
+                  </div>
+                  {/* Request form */}
+                  <Card className="bg-card border-border">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Approval Title</label>
+                          <Input
+                            placeholder="e.g. SOW Sign-off, Budget Increase..."
+                            className="h-8 text-xs bg-black/20 border-border"
+                            id={`approval-title-${detailProject.id}`}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground uppercase font-semibold">Description</label>
+                          <Input
+                            placeholder="Optional details..."
+                            className="h-8 text-xs bg-black/20 border-border"
+                            id={`approval-desc-${detailProject.id}`}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end mt-2">
+                        <Button variant="gold" size="sm" className="h-7 text-xs" onClick={() => handleRequestApproval(detailProject.id, detailProject.client)}>
+                          Request Approval
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <div className="space-y-3">
+                    {workspaceApprovals.map((approval: any) => (
+                      <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all">
+                        <CardContent className="p-3.5 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">{approval.title}</p>
+                            {approval.description && <p className="text-[10px] text-muted-foreground mt-1">{approval.description}</p>}
+                            <p className="text-[10px] text-muted-foreground mt-1">Requested at: <span className="text-muted-foreground font-medium">{new Date(approval.requested_at).toLocaleDateString()}</span></p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {approval.status === 'Approved' ? (
+                              <Badge className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
+                            ) : approval.status === 'Rejected' ? (
+                              <Badge className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
+                            ) : (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-[10px] border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                                  onClick={async () => {
+                                    await supabase.from('project_approvals').update({ status: 'Approved', approved_at: new Date().toISOString(), approved_by: 'Admin Team' }).eq('id', approval.id)
+                                    logWorkspaceActivity(detailProject.id, 'Approval Granted', `Approved: ${approval.title}`)
+                                    toast({ title: 'Approval Granted' })
+                                    fetchProjectWorkspaceData(detailProject.id)
+                                  }}
+                                >
+                                  Approve
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-7 text-[10px] border-red-500/20 text-red-400 hover:bg-red-500/10"
+                                  onClick={async () => {
+                                    await supabase.from('project_approvals').update({ status: 'Rejected' }).eq('id', approval.id)
+                                    logWorkspaceActivity(detailProject.id, 'Approval Declined', `Declined: ${approval.title}`)
+                                    toast({ title: 'Approval Declined' })
+                                    fetchProjectWorkspaceData(detailProject.id)
+                                  }}
+                                >
+                                  Decline
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    {workspaceApprovals.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic text-center py-4">No approvals requested yet.</p>
+                    )}
+                  </div>
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Create `add_project_workspace_extras.sql` with new tables (Risks, Dependencies, Notes, Approvals).
+- [x] Implement UI and Supabase hooks for new tabs in Admin Portal (`projects/page.tsx`).
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+  const [workspaceRequirements, setWorkspaceRequirements] = useState<any[]>([])
+  const [workspaceSubmissions, setWorkspaceSubmissions] = useState<any[]>([])
+  const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([])
+  const [workspaceLinks, setWorkspaceLinks] = useState<any[]>([])
+  const [workspaceReports, setWorkspaceReports] = useState<any[]>([])
+  const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  const [workspaceRisks, setWorkspaceRisks] = useState<any[]>([])
+  const [workspaceDependencies, setWorkspaceDependencies] = useState<any[]>([])
+  const [workspaceNotes, setWorkspaceNotes] = useState<any[]>([])
+  const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
+  const [workspaceMeetings, setWorkspaceMeetings] = useState<any[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      setWorkspaceRequirements(swrData.reqList)
+      setWorkspaceFiles(swrData.pFilesList)
+      setWorkspaceLinks(swrData.pLinksList)
+      setWorkspaceReports(swrData.pRepsList)
+      setWorkspaceTimeline(swrData.pTimeList)
+      setWorkspaceRisks(swrData.pRisksList)
+      setWorkspaceDependencies(swrData.pDepsList)
+      setWorkspaceNotes(swrData.pNotesList)
+      setWorkspaceApprovals(swrData.pApprovalsList)
+      setWorkspaceSubmissions(swrData.subsList)
+      setWorkspaceMeetings(swrData.meetsList)
+      setNotifications(swrData.notifications)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      let reqList: any[] = []
+      let pFilesList: any[] = []
+      let pLinksList: any[] = []
+      let pRepsList: any[] = []
+      let pTimeList: any[] = []
+      let pRisksList: any[] = []
+      let pDepsList: any[] = []
+      let pNotesList: any[] = []
+      let pApprovalsList: any[] = []
+      let subsList: any[] = []
+
+      if (matchedProjects.length > 0) {
+        const projIds = matchedProjects.map(p => p.id)
+        const [reqs, pFiles, pLinks, pReps, pTime, pRisks, pDeps, pNotes, pApprovals] = await Promise.all([
+          supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
+          supabase.from('project_files').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
+          supabase.from('project_links').select('*').in('project_id', projIds).order('published_at', { ascending: false }),
+          supabase.from('project_reports').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
+          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).eq('is_client_visible', true).order('created_at', { ascending: false }),
+          supabase.from('project_risks').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('created_at', { ascending: false }),
+          supabase.from('project_dependencies').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('created_at', { ascending: false }),
+          supabase.from('project_notes').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('created_at', { ascending: false }),
+          supabase.from('project_approvals').select('*').in('project_id', projIds).order('requested_at', { ascending: false })
+        ])
+
+        reqList = reqs.data || []
+        pFilesList = pFiles.data || []
+        pLinksList = pLinks.data || []
+        pRepsList = pReps.data || []
+        pTimeList = pTime.data || []
+        pRisksList = pRisks.data || []
+        pDepsList = pDeps.data || []
+        pNotesList = pNotes.data || []
+        pApprovalsList = pApprovals.data || []
+
+        if (reqList.length > 0) {
+          const reqIds = reqList.map((r: any) => r.id)
+          const { data: subs } = await supabase.from('project_requirement_submissions').select('*').in('requirement_id', reqIds)
+          subsList = subs || []
+        }
+      }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+        pFilesList,
+        pLinksList,
+        pRepsList,
+        pTimeList,
+        pRisksList,
+        pDepsList,
+        pNotesList,
+        pApprovalsList,
+        subsList,
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+    { id: 'workspace-reqs', label: 'Requirements', icon: FileSignature, badge: workspaceRequirements.filter(r => r.status === 'pending' || r.status === 'needs revision').length },
+    { id: 'workspace-tasks', label: 'Tasks & Progress', icon: CheckCircle2 },
+    { id: 'workspace-files', label: 'Files & Documents', icon: FolderOpen },
+    { id: 'workspace-reports', label: 'Reports', icon: TrendingUp },
+    { id: 'workspace-risks', label: 'Risks', icon: AlertTriangle, badge: workspaceRisks.length > 0 ? workspaceRisks.length : undefined },
+    { id: 'workspace-dependencies', label: 'Dependencies', icon: Link2 },
+    { id: 'workspace-notes', label: 'Notes', icon: FileText },
+    { id: 'workspace-approvals', label: 'Approvals', icon: UserCheck, badge: workspaceApprovals.filter(a => a.status === 'Pending').length > 0 ? workspaceApprovals.filter(a => a.status === 'Pending').length : undefined },
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+          </div>
+        )}
+
+        {/* Workspace: Risks Tab */}
+        {activeTab === 'workspace-risks' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Risks</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review active project risks and mitigation plans.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceRisks.filter(r => r.project_id === selectedProjectId && r.visibility === 'Published to Client').map((risk: any) => (
+                  <Card key={risk.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex gap-3 items-start">
+                      <AlertTriangle className={`h-4 w-4 mt-0.5 ${risk.impact === 'High' || risk.impact === 'critical' ? 'text-red-400' : risk.impact === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`} />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-foreground">{risk.title}</p>
+                          <span className="text-[10px] text-muted-foreground">{new Date(risk.created_at).toLocaleDateString()}</span>
+                        </div>
+                        {risk.mitigation && <p className="text-xs text-muted-foreground">Mitigation: {risk.mitigation}</p>}
+                        <div className="flex gap-2 mt-2 pt-2">
+                          <Badge variant="outline" className="text-[10px]">Impact: {risk.impact}</Badge>
+                          <Badge variant="outline" className="text-[10px]">Status: {risk.status}</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceRisks.filter(r => r.project_id === selectedProjectId && r.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No active risks.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Dependencies Tab */}
+        {activeTab === 'workspace-dependencies' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Dependencies</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review items currently blocking project progression.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceDependencies.filter(d => d.project_id === selectedProjectId && d.visibility === 'Published to Client').map((dep: any) => (
+                  <Card key={dep.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex gap-3 items-start">
+                      <Link2 className="h-4 w-4 mt-0.5 text-blue-400" />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-foreground">{dep.dependent_on}</p>
+                          <span className="text-[10px] text-muted-foreground">{new Date(dep.created_at).toLocaleDateString()}</span>
+                        </div>
+                        {dep.description && <p className="text-xs text-muted-foreground">{dep.description}</p>}
+                        <div className="mt-2 pt-2">
+                          <Badge variant="outline" className="text-[10px]">Status: {dep.status}</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceDependencies.filter(d => d.project_id === selectedProjectId && d.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No active dependencies.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Notes Tab */}
+        {activeTab === 'workspace-notes' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Notes</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review shared notes and meeting summaries.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceNotes.filter(n => n.project_id === selectedProjectId && n.visibility === 'Published to Client').map((note: any) => (
+                  <Card key={note.id} className="bg-card border-border">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-foreground/90">{note.content}</p>
+                      <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                        <span className="text-[10px] font-medium text-muted-foreground">{note.author}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(note.created_at).toLocaleString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceNotes.filter(n => n.project_id === selectedProjectId && n.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No shared notes available.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Approvals Tab */}
+        {activeTab === 'workspace-approvals' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Approvals Queue</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review and sign-off on deliverables, requirements, and milestones.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).map((approval: any) => (
+                  <Card key={approval.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex flex-col sm:flex-row justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-foreground">{approval.title}</h4>
+                        {approval.description && <p className="text-xs text-muted-foreground mt-1">{approval.description}</p>}
+                        <p className="text-[10px] text-muted-foreground mt-2">Requested: {new Date(approval.requested_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {approval.status === 'Approved' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
+                        ) : approval.status === 'Rejected' ? (
+                          <Badge className="bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
+                        ) : (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Approved', approved_at: new Date().toISOString(), approved_by: session?.name || 'Client' }).eq('id', approval.id)
+                                toast({ title: 'Approval Granted' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Rejected' }).eq('id', approval.id)
+                                toast({ title: 'Approval Declined' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Decline
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No pending approvals.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+        {/* Workspace: Risks Tab */}
+        {activeTab === 'workspace-risks' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Risks</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review active project risks and mitigation plans.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceRisks.filter(r => r.project_id === selectedProjectId && r.visibility === 'Published to Client').map((risk: any) => (
+                  <Card key={risk.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex gap-3 items-start">
+                      <AlertTriangle className={`h-4 w-4 mt-0.5 ${risk.impact === 'High' || risk.impact === 'critical' ? 'text-red-400' : risk.impact === 'Medium' ? 'text-yellow-400' : 'text-emerald-400'}`} />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-foreground">{risk.title}</p>
+                          <span className="text-[10px] text-muted-foreground">{new Date(risk.created_at).toLocaleDateString()}</span>
+                        </div>
+                        {risk.mitigation && <p className="text-xs text-muted-foreground">Mitigation: {risk.mitigation}</p>}
+                        <div className="flex gap-2 mt-2 pt-2">
+                          <Badge variant="outline" className="text-[10px]">Impact: {risk.impact}</Badge>
+                          <Badge variant="outline" className="text-[10px]">Status: {risk.status}</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceRisks.filter(r => r.project_id === selectedProjectId && r.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No active risks.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Dependencies Tab */}
+        {activeTab === 'workspace-dependencies' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Dependencies</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review items currently blocking project progression.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceDependencies.filter(d => d.project_id === selectedProjectId && d.visibility === 'Published to Client').map((dep: any) => (
+                  <Card key={dep.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex gap-3 items-start">
+                      <Link2 className="h-4 w-4 mt-0.5 text-blue-400" />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-foreground">{dep.dependent_on}</p>
+                          <span className="text-[10px] text-muted-foreground">{new Date(dep.created_at).toLocaleDateString()}</span>
+                        </div>
+                        {dep.description && <p className="text-xs text-muted-foreground">{dep.description}</p>}
+                        <div className="mt-2 pt-2">
+                          <Badge variant="outline" className="text-[10px]">Status: {dep.status}</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceDependencies.filter(d => d.project_id === selectedProjectId && d.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No active dependencies.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Notes Tab */}
+        {activeTab === 'workspace-notes' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Project Notes</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review shared notes and meeting summaries.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceNotes.filter(n => n.project_id === selectedProjectId && n.visibility === 'Published to Client').map((note: any) => (
+                  <Card key={note.id} className="bg-card border-border">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-foreground/90">{note.content}</p>
+                      <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                        <span className="text-[10px] font-medium text-muted-foreground">{note.author}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(note.created_at).toLocaleString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceNotes.filter(n => n.project_id === selectedProjectId && n.visibility === 'Published to Client').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No shared notes available.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Approvals Tab */}
+        {activeTab === 'workspace-approvals' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Approvals Queue</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review and sign-off on deliverables, requirements, and milestones.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).map((approval: any) => (
+                  <Card key={approval.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex flex-col sm:flex-row justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-foreground">{approval.title}</h4>
+                        {approval.description && <p className="text-xs text-muted-foreground mt-1">{approval.description}</p>}
+                        <p className="text-[10px] text-muted-foreground mt-2">Requested: {new Date(approval.requested_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {approval.status === 'Approved' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
+                        ) : approval.status === 'Rejected' ? (
+                          <Badge className="bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
+                        ) : (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Approved', approved_at: new Date().toISOString(), approved_by: session?.name || 'Client' }).eq('id', approval.id)
+                                toast({ title: 'Approval Granted' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Rejected' }).eq('id', approval.id)
+                                toast({ title: 'Approval Declined' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Decline
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No pending approvals.</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Meetings Tab */}
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_requirement_submissions' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_risks' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_dependencies' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_notes' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_approvals' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_risks' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_dependencies' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_notes' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_approvals' }, () => {
+        refreshClientData()
+      })
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Upgrade Client Portal (`client/dashboard/page.tsx`) with the Project Workspace modal and all 10 tabs.
+- [x] Ensure Client Portal respects `visibility` (Published to Client).
+- [x] Add real-time Supabase subscriptions to both Admin and Client portals for new tables.
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Verify build and type safety with `tsc --noEmit`.
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Create `supabase/add_timesheets_schema.sql` with `project_timesheets` table.
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const [workspaceDependencies, setWorkspaceDependencies] = useState<any[]>([])
+  const [workspaceNotes, setWorkspaceNotes] = useState<any[]>([])
+  const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
+  const [workspaceTimesheets, setWorkspaceTimesheets] = useState<any[]>([])
+  const [teamMembersList, setTeamMembersList] = useState<any[]>([])
+  
+  // Timesheet Form States
+  const [tsDate, setTsDate] = useState(new Date().toISOString().slice(0, 10))
+  const [tsHours, setTsHours] = useState('1.0')
+  const [tsTeamMemberId, setTsTeamMemberId] = useState('')
+  const [tsBillable, setTsBillable] = useState(true)
+  const [tsNotes, setTsNotes] = useState('')
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+      const [reqs, files, links, reps, timeline, risks, deps, notes, approvals, timesheets, teamMembers] = await Promise.all([
+        supabase.from('project_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_links').select('*').eq('project_id', projectId).order('published_at', { ascending: false }),
+        supabase.from('project_reports').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
+        supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_risks').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_dependencies').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_notes').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_approvals').select('*').eq('project_id', projectId).order('requested_at', { ascending: false }),
+        supabase.from('project_timesheets').select('*, team_member:team_members(name, role)').eq('project_id', projectId).order('date', { ascending: false }),
+        supabase.from('team_members').select('id, name, role').order('name')
+      ])
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+      setWorkspaceRisks(risks.data || [])
+      setWorkspaceDependencies(deps.data || [])
+      setWorkspaceNotes(notes.data || [])
+      setWorkspaceApprovals(approvals.data || [])
+      setWorkspaceTimesheets(timesheets.data || [])
+      setTeamMembersList(teamMembers.data || [])
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_approvals' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_timesheets' }, () => {
+        if (detailProject) fetchProjectWorkspaceData(detailProject.id)
+      })
+      .subscribe((status) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const handleLogTimesheet = async (projectId: string, clientName: string) => {
+    if (!tsTeamMemberId) {
+      toast({ title: 'Validation Error', description: 'Please select a team member.', variant: 'destructive' })
+      return
+    }
+    const hrs = parseFloat(tsHours)
+    if (isNaN(hrs) || hrs <= 0) {
+      toast({ title: 'Validation Error', description: 'Please enter valid hours.', variant: 'destructive' })
+      return
+    }
+
+    try {
+      const { error } = await supabase.from('project_timesheets').insert({
+        project_id: projectId,
+        team_member_id: tsTeamMemberId,
+        date: tsDate,
+        hours: hrs,
+        billable: tsBillable,
+        notes: tsNotes
+      })
+
+      if (error) throw error
+
+      toast({ title: 'Timesheet Logged', description: `Successfully logged ${hrs} hours.` })
+      setTsHours('1.0')
+      setTsNotes('')
+      setTsTeamMemberId('')
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Timesheet Logged', `Logged ${hrs} hours on ${tsDate}.`)
+    } catch (e: any) {
+      toast({ title: 'Error Logging Time', description: e.message, variant: 'destructive' })
+    }
+  }
+
+
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const handleLogTimesheet = async (projectId: string, clientName: string) => {
+    if (!tsTeamMemberId) {
+      toast({ title: 'Validation Error', description: 'Please select a team member.', variant: 'destructive' })
+      return
+    }
+    const hrs = parseFloat(tsHours)
+    if (isNaN(hrs) || hrs <= 0) {
+      toast({ title: 'Validation Error', description: 'Please enter valid hours.', variant: 'destructive' })
+      return
+    }
+
+    try {
+      const { error } = await supabase.from('project_timesheets').insert({
+        project_id: projectId,
+        team_member_id: tsTeamMemberId,
+        date: tsDate,
+        hours: hrs,
+        billable: tsBillable,
+        notes: tsNotes
+      })
+
+      if (error) throw error
+
+      toast({ title: 'Timesheet Logged', description: `Successfully logged ${hrs} hours.` })
+      setTsHours('1.0')
+      setTsNotes('')
+      setTsTeamMemberId('')
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Timesheet Logged', `Logged ${hrs} hours on ${tsDate}.`)
+    } catch (e: any) {
+      toast({ title: 'Error Logging Time', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleLogRisk = async (projectId: string) => {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                  {/* Time Tracking Panel */}
+                  <div className="mt-6 border-t border-border pt-5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Time Tracking & Timesheets</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="bg-card border-border">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
+                          <p className="text-xl font-bold text-foreground">
+                            {workspaceTimesheets.reduce((acc, ts) => acc + Number(ts.hours), 0).toFixed(1)} hrs
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">Across all team members</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card border-border">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Burn Rate</p>
+                          <p className="text-xl font-bold text-amber-400">
+                            {detailProject.budget > 0 
+                              ? ((workspaceTimesheets.filter(ts => ts.billable).reduce((acc, ts) => acc + (Number(ts.hours) * 1250), 0) / detailProject.budget) * 100).toFixed(1)
+                              : 0}%
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">Budget utilisation</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card border-border">
+                        <CardContent className="p-3.5 space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase">Billable Amount</p>
+                          <p className="text-xl font-bold text-emerald-400">
+                            {formatCurrency(workspaceTimesheets.filter(ts => ts.billable).reduce((acc, ts) => acc + (Number(ts.hours) * 1250), 0))}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">Based on standard ₹1,250/hr rate</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="mt-4 bg-card border border-border rounded-lg p-4 space-y-4">
+                      <div className="flex justify-between items-center pb-2 border-b border-border">
+                        <span className="text-sm font-semibold text-foreground">Log Time Entry</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                        <div className="space-y-1 md:col-span-1">
+                          <Label className="text-[10px]">Date</Label>
+                          <Input type="date" className="h-8 text-xs bg-black/20" value={tsDate} onChange={e => setTsDate(e.target.value)} />
+                        </div>
+                        <div className="space-y-1 md:col-span-1">
+                          <Label className="text-[10px]">Team Member</Label>
+                          <Select value={tsTeamMemberId} onValueChange={setTsTeamMemberId}>
+                            <SelectTrigger className="h-8 text-xs bg-black/20"><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent>
+                              {teamMembersList.map(tm => (
+                                <SelectItem key={tm.id} value={tm.id}>{tm.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1 md:col-span-1">
+                          <Label className="text-[10px]">Hours</Label>
+                          <Input type="number" step="0.5" className="h-8 text-xs bg-black/20" value={tsHours} onChange={e => setTsHours(e.target.value)} />
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <Label className="text-[10px]">Notes / Task Description</Label>
+                          <Input className="h-8 text-xs bg-black/20" placeholder="What did you work on?" value={tsNotes} onChange={e => setTsNotes(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center mt-2 pt-3 border-t border-border">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={tsBillable} onChange={e => setTsBillable(e.target.checked)} className="rounded border-gray-300 text-gold focus:ring-gold accent-gold" />
+                          <span className="text-xs text-muted-foreground">Billable Hours</span>
+                        </label>
+                        <Button size="sm" className="h-8 text-xs font-semibold px-4" onClick={() => handleLogTimesheet(detailProject.id, detailProject.client)}>
+                          Save Entry
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between items-center px-1">
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Entries</h4>
+                        <span className="text-[10px] text-muted-foreground">{workspaceTimesheets.length} total entries</span>
+                      </div>
+                      {workspaceTimesheets.length > 0 ? (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                          {workspaceTimesheets.map((ts: any) => (
+                            <div key={ts.id} className="bg-black/10 border border-border p-3 rounded-lg flex justify-between items-center group hover:bg-black/20 transition-colors">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                  {ts.team_member?.name || 'Unknown'} 
+                                  {ts.billable && <Badge variant="outline" className="text-[9px] border-emerald-500/30 text-emerald-400 bg-emerald-500/5 py-0 px-1.5">Billable</Badge>}
+                                </span>
+                                <span className="text-xs text-muted-foreground mt-0.5">{ts.notes || 'No notes provided'}</span>
+                              </div>
+                              <div className="flex flex-col items-end text-right">
+                                <span className="text-sm font-bold text-foreground">{Number(ts.hours).toFixed(1)} hrs</span>
+                                <span className="text-[10px] text-muted-foreground">{new Date(ts.date).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground text-xs border border-dashed border-border rounded-xl bg-card/10">
+                          No timesheet entries logged yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Update `app/(dashboard)/projects/page.tsx` with timesheet state and fetch handlers.
+- [x] Add Supabase real-time subscription for `project_timesheets`.
+- [x] Calculate total Logged Hours, Burn Rate, and Billable Amount dynamically.
+- [x] Replace "Mock Timesheet Schema" with interactive DataTable.
+- [x] Create "Add Entry" dialog for logging new timesheet records.
+
+=== TARGET FILE: C:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Verify build and type safety with `tsc --noEmit`.
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\supabase\add_timesheets_schema.sql ===
+    project_id TEXT REFERENCES public.projects(id) ON DELETE CASCADE,
+    team_member_id TEXT REFERENCES public.team_members(id) ON DELETE SET NULL,
+    date DATE NOT NULL,
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+  const handleCustomSubtotalChange = (val: number) => {
+    let newItems = form.items || []
+    if (newItems.length > 0 && hasRange && totalMaxPrice > totalMinPrice) {
+      const ratio = (val - totalMinPrice) / (totalMaxPrice - totalMinPrice)
+      newItems = newItems.map((item: any) => {
+        const svc = servicesData.find(s => s.id === item.service_id)
+        if (svc) {
+          const minP = svc.priceMin !== undefined ? svc.priceMin : svc.price
+          const maxP = svc.priceMax !== undefined ? svc.priceMax : svc.price
+          const range = maxP - minP
+          const scaledPrice = Math.round(minP + ratio * range)
+          return { ...item, unit_price: scaledPrice, total: scaledPrice * (item.quantity || 1) }
+        }
+        return item
+      })
+    }
+    setForm({ ...form, customSubtotal: val, items: newItems })
+  }
+
+  const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
+  const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
+
+  const subtotal = form.items && form.items.length > 0
+    ? (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : lineItemsSubtotal) + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)
+    : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0))
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                          value={form.customSubtotal ?? computedSubStandard} 
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
+                          className="w-full accent-gold bg-muted/30" 
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            value={form.customSubtotal ?? computedSubStandard} 
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                          value={form.customSubtotal ?? computedSubStandard} 
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
+                          className="w-full accent-gold bg-muted/30" 
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
+                          className="w-full accent-gold bg-muted/30" 
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                            onChange={e => {
+                              const val = Number(e.target.value)
+                              handleCustomSubtotalChange(val)
+                            }}
+                          />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                          onChange={e => handleCustomSubtotalChange(Number(e.target.value))}
+                          className="w-full accent-gold bg-muted/30" 
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+  const handleCustomSubtotalChange = (val: number) => {
+    let newItems = form.items || []
+    if (newItems.length > 0) {
+      const currentTotal = newItems.reduce((sum: number, item: any) => sum + (item.unit_price * (item.quantity || 1)), 0)
+      if (currentTotal > 0) {
+        const ratio = val / currentTotal
+        newItems = newItems.map((item: any) => ({
+          ...item,
+          unit_price: Math.round(item.unit_price * ratio),
+          total: Math.round(item.unit_price * ratio) * (item.quantity || 1)
+        }))
+      }
+    }
+    setForm({ ...form, customSubtotal: val, items: newItems })
+  }
+
+  const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
+  const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
+
+  const subtotal = form.items && form.items.length > 0
+    ? (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : lineItemsSubtotal)
+    : (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)))
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+                onChange={e => {
+                  const val = Number(e.target.value)
+                  handleCustomSubtotalChange(val)
+                }}
+              />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\meetings\page.tsx ===
+      {/* Header section */}
+      <PageHeader
+        title="Meetings & Communications"
+        description="Centralize your client meetings, sync Google Calendar appointments, and manage multi-channel follow-ups."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Meetings' }
+        ]}
+        primaryAction={{
+          label: syncing ? 'Syncing...' : 'Sync Calendar',
+          onClick: handleSyncGoogle,
+          icon: RefreshCw,
+          disabled: syncing || loading
+        }}
+        secondaryActions={
+          <Button variant="outline" asChild className="border-gold/30 text-gold hover:bg-gold/10">
+            <a href={process.env.NEXT_PUBLIC_CAL_BOOKING_URL || '#'} target={process.env.NEXT_PUBLIC_CAL_BOOKING_URL ? "_blank" : "_self"} rel="noopener noreferrer">
+              <Calendar className="mr-2 h-4 w-4" />
+              Book a Meeting
+            </a>
+          </Button>
+        }
+      />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\meetings\page.tsx ===
+  const [bookingUrl, setBookingUrl] = useState<string>('')
+
+  const fetchMeetings = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('meetings')
+        .select('*')
+        .order('meeting_date', { ascending: false })
+        .order('meeting_time', { ascending: false })
+
+      if (error) throw error
+      setMeetings(data || [])
+
+      const { data: settingsData } = await supabase.from('company_settings').select('settings').single()
+      if (settingsData?.settings?.company?.calBookingUrl) {
+        setBookingUrl(settingsData.settings.company.calBookingUrl)
+      } else {
+        setBookingUrl(process.env.NEXT_PUBLIC_CAL_BOOKING_URL || '')
+      }
+    } catch (err: any) {
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\meetings\page.tsx ===
+        secondaryActions={
+          bookingUrl ? (
+            <Button variant="outline" asChild className="border-gold/30 text-gold hover:bg-gold/10">
+              <a href={bookingUrl} target="_blank" rel="noopener noreferrer">
+                <Calendar className="mr-2 h-4 w-4" />
+                Book a Meeting
+              </a>
+            </Button>
+          ) : null
+        }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue || ''} placeholder="0" onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\invoices\page.tsx ===
+                  <div className="space-y-1"><Label>{form.discountType === 'percentage' ? 'Discount (%)' : 'Discount Amount'}</Label><Input type="number" min="0" max={form.discountType === 'percentage' ? "100" : undefined} value={form.discountValue || ''} placeholder="0" onChange={e => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                  <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\documents\quotations\page.tsx ===
+          <div className="space-y-1"><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={form.discountPct || ''} placeholder="0" onChange={e => setForm({ ...form, discountPct: Number(e.target.value) })} /></div>
+          <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                            <Input type="number" value={editedBudget || ''} placeholder="0" onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+                            <Input type="number" value={editedSpent || ''} placeholder="0" onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\settings\page.tsx ===
+                            <Input type="number" className="h-8 text-right" value={pt.pct || ''} placeholder="0" onChange={e => {
+                              const newSchedules = [...docs.paymentSchedules];
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\campaign-strategy\page.tsx ===
+                            <Input type="number" value={editedBudget || ''} placeholder="0" onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\campaign-strategy\page.tsx ===
+                            <Input type="number" value={editedSpent || ''} placeholder="0" onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\team\page.tsx ===
+const MODULES = ['crm', 'services', 'documents', 'projects', 'prd', 'marketing', 'finance', 'meetings', 'communications', 'team', 'settings', 'self_assign']
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\team\page.tsx ===
+  team: 'Team Management',
+  settings: 'Portal Settings',
+  self_assign: 'Self Assign Projects & Tasks'
+}
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Create `supabase/add_assignees.sql` migration file and run it
+- [x] Update `app/(dashboard)/team/page.tsx` with `self_assign` module and labels
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+    { id: 'workspace-reports', label: 'Reports', icon: TrendingUp },
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+  const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+        const [reqs, pFiles, pLinks, pReps, pTime, pApprovals] = await Promise.all([
+          supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
+          supabase.from('project_files').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
+          supabase.from('project_links').select('*').in('project_id', projIds).order('published_at', { ascending: false }),
+          supabase.from('project_reports').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
+          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).eq('is_client_visible', true).order('created_at', { ascending: false }),
+          supabase.from('project_approvals').select('*').in('project_id', projIds).order('requested_at', { ascending: false })
+        ])
+
+        reqList = reqs.data || []
+        pFilesList = pFiles.data || []
+        pLinksList = pLinks.data || []
+        pRepsList = pReps.data || []
+        pTimeList = pTime.data || []
+        pApprovalsList = pApprovals.data || []
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+        pRepsList,
+        pTimeList,
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      setWorkspaceTimeline(swrData.pTimeList)
+      setWorkspaceApprovals(swrData.pApprovalsList)
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\client\dashboard\page.tsx ===
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        refreshClientData()
+      })
+
+=== TARGET FILE: c:\Users\heman\.gemini\antigravity-ide\brain\4ee5602f-8f0f-4781-a9a8-811fff27c166\task.md ===
+- [x] Update `app/client/dashboard/page.tsx` to remove risks, dependencies, and notes tabs and queries
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+          if (settings?.docs?.projectTypes) {
+            setProjectTypes(settings.docs.projectTypes)
+          }
+
+          // Fetch team members globally
+          const { data: teamMembers } = await supabase.from('team_members').select('id, name, role').order('name')
+          if (teamMembers) setTeamMembersList(teamMembers)
+
+        } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+          if (settings?.docs?.projectTypes) {
+            setProjectTypes(settings.docs.projectTypes)
+          }
+
+          // Fetch team members globally
+          const { data: teamMembers } = await supabase.from('team_members').select('id, name, role').order('name')
+          if (teamMembers) setTeamMembersList(teamMembers)
+
+        } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { DataTable } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/ui/skeletons'
+import { logSystemActivity } from '@/lib/activity-helper'
+import { useUser } from '@/components/user-provider'
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const { toast } = useToast()
+  const [generating, setGenerating] = useState(false)
+  const { user } = useUser()
+  
+  const [newRiskAssignee, setNewRiskAssignee] = useState('')
+  const [newDepAssignee, setNewDepAssignee] = useState('')
+  const [newNoteAssignee, setNewNoteAssignee] = useState('')
+  const [quickAssigneeId, setQuickAssigneeId] = useState('')
+
+  const canSelfAssign = user?.permissions?.includes('all') || user?.permissions?.includes('self_assign')
+
+=== TARGET FILE: c:\Users\heman\Downloads\Netgain Operating Portal\netgain-portal\app\(dashboard)\projects\page.tsx ===
+          if (settings?.docs?.projectTypes) {
+            setProjectTypes(settings.docs.projectTypes)
+          }
+
+          // Fetch team members globally
+          const { data: teamMembers } = await supabase.from('team_members').select('id, name, role').order('name')
+          if (teamMembers) setTeamMembersList(teamMembers)
+
+        } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
+

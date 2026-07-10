@@ -937,11 +937,11 @@ export default function CampaignStrategyPage() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Budget (₹)</Label>
-                            <Input type="number" value={editedBudget} onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+                            <Input type="number" value={editedBudget || ''} placeholder="0" onChange={e => setEditedBudget(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Spent (₹)</Label>
-                            <Input type="number" value={editedSpent} onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
+                            <Input type="number" value={editedSpent || ''} placeholder="0" onChange={e => setEditedSpent(Number(e.target.value))} className="h-7 text-xs bg-muted/30" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px]">Timeline (e.g. 8 Weeks)</Label>

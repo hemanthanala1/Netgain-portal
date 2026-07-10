@@ -628,7 +628,7 @@ function SettingsPageContent() {
                             setDocs({ ...docs, paymentSchedules: newSchedules });
                           }} placeholder="e.g. Advance to begin" />
                           <div className="flex items-center gap-1 shrink-0 w-24">
-                            <Input type="number" className="h-8 text-right" value={pt.pct} onChange={e => {
+                            <Input type="number" className="h-8 text-right" value={pt.pct || ''} placeholder="0" onChange={e => {
                               const newSchedules = [...docs.paymentSchedules];
                               newSchedules[sIdx].points[pIdx].pct = Number(e.target.value);
                               setDocs({ ...docs, paymentSchedules: newSchedules });

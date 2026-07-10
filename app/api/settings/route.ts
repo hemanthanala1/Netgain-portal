@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     if (supabase) {
       const { data, error } = await supabase
         .from('company_settings')
-        .select('company, updated_at')
+        .select('company, payment, updated_at')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -108,6 +108,10 @@ export async function GET(request: NextRequest) {
       if (data?.company) {
         return NextResponse.json({
           company: data.company,
+          payment: {
+            razorpayEnabled: data.payment?.razorpayEnabled || false,
+            razorpayKeyId: data.payment?.razorpayKeyId || ''
+          },
           updatedAt: data.updated_at
         })
       }

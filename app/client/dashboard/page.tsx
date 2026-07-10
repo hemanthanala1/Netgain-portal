@@ -107,6 +107,7 @@ export default function ClientDashboardPage() {
   const [workspaceLinks, setWorkspaceLinks] = useState<any[]>([])
   const [workspaceReports, setWorkspaceReports] = useState<any[]>([])
   const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
   const [workspaceMeetings, setWorkspaceMeetings] = useState<any[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
@@ -512,16 +513,21 @@ export default function ClientDashboardPage() {
       let pLinksList: any[] = []
       let pRepsList: any[] = []
       let pTimeList: any[] = []
+      let pRisksList: any[] = []
+      let pDepsList: any[] = []
+      let pNotesList: any[] = []
+      let pApprovalsList: any[] = []
       let subsList: any[] = []
 
       if (matchedProjects.length > 0) {
         const projIds = matchedProjects.map(p => p.id)
-        const [reqs, pFiles, pLinks, pReps, pTime] = await Promise.all([
+        const [reqs, pFiles, pLinks, pReps, pTime, pApprovals] = await Promise.all([
           supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
-          supabase.from('project_files').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
+          supabase.from('project_files').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
           supabase.from('project_links').select('*').in('project_id', projIds).order('published_at', { ascending: false }),
-          supabase.from('project_reports').select('*').in('project_id', projIds).order('uploaded_at', { ascending: false }),
-          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).order('created_at', { ascending: false })
+          supabase.from('project_reports').select('*').in('project_id', projIds).eq('visibility', 'Published to Client').order('uploaded_at', { ascending: false }),
+          supabase.from('project_activity_timeline').select('*').in('project_id', projIds).eq('is_client_visible', true).order('created_at', { ascending: false }),
+          supabase.from('project_approvals').select('*').in('project_id', projIds).order('requested_at', { ascending: false })
         ])
 
         reqList = reqs.data || []
@@ -529,6 +535,7 @@ export default function ClientDashboardPage() {
         pLinksList = pLinks.data || []
         pRepsList = pReps.data || []
         pTimeList = pTime.data || []
+        pApprovalsList = pApprovals.data || []
 
         if (reqList.length > 0) {
           const reqIds = reqList.map((r: any) => r.id)
@@ -550,6 +557,7 @@ export default function ClientDashboardPage() {
         pLinksList,
         pRepsList,
         pTimeList,
+        pApprovalsList,
         subsList,
         meetsList: meets || [],
         notifications: notifRes.data || []
@@ -576,6 +584,7 @@ export default function ClientDashboardPage() {
       setWorkspaceLinks(swrData.pLinksList)
       setWorkspaceReports(swrData.pRepsList)
       setWorkspaceTimeline(swrData.pTimeList)
+      setWorkspaceApprovals(swrData.pApprovalsList)
       setWorkspaceSubmissions(swrData.subsList)
       setWorkspaceMeetings(swrData.meetsList)
       setNotifications(swrData.notifications)
@@ -634,6 +643,9 @@ export default function ClientDashboardPage() {
         refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline' }, () => {
+        refreshClientData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_approvals' }, () => {
         refreshClientData()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => {
@@ -1377,6 +1389,7 @@ export default function ClientDashboardPage() {
     { id: 'workspace-tasks', label: 'Tasks & Progress', icon: CheckCircle2 },
     { id: 'workspace-files', label: 'Files & Documents', icon: FolderOpen },
     { id: 'workspace-reports', label: 'Reports', icon: TrendingUp },
+    { id: 'workspace-approvals', label: 'Approvals', icon: UserCheck, badge: workspaceApprovals.filter(a => a.status === 'Pending').length > 0 ? workspaceApprovals.filter(a => a.status === 'Pending').length : undefined },
     { id: 'quotations', label: 'Quotations', icon: FileText, badge: docs.filter(d => d.type === 'Quotation').length },
     { id: 'sow', label: 'Scope of Work', icon: Briefcase, badge: docs.filter(d => d.type === 'SOW').length },
     { id: 'agreements', label: 'Agreements', icon: UserCheck, badge: docs.filter(d => d.type === 'Agreement').length },
@@ -2288,6 +2301,81 @@ export default function ClientDashboardPage() {
                 searchKeys={['title', 'report_type']}
                 exportFileName="performance_reports"
               />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+            )}
+          </div>
+        )}
+
+        {/* Workspace: Approvals Tab */}
+        {activeTab === 'workspace-approvals' && !selectedDoc && (
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Approvals Queue</h1>
+                <p className="text-xs text-muted-foreground mt-1">Review and sign-off on deliverables, requirements, and milestones.</p>
+              </div>
+              {projects.length > 1 && (
+                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {selectedProjectId ? (
+              <div className="space-y-3">
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).map((approval: any) => (
+                  <Card key={approval.id} className="bg-card border-border">
+                    <CardContent className="p-4 flex flex-col sm:flex-row justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-foreground">{approval.title}</h4>
+                        {approval.description && <p className="text-xs text-muted-foreground mt-1">{approval.description}</p>}
+                        <p className="text-[10px] text-muted-foreground mt-2">Requested: {new Date(approval.requested_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {approval.status === 'Approved' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
+                        ) : approval.status === 'Rejected' ? (
+                          <Badge className="bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
+                        ) : (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Approved', approved_at: new Date().toISOString(), approved_by: session?.name || 'Client' }).eq('id', approval.id)
+                                toast({ title: 'Approval Granted' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10"
+                              onClick={async () => {
+                                await supabase.from('project_approvals').update({ status: 'Rejected' }).eq('id', approval.id)
+                                toast({ title: 'Approval Declined' })
+                                fetchClientData(true)
+                              }}
+                            >
+                              Decline
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {workspaceApprovals.filter(a => a.project_id === selectedProjectId).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-xs border border-dashed border-border rounded-xl">No pending approvals.</div>
+                )}
+              </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
             )}

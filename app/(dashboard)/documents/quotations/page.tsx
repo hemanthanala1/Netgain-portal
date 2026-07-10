@@ -156,9 +156,10 @@ interface FormBodyProps {
   grandTotal: number
   toggleSvc: (id: string) => void
   paymentSchedules: any[]
+  handleCustomSubtotalChange: (val: number) => void
 }
 
-const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc, paymentSchedules }: FormBodyProps) => {
+const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, grandTotal, toggleSvc, paymentSchedules, handleCustomSubtotalChange }: FormBodyProps) => {
   const [serviceSearch, setServiceSearch] = useState('')
 
   return (
@@ -299,8 +300,8 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
       <div>
         <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Pricing & Totals</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-          <div className="space-y-1"><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={form.discountPct} onChange={e => setForm({ ...form, discountPct: Number(e.target.value) })} /></div>
-          <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct} onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
+          <div className="space-y-1"><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={form.discountPct || ''} placeholder="0" onChange={e => setForm({ ...form, discountPct: Number(e.target.value) })} /></div>
+          <div className="space-y-1"><Label>GST (%)</Label><Input type="number" min="0" max="28" value={form.gstPct || ''} placeholder="0" onChange={e => setForm({ ...form, gstPct: Number(e.target.value) })} /></div>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
           <div className="flex justify-between items-center">
@@ -312,7 +313,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
                 value={form.customSubtotal ?? subtotal} 
                 onChange={e => {
                   const val = Number(e.target.value)
-                  setForm({ ...form, customSubtotal: val })
+                  handleCustomSubtotalChange(val)
                 }}
               />
             </div>
@@ -758,12 +759,28 @@ function QuotationsPageContent() {
     return sum + s.price
   }, 0)
 
+  const handleCustomSubtotalChange = (val: number) => {
+    let newItems = form.items || []
+    if (newItems.length > 0) {
+      const currentTotal = newItems.reduce((sum: number, item: any) => sum + (item.unit_price * (item.quantity || 1)), 0)
+      if (currentTotal > 0) {
+        const ratio = val / currentTotal
+        newItems = newItems.map((item: any) => ({
+          ...item,
+          unit_price: Math.round(item.unit_price * ratio),
+          total: Math.round(item.unit_price * ratio) * (item.quantity || 1)
+        }))
+      }
+    }
+    setForm({ ...form, customSubtotal: val, items: newItems })
+  }
+
   const lineItemsSubtotal = form.items ? form.items.reduce((sum, item) => sum + (item.unit_price * (item.quantity || 1)), 0) : 0
   const lineItemsDiscount = form.items ? form.items.reduce((sum, item) => sum + item.discount, 0) : 0
 
   const subtotal = form.items && form.items.length > 0
-    ? lineItemsSubtotal
-    : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0))
+    ? (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : lineItemsSubtotal)
+    : (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)))
 
   const discAmt = form.items && form.items.length > 0
     ? lineItemsDiscount + Math.round((lineItemsSubtotal - lineItemsDiscount) * form.discountPct / 100)
@@ -1428,7 +1445,7 @@ function QuotationsPageContent() {
           </>
         }
       >
-        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
+        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} handleCustomSubtotalChange={handleCustomSubtotalChange} />
       </Drawer>
 
       {/* Edit Drawer */}
@@ -1447,7 +1464,7 @@ function QuotationsPageContent() {
           </>
         }
       >
-        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} />
+        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} handleCustomSubtotalChange={handleCustomSubtotalChange} />
       </Drawer>
 
       {/* Delete Confirmation */}
