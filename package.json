@@ -38,6 +38,7 @@
     "react-grid-layout": "^2.2.3",
     "react-resizable": "^4.0.2",
     "recharts": "^2.12.7",
+    "swr": "^2.4.2",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7"
   },

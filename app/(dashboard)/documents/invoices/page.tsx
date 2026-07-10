@@ -1421,7 +1421,7 @@ function InvoicesPageContent() {
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Monthly Ad Budget (INR) *</Label>
+                    <Label>Monthly Ad Budget (₹) *</Label>
                     <Input 
                       type="number" 
                       placeholder="e.g. 100000" 
@@ -1462,7 +1462,7 @@ function InvoicesPageContent() {
 
                 {form.adBudgetOverride ? (
                   <div className="space-y-1 max-w-sm">
-                    <Label>Custom Service Fee (INR)</Label>
+                    <Label>Custom Service Fee (₹)</Label>
                     <Input 
                       type="number" 
                       placeholder="e.g. 15000" 
@@ -1499,7 +1499,7 @@ function InvoicesPageContent() {
                     <Label>Discount Type</Label>
                     <div className="flex bg-muted/30 p-1 rounded-md border border-border">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (₹)</Button>
                     </div>
                   </div>
                 </div>
@@ -1733,7 +1733,7 @@ function InvoicesPageContent() {
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Monthly Ad Budget (INR) *</Label>
+                    <Label>Monthly Ad Budget (₹) *</Label>
                     <Input 
                       type="number" 
                       placeholder="e.g. 100000" 
@@ -1774,7 +1774,7 @@ function InvoicesPageContent() {
 
                 {form.adBudgetOverride ? (
                   <div className="space-y-1 max-w-sm">
-                    <Label>Custom Service Fee (INR)</Label>
+                    <Label>Custom Service Fee (₹)</Label>
                     <Input 
                       type="number" 
                       placeholder="e.g. 15000" 
@@ -1811,7 +1811,7 @@ function InvoicesPageContent() {
                     <Label>Discount Type</Label>
                     <div className="flex bg-muted/30 p-1 rounded-md border border-border">
                       <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'percentage' })} className={`flex-1 h-7 text-xs ${form.discountType === 'percentage' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Percentage (%)</Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (INR)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, discountType: 'fixed' })} className={`flex-1 h-7 text-xs ${form.discountType === 'fixed' ? 'bg-background shadow-sm text-gold' : 'text-muted-foreground'}`}>Fixed (₹)</Button>
                     </div>
                   </div>
                 </div>

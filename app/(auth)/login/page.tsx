@@ -52,7 +52,7 @@ export default function LoginPage() {
           document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${data.session.expires_in}`
           document.cookie = `nbos-session=active; path=/`
           toast({ title: 'Welcome back!', description: 'Logged in successfully.' })
-          router.replace('/dashboard')
+          window.location.href = '/dashboard'
         }
       } catch (err: any) {
         toast({ title: 'Auth Error', description: err.message || 'An error occurred during login', variant: 'destructive' })

@@ -23,6 +23,7 @@ import {
   Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink,
   Sun, Moon
 } from 'lucide-react'
+import useSWR from 'swr'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { GlobalSearch } from '@/components/ui/global-search'
@@ -419,9 +420,8 @@ export default function ClientDashboardPage() {
   }, [session, sessionReady, router])
 
   // ─── 3. Global document/project fetcher logic ───
-  const fetchClientData = async (isRefresh = false) => {
-    if (!session) return
-    if (!isRefresh) setLoading(true)
+  const fetchClientDataSWR = async () => {
+    if (!session) return null
     try {
       const clientEmail = (session.email || '').toLowerCase().trim()
       const clientCompany = (session.company || '').toLowerCase().trim()
@@ -449,13 +449,8 @@ export default function ClientDashboardPage() {
         session.clientId ? supabase.from('crm_clients').select('website, address, gst').eq('id', session.clientId).maybeSingle() : Promise.resolve({ data: null })
       ])
       
-      if (settingsRes && settingsRes.data) {
-        setCompanySettings(settingsRes.data)
-      }
-
-      if (clientRes && clientRes.data) {
-        setClientDetails(clientRes.data)
-      }
+      const compSettings = settingsRes && settingsRes.data ? settingsRes.data : null
+      const clDetails = clientRes && clientRes.data ? clientRes.data : null
 
       // Build token lookup map
       const tokenMap = new Map<string, string>()
@@ -486,8 +481,6 @@ export default function ClientDashboardPage() {
         })
       })
 
-      setDocs(combined)
-
       const matchedProjects: Project[] = (projRes.data || []).filter(p => {
         const docClient = (p.client || '').toLowerCase().trim()
         return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
@@ -513,12 +506,15 @@ export default function ClientDashboardPage() {
           sprintGoal: extra.sprintGoal || ''
         }
       })
-
-      setProjects(matchedProjects)
       
+      let reqList: any[] = []
+      let pFilesList: any[] = []
+      let pLinksList: any[] = []
+      let pRepsList: any[] = []
+      let pTimeList: any[] = []
+      let subsList: any[] = []
+
       if (matchedProjects.length > 0) {
-        setSelectedProjectId(prev => prev || matchedProjects[0].id)
-        
         const projIds = matchedProjects.map(p => p.id)
         const [reqs, pFiles, pLinks, pReps, pTime] = await Promise.all([
           supabase.from('project_requirements').select('*').in('project_id', projIds).order('created_at', { ascending: false }),
@@ -528,39 +524,74 @@ export default function ClientDashboardPage() {
           supabase.from('project_activity_timeline').select('*').in('project_id', projIds).order('created_at', { ascending: false })
         ])
 
-        const reqList = reqs.data || []
-        setWorkspaceRequirements(reqList)
-        setWorkspaceFiles(pFiles.data || [])
-        setWorkspaceLinks(pLinks.data || [])
-        setWorkspaceReports(pReps.data || [])
-        setWorkspaceTimeline(pTime.data || [])
+        reqList = reqs.data || []
+        pFilesList = pFiles.data || []
+        pLinksList = pLinks.data || []
+        pRepsList = pReps.data || []
+        pTimeList = pTime.data || []
 
         if (reqList.length > 0) {
           const reqIds = reqList.map((r: any) => r.id)
           const { data: subs } = await supabase.from('project_requirement_submissions').select('*').in('requirement_id', reqIds)
-          setWorkspaceSubmissions(subs || [])
-        } else {
-          setWorkspaceSubmissions([])
+          subsList = subs || []
         }
       }
 
       // Fetch client meetings
       const { data: meets } = await supabase.from('meetings').select('*').or(`client_email.eq."${clientEmail}",client_name.eq."${session.company}"`).order('meeting_date', { ascending: false })
-      setWorkspaceMeetings(meets || [])
-
-      if (notifRes.data) {
-        setNotifications(notifRes.data)
+      
+      return {
+        compSettings,
+        clDetails,
+        docs: combined,
+        projects: matchedProjects,
+        reqList,
+        pFilesList,
+        pLinksList,
+        pRepsList,
+        pTimeList,
+        subsList,
+        meetsList: meets || [],
+        notifications: notifRes.data || []
       }
     } catch (err) {
       console.error(err)
-    } finally {
-      setLoading(false)
+      return null
     }
   }
 
+  const { data: swrData, mutate: refreshClientData } = useSWR(session ? ['client_data', session.email] : null, fetchClientDataSWR, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30000,
+  })
+
   useEffect(() => {
-    if (session) fetchClientData()
-  }, [session])
+    if (swrData) {
+      if (swrData.compSettings) setCompanySettings(swrData.compSettings)
+      if (swrData.clDetails) setClientDetails(swrData.clDetails)
+      setDocs(swrData.docs)
+      setProjects(swrData.projects)
+      setWorkspaceRequirements(swrData.reqList)
+      setWorkspaceFiles(swrData.pFilesList)
+      setWorkspaceLinks(swrData.pLinksList)
+      setWorkspaceReports(swrData.pRepsList)
+      setWorkspaceTimeline(swrData.pTimeList)
+      setWorkspaceSubmissions(swrData.subsList)
+      setWorkspaceMeetings(swrData.meetsList)
+      setNotifications(swrData.notifications)
+      
+      if (swrData.projects.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(swrData.projects[0].id)
+      }
+      setLoading(false)
+    }
+  }, [swrData])
+
+  const fetchClientData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    await refreshClientData()
+    if (isRefresh) setRefreshing(false)
+  }
 
   // Keep selectedDoc in sync with the latest data from docs (fixes status updates not showing immediately)
   useEffect(() => {
@@ -1436,7 +1467,7 @@ export default function ClientDashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-transparent relative">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-transparent px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[hsl(var(--sidebar-border))] bg-background/95 backdrop-blur px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(true)}

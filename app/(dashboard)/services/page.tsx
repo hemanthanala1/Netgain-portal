@@ -643,7 +643,6 @@ export default function ServicesPage() {
                     {/* Price + payment type */}
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       <span className="text-sm font-bold text-gold flex items-center gap-1">
-                        <IndianRupee className="h-3.5 w-3.5" />
                         {formatCurrency(svc.basePrice)}{svc.pricing === 'monthly' ? '/mo' : ''}
                       </span>
                       <Badge className={`text-[10px] font-medium ${svc.pricing === 'monthly' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
@@ -719,11 +718,11 @@ export default function ServicesPage() {
         </Select>
       </div>
       <div className="space-y-1">
-        <Label>Base/Default Price (INR)</Label>
+        <Label>Base/Default Price (₹)</Label>
         <Input type="number" placeholder="39999" value={form.basePrice || ''} onChange={e => setForm({ ...form, basePrice: Number(e.target.value) })} disabled={submitting} />
       </div>
       <div className="space-y-1">
-        <Label>Quotation Max Price (INR)</Label>
+        <Label>Quotation Max Price (₹)</Label>
         <Input type="number" placeholder="45000" value={form.quotationPrice || ''} onChange={e => setForm({ ...form, quotationPrice: Number(e.target.value) })} disabled={submitting} />
       </div>
       <div className="space-y-1">
@@ -807,11 +806,11 @@ export default function ServicesPage() {
         </Select>
       </div>
       <div className="space-y-1">
-        <Label>Base/Default Price (INR)</Label>
+        <Label>Base/Default Price (₹)</Label>
         <Input type="number" placeholder="39999" value={form.basePrice || ''} onChange={e => setForm({ ...form, basePrice: Number(e.target.value) })} disabled={submitting} />
       </div>
       <div className="space-y-1">
-        <Label>Quotation Max Price (INR)</Label>
+        <Label>Quotation Max Price (₹)</Label>
         <Input type="number" placeholder="45000" value={form.quotationPrice || ''} onChange={e => setForm({ ...form, quotationPrice: Number(e.target.value) })} disabled={submitting} />
       </div>
       <div className="space-y-1">

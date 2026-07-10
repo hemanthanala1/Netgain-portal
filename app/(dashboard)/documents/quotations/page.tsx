@@ -224,7 +224,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label>Monthly Ad Budget (INR) *</Label>
+            <Label>Monthly Ad Budget (₹) *</Label>
             <Input 
               type="number" 
               placeholder="e.g. 100000" 
@@ -265,7 +265,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
 
         {form.adBudgetOverride ? (
           <div className="space-y-1 max-w-sm">
-            <Label>Custom Service Fee (INR)</Label>
+            <Label>Custom Service Fee (₹)</Label>
             <Input 
               type="number" 
               placeholder="e.g. 15000" 

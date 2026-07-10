@@ -19,12 +19,9 @@ export default function ClientLoginPage() {
     void router.prefetch('/client/dashboard')
   }, [router])
 
-  // Redirect if already logged in
+  // Clear any existing session when landing on login page
   useEffect(() => {
-    const session = localStorage.getItem('netgain_client_session')
-    if (session) {
-      router.push('/client/dashboard')
-    }
+    localStorage.removeItem('netgain_client_session')
   }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
