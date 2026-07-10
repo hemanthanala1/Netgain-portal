@@ -1763,8 +1763,27 @@ function VaultListContent() {
                 </div>
               </div>
               <div className="w-full h-full mt-12 bg-white rounded-sm overflow-hidden shadow-2xl relative">
-                <iframe src="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf#toolbar=0" className="w-full h-full" title="Document Preview" />
-                <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/60 text-white rounded text-[10px] font-mono tracking-wider backdrop-blur-sm">
+                <div className="w-full h-full flex flex-col items-center overflow-y-auto bg-muted/10 py-10 px-4 no-scrollbar">
+                  <div className="w-full max-w-3xl bg-white shadow-sm border border-black/10 aspect-[1/1.414] p-12 sm:p-20 flex flex-col">
+                    <div className="flex justify-between items-start mb-16">
+                      <div className="h-10 w-40 bg-muted/60 rounded" />
+                      <div className="h-10 w-10 bg-muted/40 rounded-full" />
+                    </div>
+                    <div className="h-6 w-2/3 bg-muted/80 rounded mb-6" />
+                    <div className="h-4 w-1/3 bg-muted/40 rounded mb-12" />
+                    <div className="space-y-5 flex-1">
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-11/12 bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-4/5 bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-full bg-muted/30 rounded" />
+                      <div className="h-3 w-10/12 bg-muted/30 rounded" />
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute top-4 right-4 px-3 py-1.5 bg-black/60 text-white rounded text-[10px] font-mono tracking-wider backdrop-blur-sm z-10">
                   SIMULATED PREVIEW
                 </div>
               </div>
