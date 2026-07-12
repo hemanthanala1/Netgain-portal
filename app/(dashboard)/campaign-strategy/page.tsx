@@ -736,7 +736,7 @@ export default function CampaignStrategyPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Strategies', value: campaignStrategies.length },
           { label: 'Active', value: campaignStrategies.filter(p => p.status === 'active').length },
@@ -770,7 +770,7 @@ export default function CampaignStrategyPage() {
                 <div className="flex justify-between text-xs"><span className="text-muted-foreground">Progress</span><span className="font-semibold">{p.progress}%</span></div>
                 <Progress value={p.progress} className="h-1.5" />
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-3">
                 <div className="flex items-center gap-1 text-muted-foreground"><DollarSign className="h-3 w-3 text-gold" /><span className="font-semibold text-foreground">{formatCurrency(p.budget)}</span></div>
                 <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />{p.timeline || 'Not set'}</div>
               </div>
@@ -899,7 +899,7 @@ export default function CampaignStrategyPage() {
             <TabsContent value="overview" className="mt-4 space-y-4">
               {detailProject && (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-3">
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-muted-foreground">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
@@ -1075,7 +1075,7 @@ export default function CampaignStrategyPage() {
                   {/* Registered Files List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">File Name</th>
@@ -1183,7 +1183,7 @@ export default function CampaignStrategyPage() {
                   {/* Reports List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Report Title</th>
@@ -1287,7 +1287,7 @@ export default function CampaignStrategyPage() {
                   {/* Links List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>

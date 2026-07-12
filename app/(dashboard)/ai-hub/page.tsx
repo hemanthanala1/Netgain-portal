@@ -119,7 +119,7 @@ export default function AIHubPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Skills', value: stats.skills, icon: Sparkles, color: 'text-amber-400' },
           { label: 'Prompts', value: stats.prompts, icon: BookOpen, color: 'text-violet-400' },
@@ -195,7 +195,7 @@ export default function AIHubPage() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">How It Works</h2>
         <Card className="ai-card ai-card-glow">
           <CardContent className="p-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {workflow.map((step, i) => (
                 <div key={step.step} className="relative text-center group">
                   <div className="flex flex-col items-center">

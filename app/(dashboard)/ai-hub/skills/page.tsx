@@ -406,7 +406,7 @@ export default function SkillsLibraryPage() {
                 </p>
 
                 {/* Meta */}
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-muted-foreground mb-4">
                   <div className="flex items-center gap-1"><Cpu className="h-3 w-3" />{skill.compatible_ai}</div>
                   <div className="flex items-center gap-1"><Tag className="h-3 w-3" />{skill.compatible_version}</div>
                   <div className="flex items-center gap-1"><Download className="h-3 w-3" />{skill.downloads} downloads</div>
@@ -458,7 +458,7 @@ export default function SkillsLibraryPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Skill Name *</Label><Input placeholder="e.g. Marketing Strategy Generator" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" placeholder="What does this skill do?" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Compatible AI</Label><Input value={form.compatible_ai} onChange={e => setForm({...form, compatible_ai: e.target.value})} /></div>
             </div>
@@ -486,7 +486,7 @@ export default function SkillsLibraryPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Skill Name *</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Category</Label><Select value={form.category} onValueChange={v => setForm({...form, category: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Compatible AI</Label><Input value={form.compatible_ai} onChange={e => setForm({...form, compatible_ai: e.target.value})} /></div>
             </div>
@@ -518,7 +518,7 @@ export default function SkillsLibraryPage() {
             {uploadedFiles.length > 0 && (
               <div className="border-t border-border pt-3 space-y-3">
                 <p className="text-xs font-semibold text-gold uppercase tracking-wide">New Version Details</p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label>New Version *</Label>
                     <Input value={newVersion} onChange={e => setNewVersion(e.target.value)} />

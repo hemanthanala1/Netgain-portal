@@ -1401,7 +1401,7 @@ function VaultListContent() {
                 {/* 1. Document Lifecycle Progress Tracker */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">Workflow Status</h3>
-                  <div className="grid grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-muted-foreground">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-muted-foreground">
                     {[
                       { l: 'Draft', active: ['draft', 'internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Reviewed', active: ['internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
@@ -1550,7 +1550,7 @@ function VaultListContent() {
                   ) : (
                     <div className="space-y-2.5">
                       <div className="flex gap-2 items-center bg-card border border-border rounded-xl p-3">
-                        <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           <div>
                             <label className="text-[10px] text-muted-foreground block mb-0.5">Version A</label>
                             <select
@@ -1687,7 +1687,7 @@ function VaultListContent() {
             </CardHeader>
             <CardContent className="pt-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="overflow-x-auto text-xs">
-                <table className="w-full text-left">
+                <table className="w-full text-left min-w-[700px]">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground text-[10px] uppercase font-bold font-mono">
                       <th className="py-2">Property</th>

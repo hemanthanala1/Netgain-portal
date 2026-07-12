@@ -509,7 +509,7 @@ export default function ServicesPage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { l: 'Total Services', v: svcs.length },
           { l: 'Active',         v: svcs.filter(s => s.status === 'active').length },

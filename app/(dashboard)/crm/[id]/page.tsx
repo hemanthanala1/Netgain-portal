@@ -977,7 +977,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No meetings scheduled.</CardContent></Card>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
+                  <table className="w-full text-sm border-collapse min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border text-left text-xs font-semibold text-muted-foreground uppercase">
                         <th className="py-2 px-3">Date</th>
@@ -1089,7 +1089,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <Card><CardContent className="p-4 text-sm text-muted-foreground text-center py-8">No uploaded files for this client.</CardContent></Card>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border-collapse">
+                  <table className="w-full text-sm text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border text-xs text-muted-foreground font-semibold uppercase">
                         <th className="py-2 px-3">File Name</th>
@@ -1454,7 +1454,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     {/* Quick Operations Actions */}
                     <div className="space-y-2">
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-gold">Actions</h4>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <a
                           href={`/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : pdfVersion}`}
                           download={`Document_${currentDoc.doc_id}.pdf`}

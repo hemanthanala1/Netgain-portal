@@ -208,7 +208,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         </div>
       </div>
       <div>
-        <LineItemsTable variant="detailed"
+        <LineItemsTable variant="full"
           items={form.items || []}
           onChange={(items) => {
             setForm({
@@ -1409,7 +1409,7 @@ function QuotationsPageContent() {
         }}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total', v: quotes.length }, { l: 'Draft', v: quotes.filter(q=>q.status==='draft').length }, { l: 'Sent', v: quotes.filter(q=>q.status==='sent').length }, { l: 'Approved', v: quotes.filter(q=>q.status==='approved').length }].map(s => (
           <Card key={s.l}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.l}</p><p className="text-2xl font-bold mt-1">{s.v}</p></CardContent></Card>
         ))}

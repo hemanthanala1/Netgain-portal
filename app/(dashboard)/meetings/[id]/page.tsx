@@ -398,15 +398,15 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3.5 text-sm">
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
                 <span className="text-muted-foreground text-xs">Email</span>
                 <span className="col-span-2 font-medium break-all">{meeting.client_email}</span>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
                 <span className="text-muted-foreground text-xs">Phone</span>
                 <span className="col-span-2 font-medium">{meeting.client_phone || 'Not provided'}</span>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
                 <span className="text-muted-foreground text-xs">Date</span>
                 <span className="col-span-2 font-medium flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
@@ -415,7 +415,7 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
                   })}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
                 <span className="text-muted-foreground text-xs">Time</span>
                 <span className="col-span-2 font-medium flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -423,7 +423,7 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
                 </span>
               </div>
               {meeting.timezone && (
-                <div className="grid grid-cols-3 gap-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
                   <span className="text-muted-foreground text-xs">Timezone</span>
                   <span className="col-span-2 text-xs text-muted-foreground font-medium">{meeting.timezone}</span>
                 </div>
@@ -507,7 +507,7 @@ export default function MeetingDetailsPage({ params }: { params: { id: string } 
             </CardHeader>
             <CardContent className="p-4">
               <Tabs defaultValue="email" onValueChange={handleTabChange}>
-                <TabsList className="grid grid-cols-3 h-8 w-full max-w-[300px] mb-4">
+                <TabsList className="grid grid-cols-1 md:grid-cols-3 h-8 w-full max-w-[300px] mb-4">
                   <TabsTrigger value="email" className="text-xs">Email</TabsTrigger>
                   <TabsTrigger value="whatsapp" className="text-xs">WhatsApp</TabsTrigger>
                   <TabsTrigger value="sms" className="text-xs">SMS</TabsTrigger>

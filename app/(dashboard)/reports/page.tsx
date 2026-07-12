@@ -224,7 +224,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <Tabs defaultValue="revenue" className="space-y-6">
-          <TabsList className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
+          <TabsList className="grid grid-cols-1 md:grid-cols-3 sm:grid-cols-5 md:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
             <TabsTrigger value="revenue" className="text-xs gap-1.5"><DollarSign className="h-3.5 w-3.5" />Revenue</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Sales</TabsTrigger>
             <TabsTrigger value="projects" className="text-xs gap-1.5"><Briefcase className="h-3.5 w-3.5" />Projects</TabsTrigger>
@@ -246,7 +246,7 @@ export default function ReportsPage() {
                 derived.monthlyRevenue.map(m => [m.month, m.revenue, m.invoices])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Revenue" value={formatCurrency(derived.totalRevenue)} />
               <KPICard title="Outstanding" value={formatCurrency(derived.outstandingRev)} />
               <KPICard title="Total Invoices" value={data.invoices.length} />
@@ -302,7 +302,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Doc ID</th>
@@ -343,7 +343,7 @@ export default function ReportsPage() {
                 data.clients.map((c: any) => [c.name, c.business, c.status, c.city || ''])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Leads" value={data.clients.length} />
               <KPICard title="Active Clients" value={data.clients.filter((c: any) => c.status === 'active').length} />
               <KPICard title="Won Deals" value={data.clients.filter((c: any) => c.status === 'won').length} />
@@ -402,7 +402,7 @@ export default function ReportsPage() {
                 data.projects.map((p: any) => [p.title, p.client, p.status, p.progress, p.budget, p.spent])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Active Projects" value={derived.activeProjects} />
               <KPICard title="Completed" value={derived.completedProjects} />
               <KPICard title="Total Budget" value={formatCurrency(derived.totalBudget)} />
@@ -449,7 +449,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Project</th>
@@ -499,7 +499,7 @@ export default function ReportsPage() {
                 [['Total', derived.totalRevenue, derived.totalExpenses, derived.totalSalaries, derived.netProfit]]
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Revenue" value={formatCurrency(derived.totalRevenue)} />
               <KPICard title="Total Expenses" value={formatCurrency(derived.totalExpenses)} />
               <KPICard title="Salary Cost" value={formatCurrency(derived.totalSalaries)} />
@@ -557,7 +557,7 @@ export default function ReportsPage() {
                 data.clients.map((c: any) => [c.name, c.business, c.type, c.status, c.city || '', c.gst || ''])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Clients" value={data.clients.length} />
               <KPICard title="Active" value={data.clients.filter((c: any) => c.status === 'active').length} />
               <KPICard title="Won" value={data.clients.filter((c: any) => c.status === 'won').length} />
@@ -569,7 +569,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Client</th>
@@ -610,7 +610,7 @@ export default function ReportsPage() {
                 data.tickets.map((t: any) => [t.title, t.client_id, t.status || 'open', t.priority || 'medium', formatDate(t.created_at)])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Tickets" value={data.tickets.length} />
               <KPICard title="Open" value={derived.openTickets} />
               <KPICard title="Resolved" value={derived.resolvedTickets} />
@@ -622,7 +622,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Title</th>
@@ -667,7 +667,7 @@ export default function ReportsPage() {
                 data.team.map((t: any) => [t.name, t.email, t.role, t.status, t.joined])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Members" value={data.team.length} />
               <KPICard title="Active Status" value={data.team.filter((t: any) => t.status === 'active').length} />
               <KPICard title="Average Salaries (Base)" value={formatCurrency(data.salaries.reduce((acc: number, curr: any) => acc + (Number(curr.base_salary) || 0), 0) / (data.salaries.length || 1))} />
@@ -679,7 +679,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Name</th>
@@ -722,7 +722,7 @@ export default function ReportsPage() {
                 (data.services || []).map((s: any) => [s.name, s.cat_id, s.pricing, s.base_price, s.status])
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Total Listed Services" value={(data.services || []).length} />
               <KPICard title="Active Services" value={(data.services || []).filter((s: any) => s.status === 'active').length} />
               <KPICard title="Average Base Price" value={formatCurrency((data.services || []).reduce((acc: number, curr: any) => acc + (Number(curr.base_price) || 0), 0) / ((data.services || []).length || 1))} />
@@ -734,7 +734,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr className="border-b border-border/60 text-muted-foreground">
                         <th className="py-2 px-3 text-left font-semibold">Service Name</th>
@@ -779,7 +779,7 @@ export default function ReportsPage() {
                 ]
               )}
             />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard title="Active Campaigns" value="3" />
               <KPICard title="Total Marketing Budget" value={formatCurrency(245000)} />
               <KPICard title="Average LAC" value={formatCurrency(344.05)} />

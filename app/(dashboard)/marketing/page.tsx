@@ -320,7 +320,7 @@ export default function MarketingIntelligencePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Reports', value: reports.length, icon: BarChart3, color: 'text-cyan-400' },
           { label: 'This Month', value: reports.filter(r => r.created >= new Date().toISOString().slice(0, 7)).length, icon: TrendingUp, color: 'text-emerald-400' },
@@ -493,7 +493,7 @@ export default function MarketingIntelligencePage() {
             </div>
           </DialogHeader>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-6">
+            <TabsList className="w-full grid grid-cols-1 md:grid-cols-4 sm:grid-cols-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="prompt">Prompt</TabsTrigger>
               <TabsTrigger value="documents">Docs</TabsTrigger>
@@ -502,7 +502,7 @@ export default function MarketingIntelligencePage() {
               <TabsTrigger value="versions" className="hidden sm:block">Versions</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Client</p><p className="text-sm font-bold">{detailReport?.client}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Period</p><p className="text-sm font-bold">{detailReport?.period}</p></CardContent></Card>
               </div>

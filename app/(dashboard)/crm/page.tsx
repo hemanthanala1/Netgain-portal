@@ -463,7 +463,7 @@ function CRMPageContent() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Clients', value: stats.total, icon: Users, color: 'text-blue-400' },
           { label: 'Active Clients', value: stats.active, icon: TrendingUp, color: 'text-emerald-400' },

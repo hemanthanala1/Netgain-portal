@@ -240,7 +240,7 @@ export default function BusinessTypesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-muted-foreground">
+              <table className="w-full text-sm text-left text-muted-foreground min-w-[700px]">
                 <thead className="bg-[#091512] text-xs font-semibold uppercase text-gold border-b border-border">
                   <tr>
                     <th className="py-3 px-4">Name</th>

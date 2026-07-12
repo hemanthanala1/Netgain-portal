@@ -1015,7 +1015,7 @@ function CampaignStrategyPageContent() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Projects', value: projects.length },
           { label: 'Active', value: projects.filter(p => p.status === 'active').length },
@@ -1167,7 +1167,7 @@ function CampaignStrategyPageContent() {
             <TabsContent value="overview" className="mt-4 space-y-4">
               {detailProject && (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-3">
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Budget</p><p className="text-sm font-bold text-gold">{formatCurrency(detailProject.budget || 0)}</p></CardContent></Card>
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Spent</p><p className="text-sm font-bold text-muted-foreground">{formatCurrency(detailProject.spent || 0)}</p></CardContent></Card>
                     <Card className="bg-card border-border"><CardContent className="p-3"><p className="text-[10px] text-muted-foreground uppercase">Progress</p><p className="text-sm font-bold text-emerald-400">{detailProject.progress}%</p></CardContent></Card>
@@ -1466,7 +1466,7 @@ function CampaignStrategyPageContent() {
                         </div>
                         
                         {/* Checkboxes */}
-                        <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border">
+                        <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border">
                           <label className="flex items-center gap-1.5 cursor-pointer">
                             <input type="checkbox" checked={reqAllowFile} onChange={e => setReqAllowFile(e.target.checked)} className="rounded text-gold accent-gold focus:ring-gold" />
                             <span>Allow File Upload</span>
@@ -1544,7 +1544,7 @@ function CampaignStrategyPageContent() {
                   {/* List of active requests */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>
@@ -1651,7 +1651,7 @@ function CampaignStrategyPageContent() {
                   {/* Registered Files List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">File Name</th>
@@ -1759,7 +1759,7 @@ function CampaignStrategyPageContent() {
                   {/* Reports List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Report Title</th>
@@ -1863,7 +1863,7 @@ function CampaignStrategyPageContent() {
                   {/* Links List */}
                   <div className="border border-border rounded-xl overflow-hidden bg-card">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
                             <th className="text-left py-2 px-3 font-semibold">Title</th>
@@ -2256,9 +2256,9 @@ function CampaignStrategyPageContent() {
                             <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-muted-foreground font-medium">{approval.requested_by || approval.requester || 'Team'}</span></p>
                           </div>
                           <div className="flex items-center gap-2">
-                            {approval.status === 'approved' ? (
+                            {approval.status === 'Approved' || approval.status === 'approved' ? (
                               <Badge className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
-                            ) : approval.status === 'rejected' || approval.status === 'declined' ? (
+                            ) : approval.status === 'Rejected' || approval.status === 'rejected' || approval.status === 'declined' ? (
                               <Badge className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
                             ) : (
                               <>
@@ -2270,10 +2270,10 @@ function CampaignStrategyPageContent() {
                                     if (!isSupabaseConfigured()) return
                                     const { error } = await supabase
                                       .from('project_approvals')
-                                      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+                                      .update({ status: 'Approved', approved_at: new Date().toISOString(), approved_by: user?.name || 'Admin Team' })
                                       .eq('id', approval.id)
                                     if (!error) {
-                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'approved' } : a))
+                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'Approved' } : a))
                                       logWorkspaceActivity(detailProject.id, 'Approval Granted', `Approved: ${approval.title || approval.name}`)
                                       toast({ title: 'Approval Granted', description: `${approval.title || approval.name} has been approved.` })
                                     } else {
@@ -2291,10 +2291,10 @@ function CampaignStrategyPageContent() {
                                     if (!isSupabaseConfigured()) return
                                     const { error } = await supabase
                                       .from('project_approvals')
-                                      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+                                      .update({ status: 'Rejected', approved_at: new Date().toISOString(), approved_by: user?.name || 'Admin Team' })
                                       .eq('id', approval.id)
                                     if (!error) {
-                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'rejected' } : a))
+                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'Rejected' } : a))
                                       logWorkspaceActivity(detailProject.id, 'Approval Declined', `Declined: ${approval.title || approval.name}`)
                                       toast({ title: 'Approval Declined', description: `${approval.title || approval.name} has been declined.` })
                                     } else {

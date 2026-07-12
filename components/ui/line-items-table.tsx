@@ -188,7 +188,7 @@ export function LineItemsTable({
       ) : (
         <div className="space-y-3">
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-xs min-w-[700px]">
               <thead>
                 <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
                   <th className="py-2.5 px-3 w-12 text-center">Sort</th>

@@ -427,7 +427,7 @@ export default function BlueprintEnginePage() {
             </div>
           </DialogHeader>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7">
+            <TabsList className="w-full grid grid-cols-1 md:grid-cols-4 sm:grid-cols-7">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="requirements">Reqs</TabsTrigger>
               <TabsTrigger value="prompt">Prompt</TabsTrigger>
@@ -437,7 +437,7 @@ export default function BlueprintEnginePage() {
               <TabsTrigger value="versions" className="hidden sm:block">Versions</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-3">
                 <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Type</p><p className="text-sm font-bold">{detailPrd?.blueprintDetails?.projectType || 'Web App'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Stack</p><p className="text-sm font-bold truncate">{detailPrd?.stack || 'N/A'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-[10px] text-muted-foreground">Timeline</p><p className="text-sm font-bold">{detailPrd?.blueprintDetails?.timeline || 'N/A'}</p></CardContent></Card>

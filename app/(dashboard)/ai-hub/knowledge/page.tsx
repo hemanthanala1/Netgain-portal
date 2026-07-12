@@ -484,7 +484,7 @@ export default function KnowledgeBasePage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Title *</Label><Input placeholder="e.g. Brand Guidelines v3" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" placeholder="Brief description..." value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Folder</Label><Select value={form.folder} onValueChange={v => setForm({...form, folder: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{folders.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Tags</Label><Input placeholder="sop, brand, v3" value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} /></div>
             </div>
@@ -510,7 +510,7 @@ export default function KnowledgeBasePage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1"><Label>Title *</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea className="h-16 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1"><Label>Folder</Label><Select value={form.folder} onValueChange={v => setForm({...form, folder: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{folders.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label>Tags (comma-separated)</Label><Input value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} /></div>
             </div>

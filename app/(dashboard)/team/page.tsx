@@ -436,7 +436,7 @@ export default function TeamPage() {
         }}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ label: 'Total Team', value: team.length }, { label: 'Active', value: team.filter(t => t.status === 'active').length }, { label: 'Managers', value: team.filter(t => ['Founder', 'Admin', 'Project Manager'].includes(t.role)).length }, { label: 'Staff', value: team.filter(t => ['Sales Executive', 'Employee'].includes(t.role)).length }].map(s => (
           <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.label}</p><p className="text-2xl font-bold mt-1">{s.value}</p></CardContent></Card>
         ))}
@@ -607,7 +607,7 @@ export default function TeamPage() {
                 ) : (
                   <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs border-collapse">
+                      <table className="w-full text-xs border-collapse min-w-[700px]">
                         <thead>
                           <tr className="border-b border-border/70 bg-muted/20">
                             <th className="py-3 px-4 text-left font-bold text-foreground min-w-40 border-r border-border/10">Module / Resource</th>

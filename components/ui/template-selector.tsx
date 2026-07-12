@@ -76,7 +76,7 @@ interface TemplateSelectorProps {
 export function TemplateSelector({ value, onChange, onPreview, disabled }: TemplateSelectorProps) {
   return (
     <div className="space-y-2.5">
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {TEMPLATES.map((t) => {
           const isSelected = value === t.id
           return (

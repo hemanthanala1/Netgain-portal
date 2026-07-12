@@ -1302,7 +1302,7 @@ function SettingsPageContent() {
 
               <div className="rounded-lg border border-border/60 overflow-hidden bg-card/25">
                 <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                  <table className="w-full text-[11px] text-left border-collapse">
+                  <table className="w-full text-[11px] text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-muted/20 border-b border-border/80 text-muted-foreground font-semibold">
                         <th className="py-2.5 px-3">Actor</th>

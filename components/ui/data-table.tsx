@@ -746,7 +746,7 @@ export function DataTable<T = any>({
       {/* Main Table */}
       <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse" role="grid">
+          <table className="w-full text-sm border-collapse min-w-[700px]" role="grid">
             <thead>
               <tr className="border-b border-border/80 bg-muted/20">
                 {/* Bulk select header checkbox */}

@@ -1372,7 +1372,7 @@ function InvoicesPageContent() {
         }}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         {[{ l: 'Total Billed', v: formatCurrency(totals.total) }, { l: 'Paid', v: formatCurrency(totals.paid), c: 'text-emerald-400' }, { l: 'Pending', v: formatCurrency(totals.pending) }, { l: 'Overdue', v: formatCurrency(totals.overdue), c: 'text-red-400' }].map(s => (
           <Card key={s.l}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{s.l}</p><p className={`text-lg font-bold mt-1 ${s.c || ''}`}>{s.v}</p></CardContent></Card>
         ))}
@@ -1498,7 +1498,7 @@ function InvoicesPageContent() {
               </div>
             </div>
             <div>
-              <LineItemsTable variant="detailed"
+              <LineItemsTable variant="full"
                 items={form.items || []}
                 onChange={(items) => {
                   setForm({
@@ -1827,7 +1827,7 @@ function InvoicesPageContent() {
               </div>
             </div>
             <div>
-              <LineItemsTable variant="detailed"
+              <LineItemsTable variant="full"
                 items={form.items || []}
                 onChange={(items) => {
                   setForm({

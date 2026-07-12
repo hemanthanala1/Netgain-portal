@@ -234,7 +234,7 @@ function SupportListContent() {
       />
 
       {/* KPI Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 sm:grid-cols-4 gap-4">
         <KPICard title="Total Tickets" value={stats.total} />
         <KPICard title="Open" value={stats.open} trend={stats.open > 0 ? 'down' : undefined} status={stats.open > 0 ? 'needs attention' : undefined} change={stats.open > 0 ? stats.open : undefined} />
         <KPICard title="Urgent" value={stats.urgent} />
@@ -587,7 +587,7 @@ function SupportListContent() {
               <div className="bg-card p-3 rounded-lg border border-border/40 max-h-36 overflow-y-auto whitespace-pre-wrap">
                 {peekTicket.message}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[10px] text-muted-foreground">Status</Label>
                   <Select value={peekTicket.status} onValueChange={(val) => {
