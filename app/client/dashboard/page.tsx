@@ -1958,7 +1958,7 @@ export default function ClientDashboardPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Account Executive</p>
-                          <p className="font-semibold text-primary mt-0.5">Netgain Team Manager</p>
+                          <p className="font-semibold text-primary mt-0.5">{proj.pm || 'Netgain Team'}</p>
                         </div>
                       </div>
 

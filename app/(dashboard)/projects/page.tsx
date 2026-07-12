@@ -276,6 +276,7 @@ function CampaignStrategyPageContent() {
   const [workspaceLinks, setWorkspaceLinks] = useState<any[]>([])
   const [workspaceReports, setWorkspaceReports] = useState<any[]>([])
   const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
+  const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
   const [loadingWorkspace, setLoadingWorkspace] = useState(false)
 
   // Requirements Request Form States
@@ -332,12 +333,13 @@ function CampaignStrategyPageContent() {
     if (!isSupabaseConfigured()) return
     setLoadingWorkspace(true)
     try {
-      const [reqs, files, links, reps, timeline] = await Promise.all([
+      const [reqs, files, links, reps, timeline, approvalsRes] = await Promise.all([
         supabase.from('project_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
         supabase.from('project_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
         supabase.from('project_links').select('*').eq('project_id', projectId).order('published_at', { ascending: false }),
         supabase.from('project_reports').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
-        supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+        supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_approvals').select('*').eq('project_id', projectId).order('requested_at', { ascending: false })
       ])
 
       const reqList = reqs.data || []
@@ -346,6 +348,7 @@ function CampaignStrategyPageContent() {
       setWorkspaceLinks(links.data || [])
       setWorkspaceReports(reps.data || [])
       setWorkspaceTimeline(timeline.data || [])
+      setWorkspaceApprovals(approvalsRes.data || [])
 
       if (reqList.length > 0) {
         const reqIds = reqList.map((r: any) => r.id)
@@ -2240,43 +2243,63 @@ function CampaignStrategyPageContent() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    {[
-                      { id: 'app-sow', name: 'Scope of Work (SOW) Sign-off', requester: 'Client Portal Integration', status: detailProject.status === 'completed' ? 'approved' : 'pending' },
-                      { id: 'app-budget', name: 'Phase 1 Budget Reallocation', requester: 'Founder Team', status: 'approved' },
-                      { id: 'app-milestone-1', name: 'Milestone 1 Deliverable Approval', requester: 'Project Manager', status: 'approved' },
-                      { id: 'app-milestone-2', name: 'Milestone 2 Deliverable Approval', requester: 'Project Manager', status: 'pending' },
-                    ].map(approval => (
+                    {workspaceApprovals.length === 0 ? (
+                      <div className="text-center py-10 border border-dashed border-border rounded-xl">
+                        <p className="text-sm font-semibold text-muted-foreground">No approvals yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">Approval requests will appear here once created.</p>
+                      </div>
+                    ) : workspaceApprovals.map((approval: any) => (
                       <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all">
                         <CardContent className="p-3.5 flex items-center justify-between gap-4">
                           <div>
-                            <p className="text-xs font-semibold text-foreground">{approval.name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-muted-foreground font-medium">{approval.requester}</span></p>
+                            <p className="text-xs font-semibold text-foreground">{approval.title || approval.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Requested by: <span className="text-muted-foreground font-medium">{approval.requested_by || approval.requester || 'Team'}</span></p>
                           </div>
                           <div className="flex items-center gap-2">
                             {approval.status === 'approved' ? (
                               <Badge className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">Approved</Badge>
-                            ) : approval.status === 'rejected' ? (
+                            ) : approval.status === 'rejected' || approval.status === 'declined' ? (
                               <Badge className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/25">Rejected</Badge>
                             ) : (
                               <>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   className="h-7 text-[10px] border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
-                                  onClick={() => {
-                                    logWorkspaceActivity(detailProject.id, 'Approval Granted', `Approved: ${approval.name}`)
-                                    toast({ title: 'Approval Granted', description: `${approval.name} has been approved.` })
+                                  onClick={async () => {
+                                    if (!isSupabaseConfigured()) return
+                                    const { error } = await supabase
+                                      .from('project_approvals')
+                                      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+                                      .eq('id', approval.id)
+                                    if (!error) {
+                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'approved' } : a))
+                                      logWorkspaceActivity(detailProject.id, 'Approval Granted', `Approved: ${approval.title || approval.name}`)
+                                      toast({ title: 'Approval Granted', description: `${approval.title || approval.name} has been approved.` })
+                                    } else {
+                                      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+                                    }
                                   }}
                                 >
                                   Approve
                                 </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   className="h-7 text-[10px] border-red-500/20 text-red-400 hover:bg-red-500/10"
-                                  onClick={() => {
-                                    logWorkspaceActivity(detailProject.id, 'Approval Declined', `Declined: ${approval.name}`)
-                                    toast({ title: 'Approval Declined', description: `${approval.name} has been declined.` })
+                                  onClick={async () => {
+                                    if (!isSupabaseConfigured()) return
+                                    const { error } = await supabase
+                                      .from('project_approvals')
+                                      .update({ status: 'rejected', reviewed_at: new Date().toISOString() })
+                                      .eq('id', approval.id)
+                                    if (!error) {
+                                      setWorkspaceApprovals(prev => prev.map(a => a.id === approval.id ? { ...a, status: 'rejected' } : a))
+                                      logWorkspaceActivity(detailProject.id, 'Approval Declined', `Declined: ${approval.title || approval.name}`)
+                                      toast({ title: 'Approval Declined', description: `${approval.title || approval.name} has been declined.` })
+                                    } else {
+                                      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+                                    }
                                   }}
                                 >
                                   Decline
