@@ -28,6 +28,8 @@ import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { LineItemsTable } from '@/components/ui/line-items-table'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
+import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
+import { LivePreviewPanel } from '@/components/ui/live-preview-panel'
 
 
 
@@ -206,8 +208,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
         </div>
       </div>
       <div>
-        <LineItemsTable
-          variant="simple"
+        <LineItemsTable variant="detailed"
           items={form.items || []}
           onChange={(items) => {
             setForm({
@@ -381,6 +382,8 @@ function QuotationsPageContent() {
   const [previewDoc, setPreviewDoc] = useState<Quote | null>(null)
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [templateId, setTemplateId] = useState<TemplateId>('modern')
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false)
   const { toast } = useToast()
   const columns = useMemo(() => [
     {
@@ -571,6 +574,12 @@ function QuotationsPageContent() {
   const [historyDoc, setHistoryDoc] = useState<Quote | null>(null)
   const [publishDoc, setPublishDoc] = useState<Quote | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+
+  useEffect(() => {
+    if (companyDocs?.defaultTemplateId) {
+      setTemplateId(companyDocs.defaultTemplateId)
+    }
+  }, [companyDocs])
 
   const [form, setForm] = useState(() => blankForm())
 
@@ -876,7 +885,8 @@ function QuotationsPageContent() {
           category: 'Service',
           timeline: 'As per SOW',
           pricing_model: 'fixed',
-          deliverables: []
+          deliverables: item.description ? item.description.split('\n').filter((d: string) => d.trim().length > 0) : [],
+          tax: Number(item.tax) || 0
         })
       })
     } else {
@@ -908,7 +918,8 @@ function QuotationsPageContent() {
             category: s.category,
             timeline: s.timeline,
             pricing_model: 'fixed',
-            deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+            deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
+            tax: Math.round(s.price * gst / 100)
           })
           pdfItems.push({
             serviceName: `${s.name} - Monthly Service Fee`,
@@ -918,7 +929,8 @@ function QuotationsPageContent() {
             category: s.category,
             timeline: s.timeline,
             pricing_model: 'monthly',
-            deliverables: s.deliverables
+            deliverables: s.deliverables,
+            tax: Math.round(adBudgetFee * gst / 100)
           })
         } else {
           pdfItems.push({
@@ -929,7 +941,8 @@ function QuotationsPageContent() {
             category: s.category,
             timeline: s.timeline,
             pricing_model: s.model,
-            deliverables: s.deliverables
+            deliverables: s.deliverables,
+            tax: Math.round(s.price * gst / 100)
           })
         }
       })
@@ -950,8 +963,9 @@ function QuotationsPageContent() {
 
     const payload = {
       docType: 'Quotation',
+      templateId,
       clientName: data.contact || data.client,
-      projectTitle: title || `Quotation — ${data.client}`,
+      projectTitle: title || `Quotation - ${data.client}`,
       companyName: data.client,
       clientInfo: { business: data.businessType, industry: data.industry, mobile: data.phone, gst: data.gst },
       content: buildContentBody(data, svcs),
@@ -1429,15 +1443,19 @@ function QuotationsPageContent() {
         emptyAction={{ label: 'New Quotation', onClick: () => { setForm(blankForm(companyDocs)); setShowCreate(true) }, icon: Plus }}
       />
 
-      {/* Create Drawer */}
+      {/* Create Drawer - split layout with live preview */}
       <Drawer
         isOpen={showCreate}
-        onClose={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}
+        onClose={() => { setShowCreate(false); setForm(blankForm(companyDocs)); setShowPreviewPanel(false) }}
         title="Create New Quotation"
-        description="Configure client details, service selections, discounts, taxes, and validity terms."
-        widthClass="max-w-3xl"
+        description="Choose a template, fill in client and service details."
+        widthClass="max-w-7xl"
         footer={
           <>
+            <Button variant="outline" size="sm" onClick={() => setShowPreviewPanel(v => !v)} className="gap-1.5 mr-auto">
+              <Eye className="h-3.5 w-3.5" />
+              {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
             <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>
               {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Generating...</> : 'Generate PDF'}
@@ -1445,7 +1463,57 @@ function QuotationsPageContent() {
           </>
         }
       >
-        <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} handleCustomSubtotalChange={handleCustomSubtotalChange} />
+        <div className={showPreviewPanel ? 'grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 h-full' : ''}>
+          {/* Left: Form */}
+          <div className="overflow-auto">
+            {/* Template Selector */}
+            <div className="mb-5 pb-5 border-b border-border">
+              <p className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Document Template</p>
+              <TemplateSelector
+                value={templateId}
+                onChange={setTemplateId}
+                onPreview={async (id) => {
+                  const previewPayload = {
+                    docType: 'Quotation' as const,
+                    templateId: id,
+                    clientName: form.contact || form.client || 'Preview Client',
+                    projectTitle: form.projectTitle || 'Quotation Preview',
+                    companyName: form.client || 'Preview Company',
+                    clientInfo: { business: form.businessType },
+                  }
+                  setPreviewDoc({ ...form, docId: 'PREVIEW', id: 'preview' } as any)
+                  setPreviewLoading(true)
+                  setPreviewBlobUrl(null)
+                  try {
+                    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(previewPayload) })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      setPreviewBlobUrl(URL.createObjectURL(blob))
+                    }
+                  } catch {}
+                  finally { setPreviewLoading(false) }
+                }}
+              />
+            </div>
+            <FormBody form={form} setForm={setForm} allSvcs={servicesData} selSvcs={selSvcs} subtotal={subtotal} discAmt={discAmt} gstAmt={gstAmt} grandTotal={grandTotal} toggleSvc={toggleSvc} paymentSchedules={paymentSchedules} handleCustomSubtotalChange={handleCustomSubtotalChange} />
+          </div>
+          {/* Right: Live Preview */}
+          {showPreviewPanel && (
+            <div className="hidden lg:block h-full min-h-[600px]">
+              <LivePreviewPanel
+                payload={form.client ? {
+                  docType: 'Quotation',
+                  templateId,
+                  clientName: form.contact || form.client,
+                  projectTitle: form.projectTitle || `Quotation - ${form.client}`,
+                  companyName: form.client,
+                  clientInfo: { business: form.businessType, industry: form.industry, mobile: form.phone, gst: form.gst },
+                } : null}
+                visible
+              />
+            </div>
+          )}
+        </div>
       </Drawer>
 
       {/* Edit Drawer */}
@@ -1480,7 +1548,7 @@ function QuotationsPageContent() {
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader className="border-b border-white/10 pb-3">
-            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
+            <DialogTitle>Document History - {historyDoc?.docId}</DialogTitle>
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
@@ -1639,7 +1707,7 @@ function QuotationsPageContent() {
               pdfPayload = {
                 docType: 'Quotation',
                 clientName: quoteObj.contact || quoteObj.client,
-                projectTitle: quoteObj.projectTitle || `Quotation — ${quoteObj.client}`,
+                projectTitle: quoteObj.projectTitle || `Quotation - ${quoteObj.client}`,
                 companyName: quoteObj.client,
                 clientInfo: { business: quoteObj.businessType, industry: quoteObj.industry, mobile: quoteObj.phone, gst: quoteObj.gst },
                 content: buildContentBody(quoteObj, svcs),
@@ -1777,3 +1845,5 @@ export default function QuotationsPage() {
     </Suspense>
   )
 }
+
+

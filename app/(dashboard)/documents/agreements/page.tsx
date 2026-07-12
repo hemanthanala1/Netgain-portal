@@ -29,6 +29,8 @@ import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 import { LineItemsTable } from '@/components/ui/line-items-table'
+import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
+import { LivePreviewPanel } from '@/components/ui/live-preview-panel'
 
 const AGR_TYPES = ['Service Agreement', 'Retainer Agreement', 'NDA', 'Freelance Contract', 'Partnership Agreement']
 const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'needs revision', 'signed', 'completed', 'expired', 'rejected']
@@ -100,10 +102,19 @@ function AgreementsPageContent() {
   const [previewDoc, setPreviewDoc] = useState<Agreement | null>(null)
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [templateId, setTemplateId] = useState<TemplateId>('modern')
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false)
+  
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<Agreement | null>(null)
   const [publishDoc, setPublishDoc] = useState<Agreement | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+
+  useEffect(() => {
+    if (companyDocs?.defaultTemplateId) {
+      setTemplateId(companyDocs.defaultTemplateId)
+    }
+  }, [companyDocs])
   const [form, setForm] = useState<ReturnType<typeof blank>>(blank())
 
   const searchParams = useSearchParams()
@@ -161,7 +172,7 @@ function AgreementsPageContent() {
       header: 'Value',
       accessor: 'value',
       sortable: true,
-      cell: (a: Agreement) => <span className="font-semibold text-gold text-xs">{a.value > 0 ? formatCurrency(a.value) : '—'}</span>
+      cell: (a: Agreement) => <span className="font-semibold text-gold text-xs">{a.value > 0 ? formatCurrency(a.value) : '-'}</span>
     },
     {
       header: 'Status',
@@ -496,11 +507,11 @@ function AgreementsPageContent() {
     const parts = [
       `## Agreement Details`,
       `**Agreement Type:** ${f.type}`,
-      `**Client Name:** ${f.contact || '—'}`,
+      `**Client Name:** ${f.contact || '-'}`,
       `**Business Name:** ${client}`,
       f.phone ? `**Phone:** ${f.phone}` : '',
       f.email ? `**Email:** ${f.email}` : '',
-      `**Contract Value:** ${calculatedValue > 0 ? formatCurrency(calculatedValue) : '—'}`,
+      `**Contract Value:** ${calculatedValue > 0 ? formatCurrency(calculatedValue) : '-'}`,
       f.duration ? `**Duration:** ${f.duration}` : '',
     ].filter(Boolean)
 
@@ -576,8 +587,9 @@ function AgreementsPageContent() {
 
     const payload = {
       docType: 'Agreement',
+      templateId,
       clientName: agr.contact || agr.client,
-      projectTitle: `${agr.type} — ${agr.client}`,
+      projectTitle: `${agr.type} - ${agr.client}`,
       companyName: agr.client,
       clientInfo: { business: agr.type, mobile: agr.phone },
       content: buildContent({ ...agr, value: tot }, agr.client, tot, servicesStr),
@@ -983,17 +995,65 @@ function AgreementsPageContent() {
 
       <Drawer
         isOpen={showCreate}
-        onClose={() => { setShowCreate(false); setForm(blank()) }}
+        onClose={() => { setShowCreate(false); setForm(blank()); setShowPreviewPanel(false); }}
         title="Generate Client Agreement"
-        description="Configure client details, agreement type, duration, services covered, and legal clauses."
-        widthClass="max-w-2xl"
+        description="Choose a template, configure client details, agreement type, duration, services covered, and legal clauses."
+        widthClass="max-w-7xl"
         footer={
           <>
+            <Button variant="outline" size="sm" onClick={() => setShowPreviewPanel(v => !v)} className="gap-1.5 mr-auto">
+              <Eye className="h-3.5 w-3.5" />
+              {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blank()) }}>Cancel</Button>
             <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>{generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating...</> : 'Generate Agreement PDF'}</Button>
           </>
         }
       >
+        <div className={showPreviewPanel ? 'grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 h-full' : ''}>
+          {/* Left: Form */}
+          <div className="overflow-auto">
+            {/* Template Selector */}
+            <div className="mb-5 pb-5 border-b border-border">
+              <p className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Document Template</p>
+              <TemplateSelector
+                value={templateId}
+                onChange={setTemplateId}
+                onPreview={async (id) => {
+                  let sub = Number(form.value) || 0
+                  let tot = Number(form.value) || 0
+                  let servicesStr = form.services || ''
+                  if (form.items && form.items.length > 0) {
+                    sub = form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+                    const lineDisc = form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                    tot = (sub - lineDisc) + lineTax
+                    servicesStr = form.items.map((i: any) => i.service_name).join(', ')
+                  }
+
+                  const previewPayload = {
+                    docType: 'Agreement' as const,
+                    templateId: id,
+                    clientName: form.contact || form.client || 'Preview Client',
+                    projectTitle: 'Agreement Preview',
+                    companyName: form.client || 'Preview Company',
+                    clientInfo: { business: form.type },
+                    content: buildContent({ ...form, value: tot }, form.client, tot, servicesStr),
+                  }
+                  setPreviewDoc({ ...form, docId: 'PREVIEW', id: 'preview' } as any)
+                  setPreviewLoading(true)
+                  setPreviewBlobUrl(null)
+                  try {
+                    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(previewPayload) })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      setPreviewBlobUrl(URL.createObjectURL(blob))
+                    }
+                  } catch {}
+                  finally { setPreviewLoading(false) }
+                }}
+              />
+            </div>
           <div className="space-y-5 py-2">
             {!editItem && sourceDocs.length > 0 && (
               <div className="bg-muted/30 p-4 rounded-lg border border-border">
@@ -1095,12 +1155,43 @@ function AgreementsPageContent() {
               </div>
             </div>
           </div>
+          </div>
+          {/* Right: Live Preview */}
+          {showPreviewPanel && (
+            <div className="hidden lg:block h-full min-h-[600px]">
+              <LivePreviewPanel
+                payload={form.client ? (() => {
+                  let sub = Number(form.value) || 0
+                  let tot = Number(form.value) || 0
+                  let servicesStr = form.services || ''
+                  if (form.items && form.items.length > 0) {
+                    sub = form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
+                    const lineDisc = form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
+                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                    tot = (sub - lineDisc) + lineTax
+                    servicesStr = form.items.map((i: any) => i.service_name).join(', ')
+                  }
+                  return {
+                    docType: 'Agreement',
+                    templateId,
+                    clientName: form.contact || form.client,
+                    projectTitle: `${form.type} - ${form.client}`,
+                    companyName: form.client,
+                    clientInfo: { business: form.type, mobile: form.phone },
+                    content: buildContent({ ...form, value: tot }, form.client, tot, servicesStr),
+                  }
+                })() : null}
+                visible
+              />
+            </div>
+          )}
+        </div>
       </Drawer>
 
       <Drawer
         isOpen={!!editItem}
         onClose={() => { setEditItem(null); setForm(blank()) }}
-        title={`Edit Agreement — ${editItem?.docId}`}
+        title={`Edit Agreement - ${editItem?.docId}`}
         description="Modify client details, agreement type, duration, services covered, and legal clauses."
         widthClass="max-w-2xl"
         footer={
@@ -1207,7 +1298,7 @@ function AgreementsPageContent() {
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader className="border-b border-white/10 pb-3">
-            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
+            <DialogTitle>Document History - {historyDoc?.docId}</DialogTitle>
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
@@ -1259,7 +1350,7 @@ function AgreementsPageContent() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         initialEmail={shareDoc ? agreements.find(a => a.id === shareDoc.id)?.email || '' : ''}
-        initialSubject={shareDoc ? `${agreements.find(a => a.id === shareDoc.id)?.type}: ${agreements.find(a => a.id === shareDoc.id)?.docId} — ${agreements.find(a => a.id === shareDoc.id)?.client}` : ''}
+        initialSubject={shareDoc ? `${agreements.find(a => a.id === shareDoc.id)?.type}: ${agreements.find(a => a.id === shareDoc.id)?.docId} - ${agreements.find(a => a.id === shareDoc.id)?.client}` : ''}
         initialMessage={shareDoc ? (() => {
           const agr = agreements.find(a => a.id === shareDoc.id)
           if (!agr) return ''
@@ -1284,7 +1375,7 @@ function AgreementsPageContent() {
 
             if (method === 'email') {
               recipient = emailDetails?.recipient || agr.email || ''
-              subject = emailDetails?.subject || `${agr.type}: ${agr.docId} — ${agr.client}`
+              subject = emailDetails?.subject || `${agr.type}: ${agr.docId} - ${agr.client}`
               message = emailDetails?.message || `Dear ${agr.client},\n\nPlease find attached the ${agr.type} document ${agr.docId}.\n\nContract Value: ${formatCurrency(agr.value)}\nDuration: ${agr.duration || 'As agreed'}\n\nKindly review, sign, and return at your earliest convenience.\n\nBest regards,\nNetgain Team`
               
               let calculatedValue = agr.value
@@ -1314,7 +1405,7 @@ function AgreementsPageContent() {
               pdfPayload = {
                 docType: 'Agreement',
                 clientName: agr.contact || agr.client,
-                projectTitle: `${agr.type} — ${agr.client}`,
+                projectTitle: `${agr.type} - ${agr.client}`,
                 companyName: agr.client,
                 clientInfo: { business: agr.type, mobile: agr.phone },
                 content: buildContent({ ...agr, value: calculatedValue }, agr.client, calculatedValue, servicesStr),
@@ -1328,7 +1419,7 @@ function AgreementsPageContent() {
               }
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = agr.phone
-              message = `Dear ${agr.client}, your ${agr.type} ${agr.docId} (${formatCurrency(agr.value)}) is ready for review and signature. — Netgain Team`
+              message = `Dear ${agr.client}, your ${agr.type} ${agr.docId} (${formatCurrency(agr.value)}) is ready for review and signature. - Netgain Team`
             }
 
             if (!recipient) {

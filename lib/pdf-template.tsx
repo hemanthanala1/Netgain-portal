@@ -1,7 +1,3 @@
-/**
- * NBOS PDF Template Engine — Urban Edge Dark Theme
- * Uses @react-pdf/renderer (pure TypeScript, no Python needed)
- */
 import React from 'react'
 import {
   Document, Page, Text, View, StyleSheet, Font, Image,
@@ -17,151 +13,7 @@ Font.register({
   src: 'https://fonts.gstatic.com/s/alexbrush/v23/SZc83FzrJKuqFbwMKk6EhUXz6BlNiCY.ttf'
 })
 
-// ── Colour palette (Urban Edge / Dark Theme) ─────────────────────────────
-const C = {
-  bg:        '#0A1612',
-  card:      '#12241D',
-  gold:      '#D4AF37',
-  white:     '#F8FAFC',
-  slate:     '#94A3B8',
-  border:    '#1E3A2F',
-  darkCard:  '#0F1F18',
-  altRow:    '#122019',
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  page: { backgroundColor: C.bg, paddingTop: 110, paddingBottom: 90, paddingHorizontal: 40 },
-
-  // Header (fixed to top)
-  header: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 100,
-    backgroundColor: C.bg, paddingHorizontal: 40, paddingTop: 22,
-  },
-  headerLine: { position: 'absolute', bottom: 0, left: 0, right: 0, borderBottomWidth: 1, borderColor: C.gold },
-  brandName: { fontFamily: 'Helvetica-Bold', fontSize: 24, color: C.gold },
-  brandTag:  { fontFamily: 'Helvetica', fontSize: 9, color: C.slate, marginTop: 2 },
-  docLabel:  { fontFamily: 'Helvetica-Bold', fontSize: 13, color: C.gold },
-  docDate:   { fontFamily: 'Helvetica', fontSize: 8, color: C.slate, marginTop: 3 },
-  docRef:    { fontFamily: 'Helvetica', fontSize: 8, color: C.slate, marginTop: 2 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-
-  // Footer (fixed to bottom)
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
-    backgroundColor: C.bg, paddingHorizontal: 40, paddingBottom: 14,
-  },
-  footerLine: { borderTopWidth: 1, borderColor: C.gold, marginBottom: 8 },
-  footerBrand: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: C.gold },
-  footerText:  { fontFamily: 'Helvetica', fontSize: 7, color: C.slate, marginTop: 3 },
-  footerRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-
-  // Body typography
-  h1: { fontFamily: 'Helvetica-Bold', fontSize: 20, color: C.white, marginBottom: 4 },
-  h2: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: C.gold, marginTop: 14, marginBottom: 5 },
-  h3: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: C.white, marginTop: 8, marginBottom: 3 },
-  body: { fontFamily: 'Helvetica', fontSize: 9, color: C.white, lineHeight: 1.5 },
-  muted: { fontFamily: 'Helvetica', fontSize: 9, color: C.slate, lineHeight: 1.5 },
-  gold: { fontFamily: 'Helvetica', fontSize: 9, color: C.gold, lineHeight: 1.5 },
-  bullet: { fontFamily: 'Helvetica', fontSize: 9, color: C.white, lineHeight: 1.5, marginLeft: 12 },
-
-  // Cards
-  card: {
-    backgroundColor: C.card, borderLeftWidth: 3, borderLeftColor: C.gold,
-    paddingHorizontal: 16, paddingVertical: 14, marginBottom: 10, borderRadius: 2,
-  },
-  prepCard: {
-    backgroundColor: C.card, borderLeftWidth: 3, borderLeftColor: C.gold,
-    paddingHorizontal: 20, paddingVertical: 14, marginBottom: 18, borderRadius: 2,
-  },
-
-  // Two-column header row in service card
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  svcName: { fontFamily: 'Helvetica-Bold', fontSize: 13, color: C.white, flex: 1 },
-  svcPrice: { fontFamily: 'Helvetica-Bold', fontSize: 14, color: C.gold },
-  svcMeta:  { fontFamily: 'Helvetica', fontSize: 8, color: C.slate, marginTop: 3 },
-
-  // Investment table
-  invCard: {
-    backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 12,
-    marginBottom: 20, borderRadius: 2,
-  },
-  invRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  invLabel: { fontFamily: 'Helvetica', fontSize: 9, color: C.slate, flex: 1 },
-  invValue: { fontFamily: 'Helvetica', fontSize: 9, color: C.white },
-  invDivider: { borderTopWidth: 0.5, borderColor: C.border, marginVertical: 4 },
-  invTotalLabel: { fontFamily: 'Helvetica-Bold', fontSize: 13, color: C.white, flex: 1 },
-  invTotalValue: { fontFamily: 'Helvetica-Bold', fontSize: 15, color: C.gold },
-
-  // Terms bullets
-  termBullet: { fontFamily: 'Helvetica', fontSize: 8, color: C.gold, marginBottom: 3 },
-
-  // Section separator
-  sep: { borderTopWidth: 0.5, borderColor: C.border, marginVertical: 10 },
-
-  spacer4:  { height: 4 },
-  spacer8:  { height: 8 },
-  spacer14: { height: 14 },
-
-  // E-Signature Block
-  sigContainer: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: C.darkCard,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 4,
-  },
-  sigBlockRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 20,
-    marginTop: 10,
-  },
-  sigColumn: {
-    flex: 1,
-  },
-  sigTitle: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 8,
-    color: C.gold,
-    marginBottom: 4,
-  },
-  sigName: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 11,
-    color: C.white,
-  },
-  sigMeta: {
-    fontFamily: 'Helvetica',
-    fontSize: 7.5,
-    color: C.slate,
-    marginTop: 2,
-  },
-  sigImage: {
-    width: 120,
-    height: 40,
-    objectFit: 'contain',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  sigTextDancing: {
-    fontFamily: 'DancingScript',
-    fontSize: 16,
-    color: C.gold,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  sigTextAlex: {
-    fontFamily: 'AlexBrush',
-    fontSize: 18,
-    color: C.gold,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-})
-
-// ── Types ─────────────────────────────────────────────────────────────────
+// Types
 export interface PdfItem {
   serviceName: string
   finalPrice: number
@@ -170,15 +22,17 @@ export interface PdfItem {
   category?: string
   pricing_model?: string
   deliverables?: string[]
+    tax?: number
 }
 
 export interface PdfPayload {
   docType: 'Quotation' | 'Invoice' | 'SOW' | 'Agreement' | 'PRD' | 'ProjectPlan' | 'MarketingReport'
+  templateId?: 'modern' | 'corporate' | 'minimal' | 'elegant'
   clientName: string
   companyName?: string
   projectTitle?: string
   clientInfo?: { business?: string; industry?: string; mobile?: string; gst?: string }
-  companySettings?: { name?: string; email?: string; phone?: string; website?: string; gst?: string; address?: string }
+  companySettings?: { name?: string; email?: string; phone?: string; website?: string; gst?: string; address?: string; panNumber?: string; logo?: string; primaryColor?: string; secondaryColor?: string; accentColor?: string; signature?: string }
   bankSettings?: { accountName?: string; accountNumber?: string; ifsc?: string; bank?: string; upiId?: string }
   founderSettings?: { name?: string; designation?: string; email?: string; phone?: string }
   docsSettings?: {
@@ -208,7 +62,7 @@ export interface PdfPayload {
   fullSubtotal?: number
   paymentScheduleId?: string
   paymentScheduleObj?: { name: string, points: { label: string, pct: number }[] } | null
-  content?: string           // Markdown-lite body text
+  content?: string | string[]
   signatureDetails?: {
     clientName: string
     company?: string
@@ -221,461 +75,614 @@ export interface PdfPayload {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-// Use 'INR' text prefix so PDFs render correctly on all systems (no ₹ glyph issues)
-const INR = (n: number) =>
-  'INR ' + n.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-
-const DOC_LABELS: Record<string, string> = {
-  Quotation: 'CUSTOM QUOTATION',
-  Invoice:   'TAX INVOICE',
-  SOW:       'STATEMENT OF WORK',
-  Agreement: 'SERVICE AGREEMENT',
-  PRD:       'PRODUCT REQUIREMENTS DOCUMENT',
-  ProjectPlan: 'PROJECT PLAN',
-  MarketingReport: 'MARKETING REPORT',
+// Formatters
+const formatCurrency = (val?: number) => {
+  if (val === undefined || isNaN(val)) return 'INR 0'
+  return `INR ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(val)}`
 }
+const stripHtml = (html?: string) => html ? html.replace(/<[^>]*>?/gm, '') : ''
 
-// ── Header fixed component ────────────────────────────────────────────────
-function Header({ docType, docRef, company, tagline }: { docType: string; docRef: string; company: PdfPayload['companySettings']; tagline: string }) {
-  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+const MarkdownRenderer = ({ content, style }: { content?: string | string[], style?: any }) => {
+  if (!content) return null;
+  const contentStr = Array.isArray(content) ? content.join('\n') : content;
+  const lines = contentStr.split('\n');
   return (
-    <View style={s.header} fixed>
-      <View style={s.headerRow}>
-        <View>
-          <Text style={s.brandName}>{company?.name || 'NETGAIN'}</Text>
-          <Text style={s.brandTag}>{tagline}</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={s.docLabel}>{DOC_LABELS[docType] || 'DOCUMENT'}</Text>
-          <Text style={s.docDate}>Date: {today}</Text>
-          <Text style={s.docRef}>Ref: {docRef}</Text>
-        </View>
-      </View>
-      <View style={s.headerLine} />
-    </View>
-  )
-}
-
-// ── Footer fixed component ─────────────────────────────────────────────────
-function Footer({ company, tagline, docType, invoiceFooter }: { company: PdfPayload['companySettings']; tagline: string; docType?: string; invoiceFooter?: string }) {
-  const isCustomInvoiceFooter = docType === 'Invoice' && invoiceFooter && invoiceFooter.trim()
-  return (
-    <View style={s.footer} fixed>
-      <View style={s.footerLine} />
-      <View style={s.footerRow}>
-        <View style={{ flex: 1 }}>
-          {isCustomInvoiceFooter ? (
-            <Text style={s.footerText}>{invoiceFooter}</Text>
-          ) : (
-            <>
-              <Text style={s.footerBrand}>{company?.name || 'NETGAIN'}</Text>
-              {company?.phone && <Text style={s.footerText}>Phone / WhatsApp: {company.phone}</Text>}
-              {(company?.email || company?.website) && (
-                <Text style={s.footerText}>
-                  {company.email || ''}{company.email && company.website ? '   | ' : ''}{company.website || ''}
-                </Text>
-              )}
-            </>
-          )}
-        </View>
-        <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
-          <Text style={s.footerText}>{tagline}</Text>
-          <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} style={s.footerText} />
-        </View>
-      </View>
-    </View>
-  )
-}
-
-// ── Render markdown-lite content ──────────────────────────────────────────
-function RenderContent({ text, docType, isSigned }: { text: string; docType?: string; isSigned: boolean }) {
-  const lines = text.split('\n')
-  return (
-    <>
+    <View style={{ flexDirection: 'column' }}>
       {lines.map((line, i) => {
-        const t = line.trim()
-        if (!t) return <View key={i} style={s.spacer4} />
+        if (!line.trim()) return <View key={i} style={{ height: 6 }} />;
         
-        // Strip manual signature elements on signed copies or for SOW/Agreement documents
-        if (isSigned || docType === 'SOW' || docType === 'Agreement') {
-          const lower = t.toLowerCase();
-          if (
-            t.includes('____') || 
-            lower.includes('signature:') || 
-            lower.includes('signatures') || 
-            t.includes('__FOUNDER_NAME__') || 
-            t.includes('__COMPANY_NAME__') ||
-            lower.includes('prepared by') ||
-            lower.includes('accepted by') ||
-            t.includes('|---|---|') ||
-            (t.startsWith('|') && t.endsWith('|') && (lower.includes('signature') || lower.includes('date') || lower.includes('name') || lower.includes('company')))
-          ) {
-            return null
-          }
+        let textStyle = { ...style, marginBottom: 4 };
+        let textLine = line;
+        
+        if (textLine.startsWith('### ')) {
+          textStyle = { ...textStyle, fontSize: (style?.fontSize || 10) + 1, fontWeight: 'bold', marginTop: 4 };
+          textLine = textLine.replace('### ', '');
+        } else if (textLine.startsWith('## ')) {
+          textStyle = { ...textStyle, fontSize: (style?.fontSize || 10) + 2, fontWeight: 'bold', marginTop: 6 };
+          textLine = textLine.replace('## ', '');
+        } else if (textLine.startsWith('# ')) {
+          textStyle = { ...textStyle, fontSize: (style?.fontSize || 10) + 4, fontWeight: 'bold', marginTop: 8 };
+          textLine = textLine.replace('# ', '');
         }
 
-        if (t.startsWith('## ')) return <Text key={i} style={s.h2}>{t.slice(3)}</Text>
-        if (t.startsWith('### ')) return <Text key={i} style={s.h3}>{t.slice(4)}</Text>
-        if (t.startsWith('# ')) return <Text key={i} style={{ ...s.h1, fontSize: 14 }}>{t.slice(2)}</Text>
-        if (t.startsWith('- ') || t.startsWith('• ')) {
-          return <Text key={i} style={s.bullet}>{'  • '}{t.slice(2)}</Text>
+        if (textLine.startsWith('__QR_CODE__')) {
+          const qrUrl = textLine.replace('__QR_CODE__', '').replace('__', '');
+          return (
+            <View key={i} style={{ marginTop: 10, marginBottom: 10 }}>
+              <Image src={qrUrl} style={{ width: 100, height: 100 }} />
+            </View>
+          );
         }
-        if (t.startsWith('---')) return <View key={i} style={s.sep} />
-        // Inline bold stripping for display
-        const clean = t.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
-        return <Text key={i} style={s.muted}>{clean}</Text>
+
+        let isList = false;
+        if (textLine.startsWith('- ')) {
+          isList = true;
+          // Safe bullet render
+        }
+        
+        const parts = textLine.split(/(\*\*.*?\*\*)/g);
+        
+        return (
+          <Text key={i} style={[textStyle, isList ? { marginLeft: 12 } : {}]}>
+            {parts.map((part, j) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return <Text key={j} style={{ fontWeight: 'bold' }}>{part.slice(2, -2)}</Text>
+              }
+              return part;
+            })}
+          </Text>
+        );
       })}
-    </>
+    </View>
   )
 }
+const getDocDate = () => new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
-// ── Main Document Component ───────────────────────────────────────────────
-export function NbosDocument({ data }: { data: PdfPayload }) {
-  const docRef = `NG-${Math.floor(Date.now() / 1000) % 1000000}`
-  const co = data.companySettings || {}
-  const ci = data.clientInfo || {}
-  const founder = data.founderSettings || {}
-  const docs = data.docsSettings || {}
-  const items = data.items || []
-  const isFinancial = ['Quotation', 'Invoice', 'Agreement', 'SOW'].includes(data.docType)
+// Default Fallback Colors
+const fallbackTheme = {
+  primary: '#0F172A',
+  secondary: '#64748B',
+  accent: '#3B82F6'
+}
 
-  const tagline = docs.tagline || 'Your Growth Partner, Powered by AI'
-  const validityDays = docs.quotationValidity || '14'
-  const ptOneTime = docs.paymentTermsOneTime || '50% advance to begin, 50% balance on final delivery'
-  const ptMonthly = docs.paymentTermsMonthly || 'Full monthly fee payable in advance each cycle'
-  const gstRate = docs.gstRate || '18'
-  const gstAmount = Math.max(0, Math.round((data.grandTotal ?? 0) - ((data.subtotal ?? 0) - (data.discountTotal ?? 0))))
-  const extraTerms = docs.extraTerms
-    ? docs.extraTerms.split('\n').map(t => t.trim()).filter(Boolean)
-    : []
+// Base Layout Switcher
+export function NbosDocument({ payload }: { payload: PdfPayload }) {
+  const tid = payload.templateId || 'modern'
+  
+  if (tid === 'corporate') return <CorporateTemplate payload={payload} />
+  if (tid === 'minimal') return <MinimalTemplate payload={payload} />
+  if (tid === 'elegant') return <LuxuryTemplate payload={payload} />
+  
+  return <ModernTemplate payload={payload} />
+}
+
+// -----------------------------------------------------------------------------
+// TEMPLATE 1: MODERN PROFESSIONAL (Stripe / Linear inspired)
+// -----------------------------------------------------------------------------
+const modernStyles = (primary: string, secondary: string, accent: string) => StyleSheet.create({
+  page: { backgroundColor: '#FFFFFF', paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 100, fontFamily: 'Helvetica', color: '#1E293B' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40 },
+  logo: { width: 100, maxHeight: 40, objectFit: 'contain' },
+  companyInfo: { alignItems: 'flex-end', fontSize: 9, color: secondary, lineHeight: 1.4 },
+  companyName: { fontSize: 16, fontWeight: 'bold', color: primary, marginBottom: 4 },
+  titleBlock: { backgroundColor: '#F8FAFC', padding: 20, borderRadius: 8, marginBottom: 30, borderLeftWidth: 4, borderLeftColor: accent },
+  docTitle: { fontSize: 24, fontWeight: 'bold', color: primary, marginBottom: 4 },
+  docMeta: { fontSize: 10, color: secondary },
+  grid2: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
+  infoCard: { width: '48%' },
+  infoLabel: { fontSize: 8, textTransform: 'uppercase', color: secondary, marginBottom: 4, letterSpacing: 1 },
+  infoText: { fontSize: 10, lineHeight: 1.4, color: primary },
+  infoTextBold: { fontSize: 11, fontWeight: 'bold', color: primary },
+  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: primary, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6 },
+  table: { width: '100%', marginBottom: 30 },
+  thRow: { flexDirection: 'row', backgroundColor: '#F1F5F9', paddingVertical: 8, paddingHorizontal: 10, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  th: { fontSize: 9, fontWeight: 'bold', color: secondary, textTransform: 'uppercase' },
+  tr: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  tdText: { fontSize: 9, color: '#334155' },
+  tdTitle: { fontSize: 10, fontWeight: 'bold', color: primary, marginBottom: 4 },
+  col1: { width: '50%' }, col2: { width: '15%', textAlign: 'center' }, col3: { width: '15%', textAlign: 'right' }, col4: { width: '20%', textAlign: 'right' },
+  totalsBox: { width: '40%', alignSelf: 'flex-end', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 6, marginBottom: 30 },
+  totRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  totLabel: { fontSize: 9, color: secondary },
+  totVal: { fontSize: 9, color: primary },
+  grandRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  grandLabel: { fontSize: 11, fontWeight: 'bold', color: primary },
+  grandVal: { fontSize: 11, fontWeight: 'bold', color: accent },
+  notesBox: { marginBottom: 30, fontSize: 9, color: secondary, lineHeight: 1.5 },
+  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 },
+  footerText: { fontSize: 8, color: secondary },
+  signatureBox: { width: 160, marginTop: 40, borderTopWidth: 1, borderTopColor: '#CBD5E1', paddingTop: 8 },
+  signatureImg: { width: 120, height: 40, objectFit: 'contain', marginBottom: 4 }
+})
+
+function ModernTemplate({ payload }: { payload: PdfPayload }) {
+  const p = payload.companySettings?.primaryColor || fallbackTheme.primary
+  const s = payload.companySettings?.secondaryColor || fallbackTheme.secondary
+  const a = payload.companySettings?.accentColor || fallbackTheme.accent
+  const st = modernStyles(p, s, a)
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        <Header docType={data.docType} docRef={docRef} company={co} tagline={tagline} />
-        <Footer company={co} tagline={tagline} docType={data.docType} invoiceFooter={docs.invoiceFooter} />
-
-        {/* ── Project Title ── */}
-        <View style={s.spacer8} />
-        <Text style={s.h1}>{data.projectTitle || `${DOC_LABELS[data.docType]}`}</Text>
-        <View style={s.spacer8} />
-
-        {/* ── PREPARED FOR card ── */}
-        <View style={s.prepCard}>
-          <Text style={[s.gold, { fontFamily: 'Helvetica-Bold', fontSize: 8, marginBottom: 4 }]}>PREPARED FOR</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 16, color: C.white, marginBottom: 2 }}>
-            {data.clientName || 'Client'}
-          </Text>
-          {data.companyName && data.companyName !== data.clientName && (
-            <Text style={s.muted}>{data.companyName}</Text>
+      <Page size="A4" style={st.page}>
+        {/* Header */}
+        <View style={st.header}>
+          {payload.companySettings?.logo ? (
+            <Image src={payload.companySettings.logo} style={st.logo} />
+          ) : (
+            <Text style={st.companyName}>{payload.companySettings?.name || 'Netgain Studio'}</Text>
           )}
-          {(ci.business || ci.industry || ci.mobile) && (
-            <View style={{ marginTop: 6 }}>
-              {ci.business && <Text style={s.muted}><Text style={s.gold}>BUSINESS  </Text>{ci.business}</Text>}
-              {ci.industry && <Text style={s.muted}><Text style={s.gold}>INDUSTRY  </Text>{ci.industry}</Text>}
-              {ci.mobile   && <Text style={s.muted}><Text style={s.gold}>MOBILE  </Text>{ci.mobile}</Text>}
-            </View>
-          )}
+          <View style={st.companyInfo}>
+            {(!payload.companySettings?.logo) && <Text style={{ marginBottom: 4 }}>{payload.docsSettings?.tagline}</Text>}
+            <Text>{payload.companySettings?.email}</Text>
+            <Text>{payload.companySettings?.phone}</Text>
+            <Text>{payload.companySettings?.website}</Text>
+            {payload.companySettings?.gst && <Text>GST: {payload.companySettings.gst}</Text>}
+            {payload.companySettings?.panNumber && <Text>PAN: {payload.companySettings.panNumber}</Text>}
+          </View>
         </View>
 
-        {/* ── Service Cards ── */}
-        {items.length > 0 && isFinancial && (
-          <>
-            <Text style={s.h2}>RECOMMENDED SERVICES & DELIVERABLES</Text>
-            <View style={s.spacer4} />
-            {items.map((item, idx) => (
-              <View key={idx} style={s.card} wrap={false}>
-                {/* Service name + price */}
-                <View style={s.cardHeaderRow}>
-                  <Text style={s.svcName}>{(idx + 1).toString().padStart(2, '0')}. {item.serviceName}</Text>
-                  <Text style={s.svcPrice}>
-                    {INR(item.finalPrice)}{item.pricing_model === 'monthly' ? ' / month' : ''}
-                  </Text>
-                </View>
+        {/* Title */}
+        <View style={st.titleBlock}>
+          <Text style={st.docTitle}>{payload.projectTitle || payload.docType}</Text>
+          <Text style={st.docMeta}>Date: {getDocDate()} - Document Reference: {payload.clientName.replace(/\s+/g, '-').toUpperCase()}-{new Date().getFullYear()}</Text>
+        </View>
 
-                {/* Category · Timeline */}
-                <Text style={s.svcMeta}>
-                  {item.category || 'SERVICE'}{item.timeline ? `  ·  Timeline: ${item.timeline}` : ''}
-                </Text>
+        {/* Info Grid */}
+        <View style={st.grid2}>
+          <View style={st.infoCard}>
+            <Text style={st.infoLabel}>Prepared For</Text>
+            <Text style={st.infoTextBold}>{payload.clientName}</Text>
+            <Text style={st.infoText}>{payload.companyName}</Text>
+            {payload.clientInfo?.mobile && <Text style={st.infoText}>{payload.clientInfo.mobile}</Text>}
+            {payload.clientInfo?.gst && <Text style={st.infoText}>GST: {payload.clientInfo.gst}</Text>}
+          </View>
+          <View style={st.infoCard}>
+            <Text style={st.infoLabel}>Prepared By</Text>
+            <Text style={st.infoTextBold}>{payload.founderSettings?.name || 'Account Executive'}</Text>
+            <Text style={st.infoText}>{payload.founderSettings?.designation || 'Netgain Studio'}</Text>
+            <Text style={st.infoText}>{payload.founderSettings?.email || payload.companySettings?.email}</Text>
+          </View>
+        </View>
 
-                {/* ── Payment type badge ── */}
-                <View style={{
-                  marginTop: 7,
-                  backgroundColor: item.pricing_model === 'monthly' ? '#1a2e1a' : '#1a2200',
-                  borderLeftWidth: 3,
-                  borderLeftColor: item.pricing_model === 'monthly' ? '#F59E0B' : '#22c55e',
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 2,
-                }}>
-                  <Text style={{
-                    fontFamily: 'Helvetica-Bold',
-                    fontSize: 8,
-                    color: item.pricing_model === 'monthly' ? '#F59E0B' : '#22c55e',
-                  }}>
-                    {item.pricing_model === 'monthly'
-                      ? 'MONTHLY RECURRING PAYMENT'
-                      : 'ONE-TIME PAYMENT'}
-                  </Text>
-                  <Text style={{ fontFamily: 'Helvetica', fontSize: 7.5, color: C.slate, marginTop: 2 }}>
-                    {item.pricing_model === 'monthly'
-                      ? `Full monthly fee of ${INR(item.finalPrice)} payable in advance at the start of each billing cycle.`
-                      : `50% advance (${INR(Math.round(item.finalPrice * 0.5))}) to begin work  ·  50% balance (${INR(Math.round(item.finalPrice * 0.5))}) on final delivery.`}
-                  </Text>
-                </View>
-
-                {/* Deliverables */}
-                {item.deliverables && item.deliverables.length > 0 && (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: C.gold, marginBottom: 4 }}>
-                      WHAT'S INCLUDED:
-                    </Text>
-                    {item.deliverables.map((d, di) => (
-                      <Text key={di} style={[s.body, { fontSize: 8, marginBottom: 2 }]}>{'  • '}{d}</Text>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-          </>
+        {/* Content (SOW/Agreements text or Line Items) */}
+        {payload.content && (
+          <View style={{ marginBottom: 30 }}>
+            <Text style={st.sectionTitle}>Agreement Details</Text>
+            <MarkdownRenderer content={payload.content} style={{ fontSize: 10, lineHeight: 1.5, color: '#334155' }} />
+          </View>
         )}
 
-        {/* ── Ad Budget Details ── */}
-        {data.adBudget && data.adBudget > 0 && (
-          <View style={{ marginBottom: 12 }} wrap={false}>
-            <Text style={s.h2}>ADVERTISING BUDGET DETAILS</Text>
-            <View style={s.card}>
-              <View style={s.cardHeaderRow}>
-                <Text style={s.svcName}>Google / Meta Ads Campaign Budget</Text>
-                <Text style={s.svcPrice}>{INR(data.adBudget)} / month</Text>
+        {/* Line Items */}
+        {payload.items && payload.items.length > 0 && (
+          <View>
+            <Text style={st.sectionTitle}>Investment Breakdown</Text>
+            <View style={st.table}>
+              <View style={st.thRow}>
+                <Text style={[st.th, st.col1]}>Service / Description</Text>
+                <Text style={[st.th, st.col2]}>Price</Text>
+                <Text style={[st.th, st.col3]}>Qty</Text>
+                <Text style={[st.th, st.col4]}>Total</Text>
               </View>
-              <Text style={s.svcMeta}>
-                Billing Mode: {data.adBudgetBillThrough ? 'Billed via Netgain (included in Invoice Total)' : 'Paid directly to platforms by Client'}
-              </Text>
-              {!data.adBudgetBillThrough && (
-                <Text style={{ fontFamily: 'Helvetica', fontSize: 7.5, color: C.slate, marginTop: 4 }}>
-                  * Note: This ad budget is managed by Netgain but paid directly to Google/Meta by the client. It is not included in the payment totals below.
-                </Text>
+              {payload.items.map((item, idx) => (
+                <View key={idx} style={st.tr}>
+                    <View style={st.col1}>
+                      <Text style={st.tdTitle}>{item.serviceName}</Text>
+                      {item.deliverables && item.deliverables.length > 0 && item.deliverables.map((d, i) => (
+                        <Text key={i} style={st.tdText}>- {d}</Text>
+                      ))}
+                      
+                    </View>
+                  <Text style={[st.tdText, st.col2]}>{formatCurrency(item.finalPrice)}</Text>
+                  <Text style={[st.tdText, st.col3]}>{item.quantity || 1}</Text>
+                  <Text style={[st.tdText, st.col4]}>{formatCurrency((item.finalPrice) * (item.quantity || 1))}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Totals */}
+            <View style={st.totalsBox}>
+              <View style={st.totRow}>
+                <Text style={st.totLabel}>Subtotal</Text>
+                <Text style={st.totVal}>{formatCurrency(payload.subtotal)}</Text>
+              </View>
+              {(payload.discountTotal || 0) > 0 && (
+                <View style={st.totRow}>
+                  <Text style={st.totLabel}>Discount</Text>
+                  <Text style={[st.totVal, { color: '#EF4444' }]}>-{formatCurrency(payload.discountTotal)}</Text>
+                </View>
               )}
+              {payload.docsSettings?.gstRate && (
+                <View style={st.totRow}>
+                  <Text style={st.totLabel}>GST ({payload.docsSettings.gstRate}%)</Text>
+                  <Text style={st.totVal}>{formatCurrency((payload.grandTotal || 0) - (payload.subtotal || 0) + (payload.discountTotal || 0))}</Text>
+                </View>
+              )}
+              <View style={st.grandRow}>
+                <Text style={st.grandLabel}>Grand Total</Text>
+                <Text style={st.grandVal}>{formatCurrency(payload.grandTotal)}</Text>
+              </View>
             </View>
           </View>
         )}
 
-        {/* ── Rich Content Body ── */}
-        {data.content && data.content.trim() && (
-          <>
-            <View style={s.spacer8} />
-            <RenderContent text={data.content} docType={data.docType} isSigned={!!data.signatureDetails} />
-          </>
+        {/* Payment & Bank Details */}
+        <View style={st.grid2}>
+          {payload.bankSettings?.accountNumber && (
+            <View style={st.infoCard}>
+              <Text style={st.sectionTitle}>Banking Details</Text>
+              <Text style={st.infoTextBold}>{payload.bankSettings.bank}</Text>
+              <Text style={st.infoText}>A/c Name: {payload.bankSettings.accountName}</Text>
+              <Text style={st.infoText}>A/c No: {payload.bankSettings.accountNumber}</Text>
+              <Text style={st.infoText}>IFSC: {payload.bankSettings.ifsc}</Text>
+              {payload.bankSettings.upiId && <Text style={st.infoText}>UPI: {payload.bankSettings.upiId}</Text>}
+            </View>
+          )}
+          {payload.paymentScheduleObj && (
+            <View style={st.infoCard}>
+              <Text style={st.sectionTitle}>Payment Schedule</Text>
+              {payload.paymentScheduleObj.points.map((pt, i) => (
+                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={st.infoText}>{pt.label}</Text>
+                  <Text style={st.infoTextBold}>{formatCurrency(((payload.fullProjectTotal || payload.grandTotal || 0) * pt.pct) / 100)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Terms */}
+        <View style={st.notesBox}>
+          <Text style={st.sectionTitle}>Terms & Conditions</Text>
+          {payload.docsSettings?.customTerms ? (
+             payload.docsSettings.customTerms.split('\n').map((t, i) => <Text key={i} style={{ marginBottom: 4 }}>- {t}</Text>)
+          ) : (
+             <Text>As per standard Netgain Studio terms of service.</Text>
+          )}
+        </View>
+
+        {/* Signatures */}
+        {payload.signatureDetails && (
+          <View style={st.grid2}>
+             <View style={st.signatureBox}>
+               {payload.companySettings?.signature ? (
+                 <Image src={payload.companySettings.signature} style={st.signatureImg} />
+               ) : (
+                 <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p, marginBottom: 10 }}>{payload.founderSettings?.name}</Text>
+               )}
+               <Text style={st.infoTextBold}>{payload.founderSettings?.name}</Text>
+               <Text style={st.infoText}>Authorized Signatory</Text>
+             </View>
+             <View style={st.signatureBox}>
+               {payload.signatureDetails.signatureImage ? (
+                 <Image src={payload.signatureDetails.signatureImage} style={st.signatureImg} />
+               ) : (
+                 <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p, marginBottom: 10 }}>{payload.signatureDetails.signatureText}</Text>
+               )}
+               <Text style={st.infoTextBold}>{payload.signatureDetails.clientName}</Text>
+               <Text style={st.infoText}>Verified: {payload.signatureDetails.signedAt}</Text>
+               <Text style={[st.infoText, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
+             </View>
+          </View>
         )}
 
-        {/* ── Investment Summary & Payment QR Code ── */}
-        {isFinancial && (data.grandTotal ?? 0) > 0 && (
-          <>
-            <Text style={s.h2}>INVESTMENT SUMMARY</Text>
-            {data.docType === 'Invoice' && data.bankSettings?.upiId ? (
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-                {/* Investment Card (Left) */}
-                <View style={[s.invCard, { flex: 1, marginBottom: 0 }]}>
-                  {(data.subtotal ?? 0) > 0 && (
-                    <View style={s.invRow}>
-                      <Text style={s.invLabel}>Subtotal charges</Text>
-                      <Text style={s.invValue}>{INR(data.subtotal!)}</Text>
-                    </View>
-                  )}
-                  {(data.discountTotal ?? 0) > 0 && (
-                    <View style={s.invRow}>
-                      <Text style={s.invLabel}>Calculated discount</Text>
-                      <Text style={[s.invValue, { color: '#34d399' }]}>−{INR(data.discountTotal!)}</Text>
-                    </View>
-                  )}
-                  {gstAmount > 0 && (
-                    <View style={s.invRow}>
-                      <Text style={s.invLabel}>GST ({gstRate}%)</Text>
-                      <Text style={s.invValue}>+{INR(gstAmount)}</Text>
-                    </View>
-                  )}
-                  <View style={s.invDivider} />
-                  <View style={s.invRow}>
-                    <Text style={s.invTotalLabel}>Total (payable now)</Text>
-                    <Text style={s.invTotalValue}>{INR(data.grandTotal!)}</Text>
-                  </View>
-                </View>
-
-                {/* UPI QR Code (Right) */}
-                <View style={{
-                  backgroundColor: C.card,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderRadius: 2,
-                  width: 160,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {(() => {
-                    const upiId = data.bankSettings?.upiId || ''
-                    const recipientName = data.bankSettings?.accountName || co.name || 'Netgain Studio'
-                    const amount = data.grandTotal!
-                    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(recipientName)}&am=${amount}&cu=INR`
-                    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiUri)}`
-                    return (
-                      <>
-                        <Image src={qrCodeUrl} style={{ width: 80, height: 80, marginBottom: 6 }} />
-                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7, color: C.gold }}>SCAN & PAY VIA UPI</Text>
-                        <Text style={{ fontFamily: 'Helvetica', fontSize: 6, color: C.slate, marginTop: 2 }}>{upiId}</Text>
-                      </>
-                    )
-                  })()}
-                </View>
-              </View>
-            ) : (
-              <View style={s.invCard}>
-                {(data.subtotal ?? 0) > 0 && (
-                  <View style={s.invRow}>
-                    <Text style={s.invLabel}>Subtotal charges</Text>
-                    <Text style={s.invValue}>{INR(data.subtotal!)}</Text>
-                  </View>
-                )}
-                {(data.discountTotal ?? 0) > 0 && (
-                  <View style={s.invRow}>
-                    <Text style={s.invLabel}>Calculated discount</Text>
-                    <Text style={[s.invValue, { color: '#34d399' }]}>−{INR(data.discountTotal!)}</Text>
-                  </View>
-                )}
-                {gstAmount > 0 && (
-                  <View style={s.invRow}>
-                    <Text style={s.invLabel}>GST ({gstRate}%)</Text>
-                    <Text style={s.invValue}>+{INR(gstAmount)}</Text>
-                  </View>
-                )}
-                <View style={s.invDivider} />
-                <View style={s.invRow}>
-                  <Text style={s.invTotalLabel}>Total (payable now)</Text>
-                  <Text style={s.invTotalValue}>{INR(data.grandTotal!)}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Payment schedule breakdown */}
-            {items.length > 0 && ['Quotation', 'Invoice'].includes(data.docType) && (() => {
-              const oneTime = items.filter(i => i.pricing_model !== 'monthly')
-              const monthly = items.filter(i => i.pricing_model === 'monthly')
-              const oneTimeSub = oneTime.reduce((a, i) => a + i.finalPrice, 0)
-              const monthlyTotal = monthly.reduce((a, i) => a + i.finalPrice, 0)
-              if (oneTime.length === 0 && monthly.length === 0) return null
-
-              const hasPaymentSchedule = !!data.paymentScheduleObj || (data.docType === 'Quotation' && !data.paymentScheduleId)
-              if (!hasPaymentSchedule) return null
-
-              return (
-                <View style={{ marginTop: 10, marginBottom: 4 }}>
-                  <Text style={[s.h2, { marginTop: 6 }]}>PAYMENT SCHEDULE</Text>
-                  <View style={s.invCard}>
-                    {data.paymentScheduleObj ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#22c55e', marginBottom: 6 }}>{data.paymentScheduleObj.name.toUpperCase()}</Text>
-                        {data.paymentScheduleObj.points.map((pt, i) => (
-                          <View key={i} style={s.invRow}>
-                            <Text style={s.invLabel}>{pt.label} ({pt.pct}%)</Text>
-                            <Text style={i === 0 ? [s.invValue, { color: '#22c55e' }] : s.invValue}>INR {Math.round((data.fullProjectTotal ?? data.grandTotal!) * (pt.pct / 100)).toLocaleString('en-IN')}</Text>
-                          </View>
-                        ))}
-                        {monthly.length > 0 && <View style={s.invDivider} />}
-                      </View>
-                    ) : oneTime.length > 0 ? (
-                      <View>
-                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#22c55e', marginBottom: 6 }}>ONE-TIME SERVICES</Text>
-                        <View style={s.invRow}>
-                          <Text style={s.invLabel}>Advance to begin (50%)</Text>
-                          <Text style={[s.invValue, { color: '#22c55e' }]}>INR {Math.round(oneTimeSub * 0.5).toLocaleString('en-IN')}</Text>
-                        </View>
-                        <View style={s.invRow}>
-                          <Text style={s.invLabel}>Balance on delivery (50%)</Text>
-                          <Text style={s.invValue}>INR {Math.round(oneTimeSub * 0.5).toLocaleString('en-IN')}</Text>
-                        </View>
-                        {monthly.length > 0 && <View style={s.invDivider} />}
-                      </View>
-                    ) : null}
-                    {monthly.length > 0 && (
-                      <View style={{ marginTop: oneTime.length > 0 || data.paymentScheduleObj ? 4 : 0 }}>
-                        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: '#F59E0B', marginBottom: 6 }}>MONTHLY RECURRING SERVICES</Text>
-                        <View style={s.invRow}>
-                          <Text style={s.invLabel}>Due every month (in advance)</Text>
-                          <Text style={[s.invValue, { color: '#F59E0B' }]}>INR {monthlyTotal.toLocaleString('en-IN')}/month</Text>
-                        </View>
-                        <Text style={[s.muted, { fontSize: 7.5, marginTop: 3 }]}>Billed on the 1st of each month. First payment due before campaign commencement.</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              )
-            })()}
-            {/* Terms & Conditions — driven by docsSettings */}
-            {((docs.customTerms && docs.customTerms.trim()) || (data.docType === 'Invoice' && docs.invoiceTerms && docs.invoiceTerms.trim())) && (
-              <>
-                <Text style={s.h2}>TERMS & CONDITIONS</Text>
-                {docs.customTerms && docs.customTerms.trim() ? (
-                  docs.customTerms.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
-                    <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-                  ))
-                ) : (
-                  docs.invoiceTerms!.split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => (
-                    <Text key={i} style={s.termBullet}>{'• '}{t}</Text>
-                  ))
-                )}
-              </>
-            )}
-
-            {/* ── Signature & Audit Block ── */}
-            {data.signatureDetails && (
-              <View style={s.sigContainer} wrap={false}>
-                <Text style={[s.h2, { marginTop: 0 }]}>E-SIGNATURE & AUDIT CERTIFICATE</Text>
-                <View style={s.sep} />
-                <View style={s.sigBlockRow}>
-                  {/* Prepared By */}
-                  <View style={s.sigColumn}>
-                    <Text style={s.sigTitle}>PREPARED BY</Text>
-                    <Text style={s.sigName}>{co.name || 'Netgain Studio'}</Text>
-                    <Text style={s.sigMeta}>{founder.name || 'Hemanth Anala'}</Text>
-                    <Text style={s.sigMeta}>{founder.designation || 'Founder & CEO'}</Text>
-                    <Text style={s.sigMeta}>{co.email || 'mail.netgain@gmail.com'}</Text>
-                    <Text style={[s.sigMeta, { fontFamily: 'Helvetica-Bold', marginTop: 4, color: '#D4AF37' }]}>Digitally Certified</Text>
-                  </View>
-
-                  {/* Accepted By */}
-                  <View style={s.sigColumn}>
-                    <Text style={s.sigTitle}>ACCEPTED & DIGITALLY SIGNED BY</Text>
-                    <Text style={s.sigName}>{data.signatureDetails.clientName}</Text>
-                    {data.signatureDetails.company && (
-                      <Text style={s.sigMeta}>{data.signatureDetails.company}</Text>
-                    )}
-                    
-                    {/* Render Signature Image / Text */}
-                    <View style={{ marginTop: 4, marginBottom: 4 }}>
-                      {data.signatureDetails.signatureType === 'drawn' && data.signatureDetails.signatureImage ? (
-                        <Image src={data.signatureDetails.signatureImage} style={s.sigImage} />
-                      ) : (
-                        <Text style={
-                          data.signatureDetails.signatureFont === 'AlexBrush' ? s.sigTextAlex : s.sigTextDancing
-                        }>
-                          {data.signatureDetails.signatureText || data.signatureDetails.clientName}
-                        </Text>
-                      )}
-                    </View>
-
-                    <Text style={s.sigMeta}>Signed via Netgain Business OS</Text>
-                    <Text style={s.sigMeta}>Date: {data.signatureDetails.signedAt}</Text>
-                    <Text style={[s.sigMeta, { fontFamily: 'Helvetica-Bold', color: '#D4AF37' }]}>
-                      Verification ID: {data.signatureDetails.verificationId}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-          </>
-        )}
+        {/* Footer */}
+        <View style={st.footer} fixed>
+          <Text style={st.footerText}>{payload.companySettings?.name} - {payload.companySettings?.website}</Text>
+          <Text style={st.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        </View>
       </Page>
     </Document>
   )
 }
+
+// -----------------------------------------------------------------------------
+// TEMPLATE 2: CORPORATE EXECUTIVE (Deloitte / EY style)
+// -----------------------------------------------------------------------------
+const corpStyles = (primary: string, secondary: string, accent: string) => StyleSheet.create({
+  page: { backgroundColor: '#FFFFFF', paddingTop: 40, paddingLeft: 40, paddingRight: 40, paddingBottom: 100, fontFamily: 'Helvetica', color: '#333333' },
+  headerStrip: { height: 12, backgroundColor: primary, position: 'absolute', top: 0, left: 0, right: 0 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, borderBottomWidth: 2, borderBottomColor: primary, paddingBottom: 20, marginBottom: 30 },
+  logo: { width: 120, maxHeight: 45, objectFit: 'contain' },
+  docType: { fontSize: 28, fontWeight: 'bold', color: primary, textTransform: 'uppercase', letterSpacing: 2 },
+  grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
+  box: { padding: 15, borderLeftWidth: 3, borderLeftColor: primary, backgroundColor: '#F9FAFB', width: '48%' },
+  boxTitle: { fontSize: 9, fontWeight: 'bold', color: secondary, textTransform: 'uppercase', marginBottom: 6 },
+  text: { fontSize: 10, lineHeight: 1.4 },
+  textBold: { fontSize: 10, fontWeight: 'bold' },
+  table: { width: '100%', marginBottom: 30, borderWidth: 1, borderColor: '#E5E7EB' },
+  thRow: { flexDirection: 'row', backgroundColor: primary },
+  th: { fontSize: 9, fontWeight: 'bold', color: '#FFFFFF', padding: 8 },
+  tr: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E5E7EB' },
+  td: { padding: 8, fontSize: 9 },
+  col1: { width: '55%' }, col2: { width: '15%', textAlign: 'center' }, col3: { width: '30%', textAlign: 'right' },
+  totalsWrapper: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 30 },
+  totalsBox: { width: '50%', borderWidth: 1, borderColor: '#E5E7EB' },
+  totRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 8, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
+  totLabel: { fontSize: 10, fontWeight: 'bold' },
+  totVal: { fontSize: 10 },
+  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: secondary, paddingTop: 10 },
+  footerText: { fontSize: 8, color: secondary },
+  confidential: { position: 'absolute', bottom: 15, left: 40, right: 40, textAlign: 'center', fontSize: 8, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 2 }
+})
+
+function CorporateTemplate({ payload }: { payload: PdfPayload }) {
+  const p = payload.companySettings?.primaryColor || '#1E3A8A'
+  const s = payload.companySettings?.secondaryColor || '#4B5563'
+  const a = payload.companySettings?.accentColor || '#2563EB'
+  const st = corpStyles(p, s, a)
+
+  return (
+    <Document>
+      <Page size="A4" style={st.page}>
+        <View style={st.headerStrip} fixed />
+        
+        <View style={st.header}>
+          {payload.companySettings?.logo ? (
+            <Image src={payload.companySettings.logo} style={st.logo} />
+          ) : (
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: p }}>{payload.companySettings?.name}</Text>
+          )}
+          <Text style={st.docType}>{payload.docType}</Text>
+        </View>
+
+        <View style={st.grid}>
+          <View style={st.box}>
+            <Text style={st.boxTitle}>Client Information</Text>
+            <Text style={st.textBold}>{payload.clientName}</Text>
+            <Text style={st.text}>{payload.companyName}</Text>
+            <Text style={st.text}>Date: {getDocDate()}</Text>
+          </View>
+          <View style={st.box}>
+            <Text style={st.boxTitle}>Corporate Details</Text>
+            <Text style={st.textBold}>{payload.companySettings?.name}</Text>
+            <Text style={st.text}>{payload.companySettings?.email}</Text>
+            <Text style={st.text}>{payload.companySettings?.website}</Text>
+            {payload.companySettings?.gst && <Text style={st.text}>GST: {payload.companySettings.gst}</Text>}
+          </View>
+        </View>
+
+        {payload.content && (
+          <View style={{ marginBottom: 30 }}>
+            <Text style={[st.boxTitle, { color: p, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 4, marginBottom: 8 }]}>Scope / Terms</Text>
+            <MarkdownRenderer content={payload.content} style={{ fontSize: 10, lineHeight: 1.5 }} />
+          </View>
+        )}
+
+        {payload.items && payload.items.length > 0 && (
+          <View style={st.table}>
+            <View style={st.thRow}>
+              <Text style={[st.th, st.col1]}>Description</Text>
+              <Text style={[st.th, st.col2]}>Qty</Text>
+              <Text style={[st.th, st.col3]}>Total Amount</Text>
+            </View>
+            {payload.items.map((item, idx) => (
+              <View key={idx} style={st.tr}>
+                  <View style={[st.td, st.col1]}>
+                    <Text style={st.textBold}>{item.serviceName}</Text>
+                    {item.deliverables && item.deliverables.length > 0 && item.deliverables.map((d, i) => <Text key={i} style={st.text}>- {d}</Text>)}
+                    
+                  </View>
+                <Text style={[st.td, st.col2]}>{item.quantity || 1}</Text>
+                <Text style={[st.td, st.col3]}>{formatCurrency((item.finalPrice) * (item.quantity || 1))}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={st.totalsWrapper}>
+          <View style={st.totalsBox}>
+            <View style={[st.totRow, { borderTopWidth: 0 }]}><Text style={st.totLabel}>Subtotal</Text><Text style={st.totVal}>{formatCurrency(payload.subtotal)}</Text></View>
+            {(payload.discountTotal || 0) > 0 && <View style={st.totRow}><Text style={st.totLabel}>Discount</Text><Text style={st.totVal}>-{formatCurrency(payload.discountTotal)}</Text></View>}
+            {payload.docsSettings?.gstRate && <View style={st.totRow}><Text style={st.totLabel}>Taxes ({payload.docsSettings.gstRate}%)</Text><Text style={st.totVal}>{formatCurrency((payload.grandTotal || 0) - (payload.subtotal || 0) + (payload.discountTotal || 0))}</Text></View>}
+            <View style={[st.totRow, { backgroundColor: '#F9FAFB' }]}><Text style={st.totLabel}>Grand Total</Text><Text style={[st.totVal, { fontWeight: 'bold' }]}>{formatCurrency(payload.grandTotal)}</Text></View>
+          </View>
+        </View>
+
+        {payload.signatureDetails && (
+          <View style={{ marginTop: 20 }}>
+            <Text style={[st.boxTitle, { color: p }]}>Execution</Text>
+            <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
+              <View>
+                 <Text style={st.textBold}>{payload.signatureDetails.clientName}</Text>
+                 <Text style={st.text}>Signed: {payload.signatureDetails.signedAt}</Text>
+              </View>
+              <View>
+                 <Text style={st.textBold}>{payload.founderSettings?.name}</Text>
+                 <Text style={st.text}>Authorized Representative</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={st.footer} fixed>
+          <Text style={st.footerText}>{payload.companySettings?.name} - Confidential</Text>
+          <Text style={st.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        </View>
+        <Text style={st.confidential} fixed>Strictly Confidential & Proprietary</Text>
+      </Page>
+    </Document>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// TEMPLATE 3: MINIMAL CLEAN (Apple / Notion style)
+// -----------------------------------------------------------------------------
+const minStyles = StyleSheet.create({
+  page: { backgroundColor: '#FFFFFF', paddingTop: 50, paddingLeft: 50, paddingRight: 50, paddingBottom: 110, fontFamily: 'Helvetica', color: '#111827' },
+  header: { marginBottom: 50 },
+  logo: { width: 60, maxHeight: 30, objectFit: 'contain', marginBottom: 20 },
+  docTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
+  metaRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 20, marginBottom: 30 },
+  metaBlock: { marginRight: 60 },
+  label: { fontSize: 8, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  value: { fontSize: 10, lineHeight: 1.5 },
+  table: { width: '100%', marginBottom: 40 },
+  tr: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingVertical: 12 },
+  col1: { width: '70%' }, col2: { width: '30%', textAlign: 'right' },
+  title: { fontSize: 10, fontWeight: 'bold' },
+  desc: { fontSize: 9, color: '#6B7280', marginTop: 4 },
+  totals: { alignSelf: 'flex-end', width: '40%', borderTopWidth: 2, borderTopColor: '#111827', paddingTop: 12 },
+  totRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  footer: { position: 'absolute', bottom: 40, left: 50, right: 50, flexDirection: 'row', justifyContent: 'space-between' },
+  footerText: { fontSize: 8, color: '#9CA3AF' }
+})
+
+function MinimalTemplate({ payload }: { payload: PdfPayload }) {
+  return (
+    <Document>
+      <Page size="A4" style={minStyles.page}>
+        <View style={minStyles.header}>
+          {payload.companySettings?.logo && <Image src={payload.companySettings.logo} style={minStyles.logo} />}
+          <Text style={minStyles.docTitle}>{payload.docType}</Text>
+        </View>
+
+        <View style={minStyles.metaRow}>
+          <View style={minStyles.metaBlock}>
+            <Text style={minStyles.label}>To</Text>
+            <Text style={minStyles.value}>{payload.clientName}</Text>
+            <Text style={minStyles.value}>{payload.companyName}</Text>
+          </View>
+          <View style={minStyles.metaBlock}>
+            <Text style={minStyles.label}>From</Text>
+            <Text style={minStyles.value}>{payload.companySettings?.name}</Text>
+            <Text style={minStyles.value}>{payload.companySettings?.email}</Text>
+          </View>
+          <View style={minStyles.metaBlock}>
+            <Text style={minStyles.label}>Date</Text>
+            <Text style={minStyles.value}>{getDocDate()}</Text>
+          </View>
+        </View>
+
+        {payload.content && (
+          <View style={{ marginBottom: 40 }}>
+            <MarkdownRenderer content={payload.content} style={{ fontSize: 10, lineHeight: 1.6 }} />
+          </View>
+        )}
+
+        {payload.items && payload.items.length > 0 && (
+          <View style={minStyles.table}>
+            <View style={[minStyles.tr, { borderBottomWidth: 2, borderBottomColor: '#111827' }]}>
+              <Text style={[minStyles.label, minStyles.col1]}>Description</Text>
+              <Text style={[minStyles.label, minStyles.col2]}>Amount</Text>
+            </View>
+            {payload.items.map((item, idx) => (
+              <View key={idx} style={minStyles.tr}>
+                  <View style={minStyles.col1}>
+                    <Text style={minStyles.title}>{item.serviceName}</Text>
+                    {item.deliverables && item.deliverables.length > 0 && <Text style={minStyles.desc}>{item.deliverables.join(' - ')}</Text>}
+                    
+                  </View>
+                <Text style={[minStyles.value, minStyles.col2]}>{formatCurrency((item.finalPrice) * (item.quantity || 1))}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={minStyles.totals}>
+           <View style={minStyles.totRow}><Text style={minStyles.label}>Subtotal</Text><Text style={minStyles.value}>{formatCurrency(payload.subtotal)}</Text></View>
+           {payload.docsSettings?.gstRate && <View style={minStyles.totRow}><Text style={minStyles.label}>Tax</Text><Text style={minStyles.value}>{formatCurrency((payload.grandTotal || 0) - (payload.subtotal || 0) + (payload.discountTotal || 0))}</Text></View>}
+           <View style={[minStyles.totRow, { marginTop: 10 }]}><Text style={[minStyles.label, { color: '#111827', fontWeight: 'bold' }]}>Total</Text><Text style={[minStyles.value, { fontWeight: 'bold', fontSize: 12 }]}>{formatCurrency(payload.grandTotal)}</Text></View>
+        </View>
+
+        <View style={minStyles.footer} fixed>
+          <Text style={minStyles.footerText}>{payload.companySettings?.name}</Text>
+          <Text style={minStyles.footerText} render={({ pageNumber }) => `${pageNumber}`} />
+        </View>
+      </Page>
+    </Document>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// TEMPLATE 4: LUXURY ELEGANT (Premium Agency style)
+// -----------------------------------------------------------------------------
+const luxStyles = (gold: string, charcoal: string) => StyleSheet.create({
+  page: { backgroundColor: '#FAFAFA', paddingTop: 50, paddingLeft: 50, paddingRight: 50, paddingBottom: 110, fontFamily: 'Times-Roman', color: charcoal },
+  borderWrap: { position: 'absolute', top: 20, left: 20, right: 20, bottom: 20, borderWidth: 1, borderColor: gold },
+  header: { alignItems: 'center', marginBottom: 40, borderBottomWidth: 1, borderBottomColor: gold, paddingBottom: 30 },
+  logo: { width: 140, maxHeight: 60, objectFit: 'contain', marginBottom: 15 },
+  docType: { fontSize: 20, color: gold, letterSpacing: 4, textTransform: 'uppercase' },
+  grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 40, paddingHorizontal: 20 },
+  titleText: { fontSize: 10, color: gold, fontStyle: 'italic', marginBottom: 5 },
+  valText: { fontSize: 11, lineHeight: 1.6 },
+  table: { paddingHorizontal: 20, marginBottom: 40 },
+  tr: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#D1D5DB', paddingVertical: 10 },
+  col1: { width: '80%' }, col2: { width: '20%', textAlign: 'right' },
+  service: { fontSize: 12, fontWeight: 'bold', marginBottom: 4 },
+  desc: { fontSize: 10, color: '#6B7280', fontStyle: 'italic' },
+  totals: { alignItems: 'flex-end', paddingHorizontal: 20 },
+  totRow: { flexDirection: 'row', width: 200, justifyContent: 'space-between', marginBottom: 6 },
+  totLabel: { fontSize: 10, color: '#6B7280' },
+  totVal: { fontSize: 11 },
+  footer: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center' },
+  footerText: { fontSize: 9, color: '#9CA3AF', fontStyle: 'italic' }
+})
+
+function LuxuryTemplate({ payload }: { payload: PdfPayload }) {
+  const gold = payload.companySettings?.primaryColor || '#D4AF37'
+  const char = payload.companySettings?.secondaryColor || '#1F2937'
+  const st = luxStyles(gold, char)
+
+  return (
+    <Document>
+      <Page size="A4" style={st.page}>
+        <View style={st.borderWrap} fixed />
+        
+        <View style={st.header}>
+          {payload.companySettings?.logo ? (
+            <Image src={payload.companySettings.logo} style={st.logo} />
+          ) : (
+            <Text style={{ fontSize: 24, color: char, marginBottom: 10 }}>{payload.companySettings?.name}</Text>
+          )}
+          <Text style={st.docType}>{payload.docType}</Text>
+        </View>
+
+        <View style={st.grid}>
+           <View>
+             <Text style={st.titleText}>Prepared For</Text>
+             <Text style={st.valText}>{payload.clientName}</Text>
+             <Text style={st.valText}>{payload.companyName}</Text>
+           </View>
+           <View style={{ alignItems: 'flex-end' }}>
+             <Text style={st.titleText}>Date</Text>
+             <Text style={st.valText}>{getDocDate()}</Text>
+             <Text style={st.titleText}>Amount</Text>
+             <Text style={st.valText}>{formatCurrency(payload.grandTotal)}</Text>
+           </View>
+        </View>
+
+        {payload.content && (
+          <View style={{ paddingHorizontal: 20, marginBottom: 40 }}>
+            <MarkdownRenderer content={payload.content} style={{ fontSize: 11, lineHeight: 1.8, textAlign: 'justify' }} />
+          </View>
+        )}
+
+        {payload.items && payload.items.length > 0 && (
+          <View style={st.table}>
+            {payload.items.map((item, idx) => (
+              <View key={idx} style={st.tr}>
+                  <View style={st.col1}>
+                    <Text style={st.service}>{item.serviceName}</Text>
+                    {item.deliverables && item.deliverables.length > 0 && <Text style={st.desc}>{item.deliverables.join(', ')}</Text>}
+                    
+                  </View>
+                <Text style={[st.valText, st.col2]}>{formatCurrency((item.finalPrice) * (item.quantity || 1))}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={st.totals}>
+          <View style={st.totRow}><Text style={st.totLabel}>Subtotal</Text><Text style={st.totVal}>{formatCurrency(payload.subtotal)}</Text></View>
+          <View style={st.totRow}><Text style={st.totLabel}>Taxes</Text><Text style={st.totVal}>{formatCurrency((payload.grandTotal || 0) - (payload.subtotal || 0) + (payload.discountTotal || 0))}</Text></View>
+          <View style={[st.totRow, { borderTopWidth: 1, borderTopColor: gold, paddingTop: 6, marginTop: 4 }]}><Text style={[st.totLabel, { color: gold }]}>Grand Total</Text><Text style={[st.totVal, { color: gold }]}>{formatCurrency(payload.grandTotal)}</Text></View>
+        </View>
+
+        <View style={st.footer} fixed>
+          <Text style={st.footerText}>{payload.companySettings?.name} - {payload.companySettings?.website}</Text>
+        </View>
+      </Page>
+    </Document>
+  )
+}
+

@@ -27,6 +27,8 @@ import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { ServiceAutocomplete } from '@/components/ui/service-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 import { LineItemsTable } from '@/components/ui/line-items-table'
+import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
+import { LivePreviewPanel } from '@/components/ui/live-preview-panel'
 
 type SOW = { 
   id: string; docId: string; client: string; contact: string; phone: string; email: string
@@ -92,12 +94,20 @@ function SOWPageContent() {
   const [previewDoc, setPreviewDoc] = useState<SOW | null>(null)
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [templateId, setTemplateId] = useState<TemplateId>('modern')
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false)
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const [shareDoc, setShareDoc] = useState<{ id: string, title: string } | null>(null)
   const [historyDoc, setHistoryDoc] = useState<SOW | null>(null)
   const [publishDoc, setPublishDoc] = useState<SOW | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+
+  useEffect(() => {
+    if (companyDocs?.defaultTemplateId) {
+      setTemplateId(companyDocs.defaultTemplateId)
+    }
+  }, [companyDocs])
 
   const columns = useMemo(() => [
     {
@@ -152,7 +162,7 @@ function SOWPageContent() {
       header: 'Value',
       accessor: 'value',
       sortable: true,
-      cell: (s: SOW) => <span className="font-semibold text-gold text-xs">{s.value > 0 ? formatCurrency(s.value) : '—'}</span>
+      cell: (s: SOW) => <span className="font-semibold text-gold text-xs">{s.value > 0 ? formatCurrency(s.value) : '-'}</span>
     },
     {
       header: 'Status',
@@ -655,9 +665,10 @@ function SOWPageContent() {
 
     const content = contentParts.join('\n\n')
     return {
-      docType: 'SOW',
+      docType: 'SOW' as const,
+      templateId,
       clientName: f.contact || clientName,
-      projectTitle: project || `SOW — ${clientName}`,
+      projectTitle: project || `SOW - ${clientName}`,
       companyName: clientName,
       clientInfo: { mobile: f.phone },
       content,
@@ -1028,12 +1039,16 @@ function SOWPageContent() {
 
       <Drawer
         isOpen={showCreate}
-        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(null, companyDocs) }}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(null, companyDocs); setShowPreviewPanel(false); }}
         title={editItem ? "Edit Scope of Work" : "Generate Scope of Work"}
-        description="Configure client details, project name, duration, service deliverables, milestones, and exclusions."
-        widthClass="max-w-2xl"
+        description="Choose a template, configure client details, project name, duration, service deliverables, milestones, and exclusions."
+        widthClass="max-w-7xl"
         footer={
           <>
+            <Button variant="outline" size="sm" onClick={() => setShowPreviewPanel(v => !v)} className="gap-1.5 mr-auto">
+              <Eye className="h-3.5 w-3.5" />
+              {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancel</Button>
             <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating}>
               {generating ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />{editItem ? 'Saving...' : 'Generating...'}</> : (editItem ? 'Save Changes' : 'Generate SOW')}
@@ -1041,6 +1056,32 @@ function SOWPageContent() {
           </>
         }
       >
+        <div className={showPreviewPanel ? 'grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 h-full' : ''}>
+          {/* Left: Form */}
+          <div className="overflow-auto">
+            {/* Template Selector */}
+            <div className="mb-5 pb-5 border-b border-border">
+              <p className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Document Template</p>
+              <TemplateSelector
+                value={templateId}
+                onChange={setTemplateId}
+                onPreview={async (id) => {
+                  const previewPayload = buildPayload(form, form.client || 'Preview Client', form.project || 'SOW Preview', 'PREVIEW')
+                  previewPayload.templateId = id
+                  setPreviewDoc({ ...form, docId: 'PREVIEW', id: 'preview' } as any)
+                  setPreviewLoading(true)
+                  setPreviewBlobUrl(null)
+                  try {
+                    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(previewPayload) })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      setPreviewBlobUrl(URL.createObjectURL(blob))
+                    }
+                  } catch {}
+                  finally { setPreviewLoading(false) }
+                }}
+              />
+            </div>
           <div className="space-y-5 py-2">
             {!editItem && (quotations.length > 0 || invoices.length > 0) && (
               <div className="bg-muted/30 p-4 rounded-lg border border-border space-y-4">
@@ -1172,6 +1213,17 @@ function SOWPageContent() {
               </div>
             </div>
           </div>
+          </div>
+          {/* Right: Live Preview */}
+          {showPreviewPanel && (
+            <div className="hidden lg:block h-full min-h-[600px]">
+              <LivePreviewPanel
+                payload={form.client ? buildPayload(form, form.client, form.project, 'PREVIEW') : null}
+                visible
+              />
+            </div>
+          )}
+        </div>
       </Drawer>
 
       {/* Delete Confirmation */}
@@ -1187,7 +1239,7 @@ function SOWPageContent() {
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader className="border-b border-white/10 pb-3">
-            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
+            <DialogTitle>Document History - {historyDoc?.docId}</DialogTitle>
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
@@ -1239,7 +1291,7 @@ function SOWPageContent() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         initialEmail={shareDoc ? sows.find(s => s.id === shareDoc.id)?.email || '' : ''}
-        initialSubject={shareDoc ? `Scope of Work: ${sows.find(s => s.id === shareDoc.id)?.docId} — ${sows.find(s => s.id === shareDoc.id)?.project || sows.find(s => s.id === shareDoc.id)?.client}` : ''}
+        initialSubject={shareDoc ? `Scope of Work: ${sows.find(s => s.id === shareDoc.id)?.docId} - ${sows.find(s => s.id === shareDoc.id)?.project || sows.find(s => s.id === shareDoc.id)?.client}` : ''}
         initialMessage={shareDoc ? (() => {
           const sow = sows.find(s => s.id === shareDoc.id)
           if (!sow) return ''
@@ -1264,7 +1316,7 @@ function SOWPageContent() {
 
             if (method === 'email') {
               recipient = emailDetails?.recipient || sow.email || ''
-              subject = emailDetails?.subject || `Scope of Work: ${sow.docId} — ${sow.project || sow.client}`
+              subject = emailDetails?.subject || `Scope of Work: ${sow.docId} - ${sow.project || sow.client}`
               message = emailDetails?.message || `Dear ${sow.client},\n\nPlease find attached the Scope of Work document ${sow.docId} for your project "${sow.project || 'Services'}".\n\nProject Value: ${formatCurrency(sow.value)}\nTimeline: ${sow.timeline || 'As discussed'}\n\nKindly review and revert with your confirmation.\n\nBest regards,\nNetgain Team`
               
               // Generate matching PDF payload on the fly
@@ -1279,7 +1331,7 @@ function SOWPageContent() {
               } as any, sow.client, sow.project, sow.docId)
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = sow.phone
-              message = `Dear ${sow.client}, your Scope of Work ${sow.docId} for "${sow.project || 'Services'}" (${formatCurrency(sow.value)}) is ready. Please review and confirm. — Netgain Team`
+              message = `Dear ${sow.client}, your Scope of Work ${sow.docId} for "${sow.project || 'Services'}" (${formatCurrency(sow.value)}) is ready. Please review and confirm. - Netgain Team`
             }
 
             if (!recipient) {
@@ -1339,3 +1391,5 @@ export default function SOWPage() {
     </Suspense>
   )
 }
+
+

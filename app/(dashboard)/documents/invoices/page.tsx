@@ -27,6 +27,8 @@ import { fetchFounderProfile } from '@/lib/founder-helper'
 import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 import { getCachedData, setCachedData, invalidateCache } from '@/lib/data-cache'
 import { LineItemsTable } from '@/components/ui/line-items-table'
+import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
+import { LivePreviewPanel } from '@/components/ui/live-preview-panel'
 
 const STATUS_OPTS = ['draft', 'sent', 'published', 'viewed', 'paid', 'overdue', 'completed', 'rejected']
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', sent: 'Sent', published: 'Published', viewed: 'Viewed', paid: 'Paid', overdue: 'Overdue', completed: 'Completed', rejected: 'Rejected' }
@@ -146,6 +148,8 @@ function InvoicesPageContent() {
   const [previewDoc, setPreviewDoc] = useState<Invoice | null>(null)
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [templateId, setTemplateId] = useState<TemplateId>('modern')
+  const [showPreviewPanel, setShowPreviewPanel] = useState(false)
   const { toast } = useToast()
 
   const columns = useMemo(() => [
@@ -327,6 +331,12 @@ function InvoicesPageContent() {
   const [historyDoc, setHistoryDoc] = useState<Invoice | null>(null)
   const [publishDoc, setPublishDoc] = useState<Invoice | null>(null)
   const [companyDocs, setCompanyDocs] = useState<any>(null)
+
+  useEffect(() => {
+    if (companyDocs?.defaultTemplateId) {
+      setTemplateId(companyDocs.defaultTemplateId)
+    }
+  }, [companyDocs])
   const [businessTypes, setBusinessTypes] = useState<string[]>([
     'E-Commerce', 'D2C Brand', 'B2B Company', 'SaaS / Software', 'Service Business', 'Other'
   ])
@@ -744,7 +754,7 @@ function InvoicesPageContent() {
       baseSub = lineItemsSubtotal
       dAmt = lineItemsDiscount + (discType === 'percentage' ? Math.round((lineItemsSubtotal - lineItemsDiscount) * discVal / 100) : discVal)
       const aft = Math.max(0, baseSub - dAmt)
-      const gAmt = Math.round(aft * gst / 100)
+      const gAmt = Math.round(aft * inv.gstPct / 100)
       tot = aft + gAmt
 
       inv.items.forEach((item: any) => {
@@ -757,7 +767,8 @@ function InvoicesPageContent() {
           quantity: item.quantity,
           category: 'Service',
           pricing_model: 'fixed',
-          deliverables: []
+          deliverables: item.description ? item.description.split('\n').filter((d: string) => d.trim().length > 0) : [],
+            tax: Math.round(Number(item.tax || 0) * scaleFactor)
         })
       })
     } else {
@@ -804,7 +815,7 @@ function InvoicesPageContent() {
       baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
       dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
       const aft = Math.max(0, baseSub - dAmt)
-      const gAmt = Math.round(aft * gst / 100)
+      const gAmt = Math.round(aft * inv.gstPct / 100)
       tot = aft + gAmt
 
       adjustedSvcs.forEach(s => {
@@ -818,7 +829,8 @@ function InvoicesPageContent() {
             quantity: 1,
             category: s.category,
             pricing_model: 'fixed',
-            deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+            deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
+              tax: Math.round(scaledSetup * inv.gstPct / 100)
           })
           // 2. Monthly Service Fee
           const scaledFee = Math.round(adBudgetFee * scaleFactor)
@@ -829,7 +841,8 @@ function InvoicesPageContent() {
             quantity: 1,
             category: s.category,
             pricing_model: 'monthly',
-            deliverables: s.deliverables
+              deliverables: s.deliverables,
+              tax: Math.round(scaledFee * inv.gstPct / 100)
           })
         } else {
           const scaledPrice = Math.round(s.price * scaleFactor)
@@ -844,7 +857,8 @@ function InvoicesPageContent() {
             quantity: 1,
             category: s.category,
             pricing_model: s.model,
-            deliverables: s.deliverables
+              deliverables: s.deliverables,
+              tax: Math.round(scaledPrice * inv.gstPct / 100)
           })
         }
       })
@@ -867,7 +881,7 @@ function InvoicesPageContent() {
     const scaledSub = Math.round(baseSub * scaleFactor)
     const scaledDAmt = Math.round(dAmt * scaleFactor)
     const scaledAft = Math.max(0, scaledSub - scaledDAmt)
-    const scaledGAmt = Math.round(scaledAft * gst / 100)
+    const scaledGAmt = Math.round(scaledAft * inv.gstPct / 100)
     const scaledTot = scaledAft + scaledGAmt
 
     const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -877,8 +891,9 @@ function InvoicesPageContent() {
 
     const payload = {
       docType: 'Invoice',
+      templateId,
       clientName: inv.contact || inv.client,
-      projectTitle: `Invoice — ${docId}`,
+      projectTitle: `Invoice - ${docId}`,
       companyName: inv.client,
       clientInfo: { business: inv.businessType, mobile: inv.phone, gst: inv.gst },
       content: [
@@ -887,7 +902,7 @@ function InvoicesPageContent() {
         `**Invoice Ref:** ${docId}`,
         `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
         '',
-        '## Services Rendered',
+        '## Services',
         ...scaledItems.flatMap((s: any, i: number) => [
           `### ${i + 1}. ${s.serviceName}`,
           `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
@@ -1393,12 +1408,16 @@ function InvoicesPageContent() {
 
       <Drawer
         isOpen={showCreate}
-        onClose={() => { setShowCreate(false); setServiceSearch(''); setForm(blankForm(companyDocs)) }}
+        onClose={() => { setShowCreate(false); setServiceSearch(''); setForm(blankForm(companyDocs)); setShowPreviewPanel(false) }}
         title="Create New Invoice"
-        description="Configure billing details, items, discounts, GST, and payment schedule."
-        widthClass="max-w-3xl"
+        description="Choose a template, configure billing details, items, discounts, GST, and payment schedule."
+        widthClass="max-w-7xl"
         footer={
           <>
+            <Button variant="outline" size="sm" onClick={() => setShowPreviewPanel(v => !v)} className="gap-1.5 mr-auto">
+              <Eye className="h-3.5 w-3.5" />
+              {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setShowCreate(false); setForm(blankForm(companyDocs)) }}>Cancel</Button>
             <Button variant="gold" size="sm" onClick={handleGenerate} disabled={generating || (form.items?.length ?? 0) === 0}>
               {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating...</> : `Generate Invoice${invoiceAmount > 0 ? ` (${formatCurrency(invoiceAmount)})` : ''}`}
@@ -1406,6 +1425,38 @@ function InvoicesPageContent() {
           </>
         }
       >
+        <div className={showPreviewPanel ? 'grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 h-full' : ''}>
+          {/* Left: Form */}
+          <div className="overflow-auto">
+            {/* Template Selector */}
+            <div className="mb-5 pb-5 border-b border-border">
+              <p className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Document Template</p>
+              <TemplateSelector
+                value={templateId}
+                onChange={setTemplateId}
+                onPreview={async (id) => {
+                  const previewPayload = {
+                    docType: 'Invoice' as const,
+                    templateId: id,
+                    clientName: form.contact || form.client || 'Preview Client',
+                    projectTitle: 'Invoice Preview',
+                    companyName: form.client || 'Preview Company',
+                    clientInfo: { business: form.businessType },
+                  }
+                  setPreviewDoc({ ...form, docId: 'PREVIEW', id: 'preview' } as any)
+                  setPreviewLoading(true)
+                  setPreviewBlobUrl(null)
+                  try {
+                    const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(previewPayload) })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      setPreviewBlobUrl(URL.createObjectURL(blob))
+                    }
+                  } catch {}
+                  finally { setPreviewLoading(false) }
+                }}
+              />
+            </div>
           <div className="space-y-6 py-2">
             <div>
               <p className="text-xs font-semibold text-gold mb-3 uppercase tracking-wide">Client Information</p>
@@ -1447,8 +1498,7 @@ function InvoicesPageContent() {
               </div>
             </div>
             <div>
-              <LineItemsTable
-                variant="simple"
+              <LineItemsTable variant="detailed"
                 items={form.items || []}
                 onChange={(items) => {
                   setForm({
@@ -1701,12 +1751,30 @@ function InvoicesPageContent() {
 
             <div className="space-y-1"><Label>Notes</Label><Textarea className="resize-none h-16" placeholder="Payment instructions, custom notes..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
+          </div>
+          {/* Right: Live Preview */}
+          {showPreviewPanel && (
+            <div className="hidden lg:block h-full min-h-[600px]">
+              <LivePreviewPanel
+                payload={form.client ? {
+                  docType: 'Invoice',
+                  templateId,
+                  clientName: form.contact || form.client,
+                  projectTitle: `Invoice - ${(form as any).docId || 'Preview'}`,
+                  companyName: form.client,
+                  clientInfo: { business: form.businessType, mobile: form.phone, gst: form.gst },
+                } : null}
+                visible
+              />
+            </div>
+          )}
+        </div>
       </Drawer>
 
       <Drawer
         isOpen={!!editInvoice}
         onClose={() => { setEditInvoice(null); setServiceSearch(''); setForm(blankForm(companyDocs)) }}
-        title={`Edit Invoice — ${editInvoice?.docId}`}
+        title={`Edit Invoice - ${editInvoice?.docId}`}
         description="Modify billing details, items, discounts, GST, and payment schedule."
         widthClass="max-w-3xl"
         footer={
@@ -1759,8 +1827,7 @@ function InvoicesPageContent() {
               </div>
             </div>
             <div>
-              <LineItemsTable
-                variant="simple"
+              <LineItemsTable variant="detailed"
                 items={form.items || []}
                 onChange={(items) => {
                   setForm({
@@ -2096,7 +2163,7 @@ function InvoicesPageContent() {
       <Dialog open={!!historyDoc} onOpenChange={(open) => !open && setHistoryDoc(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader className="border-b border-white/10 pb-3">
-            <DialogTitle>Document History — {historyDoc?.docId}</DialogTitle>
+            <DialogTitle>Document History - {historyDoc?.docId}</DialogTitle>
             <p className="text-xs text-muted-foreground mt-1">{historyDoc?.client} · Click any entry to download that version</p>
           </DialogHeader>
           <div className="space-y-2 py-4 max-h-[50vh] overflow-y-auto">
@@ -2137,7 +2204,7 @@ function InvoicesPageContent() {
         onOpenChange={(open) => !open && setShareDoc(null)}
         title={shareDoc?.title || ''}
         initialEmail={shareDoc ? invoices.find(i => i.id === shareDoc.id)?.email || '' : ''}
-        initialSubject={shareDoc ? `Invoice: ${invoices.find(i => i.id === shareDoc.id)?.docId} — ${invoices.find(i => i.id === shareDoc.id)?.client}` : ''}
+        initialSubject={shareDoc ? `Invoice: ${invoices.find(i => i.id === shareDoc.id)?.docId} - ${invoices.find(i => i.id === shareDoc.id)?.client}` : ''}
         initialMessage={shareDoc ? (() => {
           const inv = invoices.find(i => i.id === shareDoc.id)
           if (!inv) return ''
@@ -2162,7 +2229,7 @@ function InvoicesPageContent() {
 
             if (method === 'email') {
               recipient = emailDetails?.recipient || inv.email
-              subject = emailDetails?.subject || `Invoice: ${inv.docId} — ${inv.client}`
+              subject = emailDetails?.subject || `Invoice: ${inv.docId} - ${inv.client}`
               message = emailDetails?.message || `Dear ${inv.client},\n\nPlease find your invoice ${inv.docId} for the amount of ${formatCurrency(inv.amount)}.\n\nDue Date: ${formatDate(inv.due)}\n\nKindly process payment at your earliest convenience.\n\nBest regards,\nNetgain Team`
               
               // Generate matching PDF payload on the fly
@@ -2212,7 +2279,8 @@ function InvoicesPageContent() {
                     quantity: 1,
                     category: s.category,
                     pricing_model: 'fixed',
-                    deliverables: [`Campaign structure setup and onboarding for ${s.name}`]
+                    deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
+              tax: Math.round(scaledSetup * inv.gstPct / 100)
                   })
                   // 2. Monthly Service Fee
                   const scaledFee = Math.round(adBudgetFee * scaleFactor)
@@ -2223,7 +2291,8 @@ function InvoicesPageContent() {
                     quantity: 1,
                     category: s.category,
                     pricing_model: 'monthly',
-                    deliverables: s.deliverables
+              deliverables: s.deliverables,
+              tax: Math.round(scaledFee * inv.gstPct / 100)
                   })
                 } else {
                   const scaledPrice = Math.round(s.price * scaleFactor)
@@ -2238,7 +2307,8 @@ function InvoicesPageContent() {
                     quantity: 1,
                     category: s.category,
                     pricing_model: s.model,
-                    deliverables: s.deliverables
+              deliverables: s.deliverables,
+              tax: Math.round(scaledPrice * inv.gstPct / 100)
                   })
                 }
               })
@@ -2265,7 +2335,7 @@ function InvoicesPageContent() {
               pdfPayload = {
                 docType: 'Invoice',
                 clientName: inv.contact || inv.client,
-                projectTitle: `Invoice — ${inv.docId}`,
+                projectTitle: `Invoice - ${inv.docId}`,
                 companyName: inv.client,
                 clientInfo: { business: inv.businessType, mobile: inv.phone, gst: inv.gst },
                 content: [
@@ -2274,7 +2344,7 @@ function InvoicesPageContent() {
                   `**Invoice Ref:** ${inv.docId}`,
                   `${inv.gst ? `**Client GST:** ${inv.gst}` : ''}`,
                   '',
-                  '## Services Rendered',
+                  '## Services',
                   ...scaledItems.flatMap((s: any, i: number) => [
                     `### ${i + 1}. ${s.serviceName}`,
                     `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,
@@ -2308,7 +2378,7 @@ function InvoicesPageContent() {
               }
             } else if (method === 'whatsapp' || method === 'sms') {
               recipient = inv.phone
-              message = `Dear ${inv.client}, your invoice ${inv.docId} for ${formatCurrency(inv.amount)} is due on ${formatDate(inv.due)}. Please process payment at your earliest convenience. — Netgain Team`
+              message = `Dear ${inv.client}, your invoice ${inv.docId} for ${formatCurrency(inv.amount)} is due on ${formatDate(inv.due)}. Please process payment at your earliest convenience. - Netgain Team`
             }
 
             if (!recipient) {
@@ -2368,3 +2438,5 @@ export default function InvoicesPage() {
     </Suspense>
   )
 }
+
+

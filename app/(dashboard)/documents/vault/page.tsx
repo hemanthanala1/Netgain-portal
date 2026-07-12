@@ -797,7 +797,7 @@ function VaultListContent() {
         `**Invoice Ref:** ${raw.doc_id || doc.docId}`,
         `${raw.gst ? `**Client GST:** ${raw.gst}` : ''}`,
         '',
-        '## Services Rendered',
+        '## Services',
         ...scaledItems.flatMap((s: any, i: number) => [
           `### ${i + 1}. ${s.serviceName}`,
           `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,

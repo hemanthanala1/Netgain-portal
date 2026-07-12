@@ -99,25 +99,36 @@ export async function generatePdfBuffer(payload: PdfPayload, supabase: SupabaseC
     if (bank.accountNumber) bankLines.push(`- **Account No:** ${bank.accountNumber}`)
     if (bank.bank)          bankLines.push(`- **Bank:** ${bank.bank}`)
     if (bank.ifsc)          bankLines.push(`- **IFSC:** ${bank.ifsc}`)
-    if (bank.upiId)         bankLines.push(`- **UPI:** ${bank.upiId}`)
+    if (bank.upiId) {
+      bankLines.push(`- **UPI:** ${bank.upiId}`);
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`upi://pay?pa=${bank.upiId}&pn=${encodeURIComponent(company.name)}`)}`;
+      bankLines.push(`__QR_CODE__${qrSrc}__`);
+    }
     if (bankLines.length === 0) bankLines.push('- Bank details not configured. Please update in Settings.')
-    enriched.content = enriched.content.replace('__BANK_DETAILS__', bankLines.join('\n'))
+    if (enriched.content) {
+      if (Array.isArray(enriched.content)) enriched.content = enriched.content.join('\n')
+      enriched.content = enriched.content.replace('__BANK_DETAILS__', bankLines.join('\n'))
+    }
   }
 
   // Replace __PAYMENT_SCHEDULE__ token in content
-  if (enriched.content && enriched.content.includes('__PAYMENT_SCHEDULE__')) {
-    enriched.content = enriched.content.replace('__PAYMENT_SCHEDULE__', docs.paymentSchedule)
+  if (enriched.content) {
+    if (Array.isArray(enriched.content)) enriched.content = enriched.content.join('\n')
+    if (enriched.content.includes('__PAYMENT_SCHEDULE__')) {
+      enriched.content = enriched.content.replace('__PAYMENT_SCHEDULE__', docs.paymentSchedule)
+    }
   }
 
   // Replace __COMPANY_NAME__ and __FOUNDER_NAME__ tokens
   if (enriched.content) {
+    if (Array.isArray(enriched.content)) enriched.content = enriched.content.join('\n')
     enriched.content = enriched.content
       .replace(/__COMPANY_NAME__/g, company.name)
       .replace(/__FOUNDER_NAME__/g, founder.name || 'Authorised Signatory')
   }
 
   // Render PDF buffer (pure JS, no Python)
-  const buffer = await renderToBuffer(React.createElement(NbosDocument, { data: enriched }) as any)
+  const buffer = await renderToBuffer(React.createElement(NbosDocument, { payload: enriched as PdfPayload }) as any)
 
   const docType = payload.docType || 'Document'
   const clientSlug = (payload.clientName || 'client').replace(/\s+/g, '_')

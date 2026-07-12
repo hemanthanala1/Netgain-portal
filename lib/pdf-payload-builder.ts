@@ -273,7 +273,7 @@ export async function buildPdfPayload(
         `**Invoice Ref:** ${doc.doc_id}`,
         `${doc.gst ? `**Client GST:** ${doc.gst}` : ''}`,
         '',
-        '## Services Rendered',
+        '## Services',
         ...scaledItems.flatMap((s: any, i: number) => [
           `### ${i + 1}. ${s.serviceName}`,
           `Category: ${s.category}  |  ${s.pricing_model === 'monthly' ? 'Monthly Recurring' : 'One-Time'}`,

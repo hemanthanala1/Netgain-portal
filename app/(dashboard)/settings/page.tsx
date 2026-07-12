@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus, Calendar, Link, Unlink, Shield, History, Bell, Sparkles, Search } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
+import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
 
 // Component definitions moved outside to prevent re-creation on each render
 const FieldRow = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
@@ -96,6 +97,7 @@ function SettingsPageContent() {
     signature: '',
     primaryColor: '#D4AF37',
     secondaryColor: '#1A1A1A',
+    accentColor: '#3B82F6',
     passwordPolicy: 'strong',
     rateLimitRps: '10',
     backupFrequency: 'daily',
@@ -510,6 +512,19 @@ function SettingsPageContent() {
 
         {/* ── DOCUMENTS ──────────────────────────────── */}
         <TabsContent value="docs">
+          <Card className="mb-6">
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-gold" />Document Templates</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-4">Select the default visual design that will be used for all generated PDFs (Quotations, Invoices, SOWs, Agreements). Users can still override this per-document when generating.</p>
+              <div className="max-w-2xl">
+                <TemplateSelector
+                  value={(docs as any).defaultTemplateId || 'modern'}
+                  onChange={id => setDocs({ ...docs, defaultTemplateId: id } as any)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-gold" />Document Policies & Terms</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -1094,6 +1109,12 @@ function SettingsPageContent() {
                 <div className="flex items-center gap-3">
                   <Input type="color" className="w-12 h-9 p-0.5 border cursor-pointer rounded" value={company.secondaryColor || '#1A1A1A'} onChange={e => setCompany({ ...company, secondaryColor: e.target.value })} />
                   <Input className="w-36" value={company.secondaryColor || '#1A1A1A'} onChange={e => setCompany({ ...company, secondaryColor: e.target.value })} placeholder="#1A1A1A" />
+                </div>
+              </FieldRow>
+              <FieldRow label="Accent Color" hint="Used for PDF headers, borders, and highlights">
+                <div className="flex items-center gap-3">
+                  <Input type="color" className="w-12 h-9 p-0.5 border cursor-pointer rounded" value={company.accentColor || '#3B82F6'} onChange={e => setCompany({ ...company, accentColor: e.target.value })} />
+                  <Input className="w-36" value={company.accentColor || '#3B82F6'} onChange={e => setCompany({ ...company, accentColor: e.target.value })} placeholder="#3B82F6" />
                 </div>
               </FieldRow>
               <Separator />

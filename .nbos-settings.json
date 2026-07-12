@@ -7,9 +7,20 @@
     "email": "mail.netgain@gmail.com",
     "website": "netgainstudio.com",
     "phone": "9347102347",
+    "calBookingUrl": "https://cal.com/netgain/30min",
     "logo": "",
     "stamp": "",
-    "signature": ""
+    "signature": "",
+    "primaryColor": "#D4AF37",
+    "secondaryColor": "#1A1A1A",
+    "accentColor": "#3B82F6",
+    "passwordPolicy": "strong",
+    "rateLimitRps": "10",
+    "backupFrequency": "daily",
+    "notifyOnLogin": true,
+    "notifyOnInvoice": true,
+    "notifyOnProject": true,
+    "notifyOnSupport": true
   },
   "founder": {
     "name": "Hemanth Anala",
@@ -34,23 +45,39 @@
     "fromEmail": "hello@netgainstudio.com",
     "waPhoneId": "",
     "waProvider": "meta",
-    "googleEmail": "mock_user@gmail.com",
+    "googleEmail": "mail.netgain@gmail.com",
     "smsProvider": "MSG91",
+    "supabaseUrl": "",
     "twilioWaSid": "",
     "msg91Authkey": "c30f83f30a58d9d60f1b5edd7f7afcd1:5486715353b03862a3bb4ac12eadf309e749c9f8fe6b22ef484ff40b2043e98d",
     "resendApiKey": "dd0b8322864ffe1aa9f10507a60aa3d9:4633da1b9aff123f3f2ded7ad53e87a29607c512d9084b6a760e00cbc45c3aab3e318809499d845f97412e7b9f1818f6",
     "emailProvider": "resend",
     "twilioWaToken": "",
     "sendgridApiKey": "",
+    "msg91TemplateId": "",
+    "supabaseAnonKey": "",
     "textlocalApiKey": "",
     "twilioAuthToken": "",
-    "twilioAccountSid": ""
+    "twilioAccountSid": "",
+    "googleAccessToken": "5021a507a0c6475ff2379789700dd1ed:533c5ac699d474f80833ebb3a67048fbf55f5956ce14325951118e08310ee305135de446e081d087b865a2f240d4ae9ac9c785cd40f0cec90e18175804c8861486c2859a9ce5ab20d423210af578bbdb68006e9bbbb15711b1ce9e8f2084d059c73fc8d69a55e340b071fcf4c332226cea46df07225823adb30126ba50f6fdd95afc94e1e3fcfc78ca96801ad102485f89b65e573ae515bd47358afa8741e102fec54b93191bed20946edcc12408d5efc8ddf1b725f55835ee75cbea9e4ef81c76f6df0dcb25b323cd9dd4f5e8827ed006f536fcad83a02e82e56b8d40df67e1a0f06b8c29c80e994e70df5b070541238f622d66e2c4d9f4f37a805f28b0b1b8",
+    "googleConnectedAt": "2026-06-26T16:42:43.377Z",
+    "googleRefreshToken": "967569cc3aabe11e73684307e72d1c26:dcab4522f7b8d345c97e0f06ce82245b8333a293cabe76dfcad31ba1c97495a7e459e7636f6e6f7dea83473af8472385516131f5271f85cde360961d441d79463be93529f1fbf22c863229ddd0e04fa0e5176c760c2ed0234fdd4c29e61e0f8a0203f77d9639a2021fec4fcc410a8b4e",
+    "supabaseServiceKey": "",
+    "googleTokenExpiresAt": "2026-07-10T19:25:51.186Z"
   },
   "ai": {
     "claudeKey": "",
     "geminiKey": "",
     "openaiKey": "",
     "defaultProvider": "claude"
+  },
+  "payment": {
+    "currency": "INR",
+    "razorpayMode": "test",
+    "razorpayKeyId": "rzp_live_Sq4G7rdJLCVuCB",
+    "razorpayEnabled": true,
+    "razorpaySecretKey": "70b3b3d3b2c329e25c2f6801b85e6a3a:74a9aa5f4985d61fb6d46a0809d8b54060b9790dd05137115c2a182174134383",
+    "razorpayWebhookSecret": "4491ac87c132d2e7fc0741206f41b271:79004b96074b755a90eadb139383229673c69518908a5d8ab1ae1afd3fcc567d580fe8d4b0337774aaee90dbe3e9efcc604fa5a15ba00763c1b42061b661a475"
   },
   "docs": {
     "tagline": "Your Growth Partner, Powered by AI",
@@ -92,13 +119,56 @@
             "label": "New Milestone"
           }
         ]
+      },
+      {
+        "id": "1782806315510",
+        "name": "100% Payment ",
+        "points": [
+          {
+            "pct": 100,
+            "label": "Advance"
+          }
+        ]
       }
     ],
     "invoiceTerms": "Payment is due within 10 days of invoice date.\nLate payments attract 2% per month penalty.\nAccepted: NEFT / IMPS / UPI / Cheque",
     "invoiceNotes": "Thank you for your business!",
     "invoicePaymentInstructions": "Please transfer the payment to our bank account or scan the UPI QR code.",
     "invoiceFooter": "Netgain Studio | mail.netgain@gmail.com | 9347102347",
-    "invoiceAdditionalText": ""
+    "invoiceAdditionalText": "",
+    "quotationPrefix": "QT-",
+    "invoicePrefix": "INV-",
+    "agreementPrefix": "AGR-",
+    "sowPrefix": "SOW-",
+    "taxRateTDS": "0",
+    "businessTypes": [
+      "E-Commerce",
+      "D2C Brand",
+      "B2B Company",
+      "SaaS / Software",
+      "Service Business"
+    ],
+    "industryTypes": [
+      "E-Commerce",
+      "B2B SaaS",
+      "Retail Chain",
+      "Healthcare",
+      "Agriculture",
+      "Manufacturing",
+      "Education",
+      "Travel Agency"
+    ],
+    "prdProjectTypes": [
+      "Web App",
+      "Mobile App",
+      "SaaS Platform",
+      "API Service",
+      "E-Commerce",
+      "Dashboard",
+      "CRM",
+      "ERP",
+      "Website"
+    ]
   },
-  "updatedAt": "2026-06-26T14:10:05.782Z"
+  "updatedAt": "2026-07-12T15:50:09.867Z"
 }
