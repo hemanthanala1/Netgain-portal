@@ -332,7 +332,7 @@ export async function buildPdfPayload(
       const content = [
         '## Project Overview',
         `**Project:** ${doc.project}`,
-        `**Client:** ${doc.client}${doc.contact ? ` (Attn: ${doc.contact})` : ''}`,
+        `**Client:** ${doc.client}`,
         `**Timeline:** ${doc.timeline || 'To be defined in kickoff'}`,
         `**Contract Value:** ${tot ? formatCurrency(tot) : 'As per quotation'}`,
         '',
@@ -399,7 +399,7 @@ export async function buildPdfPayload(
       const content = [
         `## Agreement Details`,
         `**Agreement Type:** ${doc.type}`,
-        `**Client:** ${doc.client}${doc.contact ? ` (Attn: ${doc.contact})` : ''}`,
+        `**Client:** ${doc.client}`,
         `**Duration:** ${doc.duration || 'As agreed'}`,
         `**Contract Value:** ${tot > 0 ? formatCurrency(tot) : 'As per schedule'}`,
         '',

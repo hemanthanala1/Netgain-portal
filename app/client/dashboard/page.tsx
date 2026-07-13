@@ -1048,7 +1048,7 @@ export default function ClientDashboardPage() {
         documentHash = 'hash-fallback-' + Math.random().toString(36).substring(2, 12)
       }
 
-      const docType = selectedDoc.type === 'SOW' ? 'SOW' : 'Agreement'
+      const docType = selectedDoc.type
       const currentVersion = selectedDoc.published_version || 1
 
       // 5. Store signature details in `document_signatures`
