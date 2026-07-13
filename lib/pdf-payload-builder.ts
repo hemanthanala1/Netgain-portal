@@ -1,9 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { PdfPayload } from './pdf-template'
 
-// Helper to format currency
 const formatCurrency = (val: number) => {
-  return 'INR ' + val.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return 'INR ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function roundToTwo(num: number): number {
+  return Math.round((num + Number.EPSILON) * 100) / 100
 }
 
 export async function buildPdfPayload(
@@ -100,7 +103,12 @@ export async function buildPdfPayload(
     bankSettings,
     founderSettings,
     docsSettings,
-    signatureDetails
+    signatureDetails,
+    paidAt: doc.paid_at
+      ? new Date(doc.paid_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+      : (doc.status === 'paid' && (doc.published_at || doc.created_at || doc.created))
+        ? new Date(doc.published_at || doc.created_at || doc.created).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+        : undefined
   }
 
   // 4. Construct payload based on document type
@@ -115,10 +123,10 @@ export async function buildPdfPayload(
       if (lineItems.length > 0) {
         sub = lineItems.reduce((a, item) => a + (Number(item.unit_price) * Number(item.quantity || 1)), 0)
         const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
-        const overallDiscAmt = Math.round((sub - lineDisc) * (doc.discount_pct || 0) / 100)
+        const overallDiscAmt = roundToTwo((sub - lineDisc) * (doc.discount_pct || 0) / 100)
         dAmt = lineDisc + overallDiscAmt
         const aft = sub - dAmt
-        const gAmt = Math.round(aft * (doc.gst_pct || 18) / 100)
+        const gAmt = roundToTwo(aft * (doc.gst_pct || 18) / 100)
         tot = aft + gAmt
 
         itemsList = lineItems.map(item => ({
@@ -138,9 +146,9 @@ export async function buildPdfPayload(
       } else {
         const qServices = services.filter(s => (doc.service_ids || []).includes(s.id))
         sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
-        dAmt = Math.round(sub * (doc.discount_pct || 0) / 100)
+        dAmt = roundToTwo(sub * (doc.discount_pct || 0) / 100)
         const aft = sub - dAmt
-        const gAmt = Math.round(aft * (doc.gst_pct || 18) / 100)
+        const gAmt = roundToTwo(aft * (doc.gst_pct || 18) / 100)
         tot = aft + gAmt
 
         itemsList = qServices.map(s => ({
@@ -215,22 +223,22 @@ export async function buildPdfPayload(
         const discType = doc.discount_type || 'percentage'
         const discVal = Number(doc.discount_value) || 0
         const overallDiscAmt = discType === 'percentage'
-          ? Math.round((sub - lineDisc) * discVal / 100)
+          ? roundToTwo((sub - lineDisc) * discVal / 100)
           : discVal
         dAmt = lineDisc + overallDiscAmt
         const aft = Math.max(0, sub - dAmt)
-        const gAmt = Math.round(aft * gstPct / 100)
+        const gAmt = roundToTwo(aft * gstPct / 100)
         tot = aft + gAmt
 
         scaledItems = lineItems.map(item => {
-          const scaledPrice = Math.round(Number(item.unit_price) * scaleFactor)
-          const scaledFinalPrice = Math.round(Number(item.total) * scaleFactor)
+          const scaledPrice = roundToTwo(Number(item.unit_price) * scaleFactor)
+          const scaledFinalPrice = roundToTwo(Number(item.total) * scaleFactor)
           return {
             serviceName: paymentScheduleEntry ? `${item.service_name} - ${paymentScheduleEntry}` : item.service_name,
             finalPrice: scaledFinalPrice,
             category: 'Service',
             pricing_model: 'fixed',
-            deliverables: []
+            deliverables: item.description ? item.description.split('\n').map(d => d.trim()).filter(Boolean) : []
           }
         })
       } else {
@@ -238,14 +246,14 @@ export async function buildPdfPayload(
         sub = qServices.reduce((a, s) => a + Number(s.quotation_price || s.price_max || s.base_price || 0), 0)
         const discVal = Number(doc.discount_value) || 0
         const discType = doc.discount_type || 'percentage'
-        const overallDiscAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
+        const overallDiscAmt = discType === 'percentage' ? roundToTwo(sub * discVal / 100) : discVal
         dAmt = overallDiscAmt
         const aft = Math.max(0, sub - dAmt)
-        const gAmt = Math.round(aft * gstPct / 100)
+        const gAmt = roundToTwo(aft * gstPct / 100)
         tot = aft + gAmt
 
         scaledItems = qServices.map(s => {
-          const scaledPrice = Math.round(Number(s.quotation_price || s.price_max || s.base_price || 0) * scaleFactor)
+          const scaledPrice = roundToTwo(Number(s.quotation_price || s.price_max || s.base_price || 0) * scaleFactor)
           return {
             serviceName: paymentScheduleEntry ? `${s.name} - ${paymentScheduleEntry}` : s.name,
             finalPrice: scaledPrice,
@@ -256,10 +264,10 @@ export async function buildPdfPayload(
         })
       }
 
-      const scaledSub = Math.round(sub * scaleFactor)
-      const scaledDAmt = Math.round(dAmt * scaleFactor)
+      const scaledSub = roundToTwo(sub * scaleFactor)
+      const scaledDAmt = roundToTwo(dAmt * scaleFactor)
       const scaledAft = Math.max(0, scaledSub - scaledDAmt)
-      const scaledGAmt = Math.round(scaledAft * gstPct / 100)
+      const scaledGAmt = roundToTwo(scaledAft * gstPct / 100)
       const scaledTot = scaledAft + scaledGAmt
 
       const today = new Date(doc.created || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -313,7 +321,7 @@ export async function buildPdfPayload(
         const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
         const overallDiscAmt = Number(doc.discount_value) || 0
         dAmt = lineDisc + overallDiscAmt
-        const lineTax = lineItems.reduce((a, item) => a + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        const lineTax = lineItems.reduce((a, item) => a + roundToTwo(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
         tot = (sub - dAmt) + lineTax
 
         sowDeliverables = lineItems.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
@@ -380,7 +388,7 @@ export async function buildPdfPayload(
         const lineDisc = lineItems.reduce((a, item) => a + Number(item.discount), 0)
         const overallDiscAmt = Number(doc.discount_value) || 0
         dAmt = lineDisc + overallDiscAmt
-        const lineTax = lineItems.reduce((a, item) => a + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        const lineTax = lineItems.reduce((a, item) => a + roundToTwo(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
         tot = (sub - dAmt) + lineTax
 
         servicesCovered = lineItems.map((item: any) => `- ${item.service_name}: ${item.description || ''}`).join('\n')

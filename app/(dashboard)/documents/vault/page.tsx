@@ -661,9 +661,9 @@ function VaultListContent() {
     
     const svcs = services.filter(s => (raw.service_ids || []).includes(s.id))
     const sub = svcs.reduce((a, s) => a + s.price, 0)
-    const dAmt = Math.round(sub * (raw.discount_pct || 0) / 100)
+    const dAmt = Math.round((sub * (raw.discount_pct || 0) / 100) * 100) / 100
     const aft = sub - dAmt
-    const gAmt = Math.round(aft * (raw.gst_pct || 18) / 100)
+    const gAmt = Math.round((aft * (raw.gst_pct || 18) / 100) * 100) / 100
     const tot = aft + gAmt
 
     const buildQuoteContent = (q: any, svList: any[]) => {
@@ -742,10 +742,10 @@ function VaultListContent() {
     
     const discVal = Number(raw.discount_value) || 0
     const discType = raw.discount_type || 'percentage'
-    const dAmt = discType === 'percentage' ? Math.round(sub * discVal / 100) : discVal
+    const dAmt = discType === 'percentage' ? Math.round((sub * discVal / 100) * 100) / 100 : discVal
     const aft = Math.max(0, sub - dAmt)
     const gstPct = Number(raw.gst_pct) || 0
-    const gAmt = Math.round(aft * gstPct / 100)
+    const gAmt = Math.round((aft * gstPct / 100) * 100) / 100
     const tot = aft + gAmt
 
     let pct = 100
@@ -757,14 +757,14 @@ function VaultListContent() {
       }
     }
     const scaleFactor = pct / 100
-    const scaledSub = Math.round(sub * scaleFactor)
-    const scaledDAmt = Math.round(dAmt * scaleFactor)
+    const scaledSub = Math.round((sub * scaleFactor) * 100) / 100
+    const scaledDAmt = Math.round((dAmt * scaleFactor) * 100) / 100
     const scaledAft = Math.max(0, scaledSub - scaledDAmt)
-    const scaledGAmt = Math.round(scaledAft * gstPct / 100)
+    const scaledGAmt = Math.round((scaledAft * gstPct / 100) * 100) / 100
     const scaledTot = scaledAft + scaledGAmt
 
     const scaledItems = svcs.map(s => {
-      const scaledPrice = Math.round(s.price * scaleFactor)
+      const scaledPrice = Math.round((s.price * scaleFactor) * 100) / 100
       let customName = s.name
       if (paymentScheduleEntry) {
         customName = `${s.name} - ${paymentScheduleEntry}`
@@ -1228,33 +1228,12 @@ function VaultListContent() {
     { id: 'Marketing', label: 'Marketing', icon: FileText },
   ]
 
-  // Mock Storage calculation
-  const totalStorageMB = 2048 // 2 GB
-  const usedStorageMB = docs.length * 3.4 // approx 3.4 MB per doc
-  const storagePercentage = Math.min((usedStorageMB / totalStorageMB) * 100, 100)
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Document Vault</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Centralized repository for all Netgain business documents.</p>
-        </div>
-        
-        {/* Storage Summary */}
-        <div className="bg-card border border-border rounded-xl p-3 flex items-center gap-4 min-w-[280px]">
-          <div className="p-2 bg-[#D4AF37]/10 rounded-lg text-[#D4AF37]">
-            <HardDrive className="h-5 w-5" />
-          </div>
-          <div className="flex-1">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground font-medium">Vault Storage</span>
-              <span className="text-[#D4AF37] font-mono">{usedStorageMB.toFixed(1)} MB / 2 GB</span>
-            </div>
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-              <div className="h-full gold-gradient rounded-full" style={{ width: `${storagePercentage}%` }} />
-            </div>
-          </div>
         </div>
       </div>
 

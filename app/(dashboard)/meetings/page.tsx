@@ -19,6 +19,12 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
+import { Plus } from 'lucide-react'
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
 import { PageHeader } from '@/components/ui/page-header'
 import { DataTable } from '@/components/ui/data-table'
 import { TableSkeleton } from '@/components/ui/skeletons'
@@ -49,6 +55,50 @@ function MeetingsListContent() {
   const searchParams = useSearchParams()
 
   const [bookingUrl, setBookingUrl] = useState<string>('')
+
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [newMeeting, setNewMeeting] = useState({
+    client_name: '',
+    client_email: '',
+    event_type: 'Check-in Meeting',
+    meeting_date: '',
+    meeting_time: '10:00',
+    meeting_duration: 30,
+    meet_link: '',
+  })
+
+  const handleAddMeeting = async () => {
+    if (!newMeeting.client_name || !newMeeting.client_email || !newMeeting.meeting_date) {
+      toast({ title: 'Missing fields', description: 'Please fill out all required fields.', variant: 'destructive' })
+      return
+    }
+    setIsSubmitting(true)
+    try {
+      const { error } = await supabase.from('meetings').insert([{
+        ...newMeeting,
+        status: 'upcoming'
+      }])
+      if (error) throw error
+      toast({ title: 'Meeting Scheduled ✓' })
+      setShowAddModal(false)
+      setNewMeeting({
+        client_name: '',
+        client_email: '',
+        event_type: 'Check-in Meeting',
+        meeting_date: '',
+        meeting_time: '10:00',
+        meeting_duration: 30,
+        meet_link: '',
+      })
+      fetchMeetings()
+    } catch (err: any) {
+      toast({ title: 'Error scheduling meeting', description: err.message, variant: 'destructive' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
 
   const fetchMeetings = useCallback(async () => {
     try {
@@ -304,14 +354,20 @@ function MeetingsListContent() {
           disabled: syncing || loading
         }}
         secondaryActions={
-          bookingUrl ? (
-            <Button variant="outline" asChild className="border-gold/30 text-gold hover:bg-gold/10">
-              <a href={bookingUrl} target="_blank" rel="noopener noreferrer">
-                <Calendar className="mr-2 h-4 w-4" />
-                Book a Meeting
-              </a>
+          <div className="flex items-center gap-2">
+            <Button variant="default" className="bg-gold text-black hover:bg-gold/90" onClick={() => setShowAddModal(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Meeting
             </Button>
-          ) : null
+            {bookingUrl && (
+              <Button variant="outline" asChild className="border-gold/30 text-gold hover:bg-gold/10">
+                <a href={bookingUrl} target="_blank" rel="noopener noreferrer">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Book a Meeting
+                </a>
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -384,6 +440,54 @@ function MeetingsListContent() {
           />
         )}
       </div>
+
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-[425px] bg-[#07110e] border-border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-gold">Schedule New Meeting</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Client Name *</Label>
+              <Input placeholder="E.g. John Doe" value={newMeeting.client_name} onChange={e => setNewMeeting({...newMeeting, client_name: e.target.value})} className="bg-black/50 border-border/50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Client Email *</Label>
+              <Input type="email" placeholder="john@example.com" value={newMeeting.client_email} onChange={e => setNewMeeting({...newMeeting, client_email: e.target.value})} className="bg-black/50 border-border/50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Meeting Type</Label>
+              <Input placeholder="E.g. Discovery Call" value={newMeeting.event_type} onChange={e => setNewMeeting({...newMeeting, event_type: e.target.value})} className="bg-black/50 border-border/50" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Date *</Label>
+                <Input type="date" value={newMeeting.meeting_date} onChange={e => setNewMeeting({...newMeeting, meeting_date: e.target.value})} className="bg-black/50 border-border/50" />
+              </div>
+              <div className="space-y-2">
+                <Label>Time *</Label>
+                <Input type="time" value={newMeeting.meeting_time} onChange={e => setNewMeeting({...newMeeting, meeting_time: e.target.value})} className="bg-black/50 border-border/50" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Duration (min)</Label>
+                <Input type="number" value={newMeeting.meeting_duration} onChange={e => setNewMeeting({...newMeeting, meeting_duration: parseInt(e.target.value) || 30})} className="bg-black/50 border-border/50" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Meeting Link</Label>
+              <Input placeholder="https://meet.google.com/..." value={newMeeting.meet_link} onChange={e => setNewMeeting({...newMeeting, meet_link: e.target.value})} className="bg-black/50 border-border/50" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddModal(false)} className="border-border/50">Cancel</Button>
+            <Button onClick={handleAddMeeting} disabled={isSubmitting} className="bg-gold text-black hover:bg-gold/90">
+              {isSubmitting ? 'Saving...' : 'Save Meeting'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -789,17 +789,13 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="bg-card border-border/50">
                 <CardHeader>
-                  <CardTitle className="text-sm font-semibold text-gold">Campaign Performance (Mock Chart)</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-gold">Campaign Performance</CardTitle>
                   <CardDescription className="text-[11px] text-muted-foreground">Leads generated vs budget usage by campaign</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={[
-                        { name: 'Launch 2026', Budget: 125000, Leads: 350 },
-                        { name: 'Q3 Retargeting', Budget: 75000, Leads: 200 },
-                        { name: 'SEO Strategy', Budget: 45000, Leads: 150 },
-                      ]}
+                      data={[]}
                       margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
@@ -820,11 +816,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3.5 text-xs">
-                    {[
-                      { name: 'Summer Product Launch 2026', budget: 125000, leads: 350, lac: 357, status: 'active' },
-                      { name: 'Re-targeting Ad Campaign Q3', budget: 75000, leads: 200, lac: 375, status: 'paused' },
-                      { name: 'Organic Search Engine Strategy', budget: 45000, leads: 150, lac: 300, status: 'active' },
-                    ].map((c, i) => (
+                    {[].map((c, i) => (
                       <div key={i} className="flex justify-between items-center p-2.5 rounded-lg border border-border/40 bg-muted/10">
                         <div>
                           <p className="font-semibold text-foreground">{c.name}</p>

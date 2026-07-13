@@ -178,12 +178,6 @@ export default function TeamPage() {
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
-      } else {
-        setTeam(mockTeam)
-        setRoles(initialRoles)
-        if (initialRoles.length > 0) {
-          setMatrixRoleId(initialRoles[0].id)
-        }
       }
       setLoading(false)
     }

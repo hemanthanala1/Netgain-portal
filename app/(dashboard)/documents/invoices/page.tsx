@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Receipt, Eye } from 'lucide-react'
-import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
+import { formatCurrency, formatDate, getDocStatusColor, generateDocId, roundToTwo } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
@@ -56,6 +56,7 @@ type Invoice = {
   viewed_at?: string
   downloaded_at?: string
   signed_at?: string
+  paid_at?: string | null
   published_version?: number
   visibility_status?: string
   ip_address?: string;
@@ -532,6 +533,7 @@ function InvoicesPageContent() {
               viewed_at: i.viewed_at || '',
               downloaded_at: i.downloaded_at || '',
               signed_at: i.signed_at || '',
+              paid_at: i.paid_at || null,
               published_version: i.published_version || 1,
               visibility_status: i.visibility_status || 'visible',
               ip_address: i.ip_address || '',
@@ -579,7 +581,7 @@ function InvoicesPageContent() {
   // Calculate dynamic price for Paid Advertising services (catId === '3')
   const adBudgetFee = form.adBudgetOverride 
     ? (form.adBudgetFixed || 0) 
-    : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+    : roundToTwo((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
 
   const totalMinPrice = selSvcs.reduce((sum, s) => {
     const base = s.priceMin !== undefined ? s.priceMin : s.price
@@ -614,8 +616,8 @@ function InvoicesPageContent() {
           const minP = svc.priceMin !== undefined ? svc.priceMin : svc.price
           const maxP = svc.priceMax !== undefined ? svc.priceMax : svc.price
           const range = maxP - minP
-          const scaledPrice = Math.round(minP + ratio * range)
-          return { ...item, unit_price: scaledPrice, total: scaledPrice * (item.quantity || 1) }
+          const scaledPrice = roundToTwo(minP + ratio * range)
+          return { ...item, unit_price: scaledPrice, total: roundToTwo(scaledPrice * (item.quantity || 1)) }
         }
         return item
       })
@@ -632,21 +634,21 @@ function InvoicesPageContent() {
 
   const discAmt = form.items && form.items.length > 0
     ? lineItemsDiscount + (form.discountType === 'percentage'
-        ? Math.round((lineItemsSubtotal - lineItemsDiscount) * form.discountValue / 100)
+        ? roundToTwo((lineItemsSubtotal - lineItemsDiscount) * form.discountValue / 100)
         : form.discountValue)
     : (form.discountType === 'percentage'
-        ? Math.round(subtotal * form.discountValue / 100)
+        ? roundToTwo(subtotal * form.discountValue / 100)
         : form.discountValue)
 
   const afterDisc = Math.max(0, subtotal - discAmt)
-  const gstAmt = Math.round(afterDisc * form.gstPct / 100)
+  const gstAmt = roundToTwo(afterDisc * form.gstPct / 100)
 
-  const grandTotal = afterDisc + gstAmt
+  const grandTotal = roundToTwo(afterDisc + gstAmt)
 
   const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
   const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
   const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
-  const invoiceAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+  const invoiceAmount = selectedMilestone ? roundToTwo(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
 
   const filtered = invoices.filter(inv => {
     const matchSearch = inv.client.toLowerCase().includes(search.toLowerCase()) || inv.docId.toLowerCase().includes(search.toLowerCase())
@@ -752,14 +754,14 @@ function InvoicesPageContent() {
       const lineItemsDiscount = inv.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
 
       baseSub = lineItemsSubtotal
-      dAmt = lineItemsDiscount + (discType === 'percentage' ? Math.round((lineItemsSubtotal - lineItemsDiscount) * discVal / 100) : discVal)
+      dAmt = lineItemsDiscount + (discType === 'percentage' ? roundToTwo((lineItemsSubtotal - lineItemsDiscount) * discVal / 100) : discVal)
       const aft = Math.max(0, baseSub - dAmt)
-      const gAmt = Math.round(aft * inv.gstPct / 100)
+      const gAmt = roundToTwo(aft * inv.gstPct / 100)
       tot = aft + gAmt
 
       inv.items.forEach((item: any) => {
-        const scaledPrice = Math.round(Number(item.unit_price) * scaleFactor)
-        const scaledFinalPrice = Math.round(Number(item.total) * scaleFactor)
+        const scaledPrice = roundToTwo(Number(item.unit_price) * scaleFactor)
+        const scaledFinalPrice = roundToTwo(Number(item.total) * scaleFactor)
         scaledItems.push({
           serviceName: paymentScheduleEntry ? `${item.service_name} - ${paymentScheduleEntry}` : item.service_name,
           finalPrice: scaledFinalPrice,
@@ -768,14 +770,14 @@ function InvoicesPageContent() {
           category: 'Service',
           pricing_model: 'fixed',
           deliverables: item.description ? item.description.split('\n').filter((d: string) => d.trim().length > 0) : [],
-            tax: Math.round(Number(item.tax || 0) * scaleFactor)
+            tax: roundToTwo(Number(item.tax || 0) * scaleFactor)
         })
       })
     } else {
       // Calculate dynamic price for Paid Advertising services (catId === '3')
       const adBudgetFee = inv.adBudgetOverride 
         ? (inv.adBudgetFixed || 0) 
-        : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
+        : roundToTwo((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
 
       const totalMinPrice = svcs.reduce((sum, s) => {
         const base = s.priceMin !== undefined ? s.priceMin : s.price
@@ -797,7 +799,7 @@ function InvoicesPageContent() {
           const range = maxP - minP
           if (totalMaxPrice > totalMinPrice) {
             const ratio = (inv.customSubtotal - totalMinPrice) / (totalMaxPrice - totalMinPrice)
-            adjPrice = Math.round(minP + ratio * range)
+            adjPrice = roundToTwo(minP + ratio * range)
           }
         }
         return { ...s, price: adjPrice }
@@ -813,15 +815,15 @@ function InvoicesPageContent() {
           }, 0)
 
       baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
-      dAmt = discType === 'percentage' ? Math.round(baseSub * discVal / 100) : discVal
+      dAmt = discType === 'percentage' ? roundToTwo(baseSub * discVal / 100) : discVal
       const aft = Math.max(0, baseSub - dAmt)
-      const gAmt = Math.round(aft * inv.gstPct / 100)
+      const gAmt = roundToTwo(aft * inv.gstPct / 100)
       tot = aft + gAmt
 
       adjustedSvcs.forEach(s => {
         if (s.catId === '3') {
           // 1. One-time Setup Cost
-          const scaledSetup = Math.round(s.price * scaleFactor)
+          const scaledSetup = roundToTwo(s.price * scaleFactor)
           scaledItems.push({
             serviceName: paymentScheduleEntry ? `${s.name} - Setup Cost - ${paymentScheduleEntry}` : `${s.name} - Setup Cost`,
             finalPrice: scaledSetup,
@@ -830,10 +832,10 @@ function InvoicesPageContent() {
             category: s.category,
             pricing_model: 'fixed',
             deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
-              tax: Math.round(scaledSetup * inv.gstPct / 100)
+              tax: roundToTwo(scaledSetup * inv.gstPct / 100)
           })
           // 2. Monthly Service Fee
-          const scaledFee = Math.round(adBudgetFee * scaleFactor)
+          const scaledFee = roundToTwo(adBudgetFee * scaleFactor)
           scaledItems.push({
             serviceName: paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
             finalPrice: scaledFee,
@@ -842,10 +844,10 @@ function InvoicesPageContent() {
             category: s.category,
             pricing_model: 'monthly',
               deliverables: s.deliverables,
-              tax: Math.round(scaledFee * inv.gstPct / 100)
+              tax: roundToTwo(scaledFee * inv.gstPct / 100)
           })
         } else {
-          const scaledPrice = Math.round(s.price * scaleFactor)
+          const scaledPrice = roundToTwo(s.price * scaleFactor)
           let customName = s.name
           if (paymentScheduleEntry) {
             customName = `${s.name} - ${paymentScheduleEntry}`
@@ -858,14 +860,14 @@ function InvoicesPageContent() {
             category: s.category,
             pricing_model: s.model,
               deliverables: s.deliverables,
-              tax: Math.round(scaledPrice * inv.gstPct / 100)
+              tax: roundToTwo(scaledPrice * inv.gstPct / 100)
           })
         }
       })
 
       // If ad budget is billed through Netgain, append it as a line item in PDF
       if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
-        const scaledBudget = Math.round(inv.adBudget * scaleFactor)
+        const scaledBudget = roundToTwo(inv.adBudget * scaleFactor)
         scaledItems.push({
           serviceName: paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
           finalPrice: scaledBudget,
@@ -878,10 +880,10 @@ function InvoicesPageContent() {
       }
     }
 
-    const scaledSub = Math.round(baseSub * scaleFactor)
-    const scaledDAmt = Math.round(dAmt * scaleFactor)
+    const scaledSub = roundToTwo(baseSub * scaleFactor)
+    const scaledDAmt = roundToTwo(dAmt * scaleFactor)
     const scaledAft = Math.max(0, scaledSub - scaledDAmt)
-    const scaledGAmt = Math.round(scaledAft * inv.gstPct / 100)
+    const scaledGAmt = roundToTwo(scaledAft * inv.gstPct / 100)
     const scaledTot = scaledAft + scaledGAmt
 
     const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -928,6 +930,11 @@ function InvoicesPageContent() {
       adBudgetFixed: inv.adBudgetFixed,
       adBudgetOverride: inv.adBudgetOverride,
       adBudgetBillThrough: inv.adBudgetBillThrough,
+      paidAt: inv.paid_at 
+        ? new Date(inv.paid_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
+        : (inv.status === 'paid' && (inv.published_at || inv.created_at || inv.created))
+          ? new Date(inv.published_at || inv.created_at || inv.created).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+          : undefined,
       docsSettings: {
         gstRate: String(gst),
         invoiceTerms: inv.invoiceTerms !== undefined && inv.invoiceTerms !== null ? inv.invoiceTerms : (companyDocs?.invoiceTerms || ''),
@@ -986,7 +993,7 @@ function InvoicesPageContent() {
       const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
       const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
       const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
-      const finalAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+      const finalAmount = selectedMilestone ? Math.round((grandTotal * (selectedMilestone.pct / 100)) * 100) / 100 : grandTotal
       const milestoneText = selectedMilestone ? `${selectedMilestone.label} (${selectedMilestone.pct}%)` : ''
 
       const newInv: Invoice = { 
@@ -1023,8 +1030,6 @@ function InvoicesPageContent() {
         customSubtotal: form.customSubtotal,
         items: form.items || [],
       }
-
-      await buildAndDownloadPdf(newInv, form.selectedIds, form.discountType, form.discountValue, form.gstPct, docId, form.paymentScheduleId, milestoneText, targetDue)
 
       if (isSupabaseConfigured()) {
         const { error } = await supabase.from('invoices').insert([{
@@ -1092,7 +1097,7 @@ function InvoicesPageContent() {
       setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
       invalidateCache('dashboard')
       setShowCreate(false); setForm(blankForm(companyDocs))
-      toast({ title: '✅ Invoice Created!', description: `${docId} downloaded.` })
+      toast({ title: '✅ Invoice Created!', description: `${docId} saved. Use Actions → Download to get the PDF.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
@@ -1106,7 +1111,7 @@ function InvoicesPageContent() {
     const selectedSchedule = form.paymentScheduleId ? paymentSchedules.find(p => p.id === form.paymentScheduleId) : null
     const selectedMilestoneIndex = form.paymentSchedulePointIndex !== 'none' ? Number(form.paymentSchedulePointIndex) : -1
     const selectedMilestone = (selectedSchedule && selectedMilestoneIndex >= 0) ? selectedSchedule.points[selectedMilestoneIndex] : null
-    const finalAmount = selectedMilestone ? Math.round(grandTotal * (selectedMilestone.pct / 100)) : grandTotal
+    const finalAmount = selectedMilestone ? Math.round((grandTotal * (selectedMilestone.pct / 100)) * 100) / 100 : grandTotal
     const milestoneText = selectedMilestone ? `${selectedMilestone.label} (${selectedMilestone.pct}%)` : ''
     const targetDue = form.due || new Date(Date.now()+10*864e5).toISOString().slice(0,10)
 
@@ -1244,14 +1249,26 @@ function InvoicesPageContent() {
   async function updateStatus(id: string, status: string) {
     const targetInv = invoices.find(i => i.id === id)
     if (!targetInv) return
-    const targetHistory = [...targetInv.history, { date: new Date().toISOString().split('T')[0], action: `Status changed to ${STATUS_LABELS[status]}` }]
+    const nowISO = new Date().toISOString()
+    const nowDate = nowISO.split('T')[0]
+    const paidAt = status === 'paid' ? nowISO : null
+    const historyAction = status === 'paid'
+      ? `Payment received — Invoice marked Paid on ${new Date(nowISO).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}`
+      : `Status changed to ${STATUS_LABELS[status]}`
+    const targetHistory = [
+      ...targetInv.history,
+      { date: nowDate, action: historyAction, canDownload: true }
+    ]
 
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('invoices').update({
-          status,
-          history: targetHistory
-        }).eq('id', id)
+        const updatePayload: any = { status, history: targetHistory }
+        if (status === 'paid') {
+          updatePayload.paid_at = paidAt
+        } else {
+          updatePayload.paid_at = null
+        }
+        const { error } = await supabase.from('invoices').update(updatePayload).eq('id', id)
         if (error) {
           toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
           return
@@ -1262,10 +1279,14 @@ function InvoicesPageContent() {
       }
     }
 
-    const updatedInvoices = invoices.map(i => i.id === id ? { ...i, status, history: targetHistory } : i)
+    const updatedInvoices = invoices.map(i => i.id === id
+      ? { ...i, status, history: targetHistory, paid_at: paidAt }
+      : i
+    )
     setInvoices(updatedInvoices)
     setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
+    if (status === 'paid') toast({ title: '✅ Invoice Marked Paid', description: 'The PAID stamp will appear on the PDF.' })
   }
 
   async function handlePublishAction(action: 'publish' | 'unpublish' | 'hide' | 'republish' | 'replace' | 'show') {
@@ -1568,7 +1589,7 @@ function InvoicesPageContent() {
                   </div>
                 ) : (
                   <div className="text-xs text-muted-foreground">
-                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round(((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)) * 100) / 100)}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
                   </div>
                 )}
 
@@ -1719,7 +1740,7 @@ function InvoicesPageContent() {
                       return (
                         <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
                           <span>{pt.label} ({pt.pct}%)</span>
-                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                          <span>{formatCurrency(Math.round((grandTotal * (pt.pct / 100)) * 100) / 100)}</span>
                         </div>
                       )
                     })}
@@ -1897,7 +1918,7 @@ function InvoicesPageContent() {
                   </div>
                 ) : (
                   <div className="text-xs text-muted-foreground">
-                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+                    Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round(((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)) * 100) / 100)}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
                   </div>
                 )}
 
@@ -2048,7 +2069,7 @@ function InvoicesPageContent() {
                       return (
                         <div key={i} className={`flex justify-between text-sm py-0.5 px-1.5 rounded transition-colors ${isSelected ? 'bg-gold/10 text-gold font-medium' : 'text-muted-foreground'}`}>
                           <span>{pt.label} ({pt.pct}%)</span>
-                          <span>{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                          <span>{formatCurrency(Math.round((grandTotal * (pt.pct / 100)) * 100) / 100)}</span>
                         </div>
                       )
                     })}
@@ -2238,7 +2259,7 @@ function InvoicesPageContent() {
               // Calculate dynamic price for Paid Advertising services (catId === '3')
               const adBudgetFee = inv.adBudgetOverride 
                 ? (inv.adBudgetFixed || 0) 
-                : Math.round((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100))
+                : Math.round(((inv.adBudget || 0) * ((inv.adBudgetPct || 15) / 100)) * 100) / 100
 
               const computedSub = svcs.reduce((sum, s) => {
                 if (s.catId === '3') {
@@ -2248,9 +2269,9 @@ function InvoicesPageContent() {
               }, 0)
 
               const baseSub = computedSub + (inv.adBudgetBillThrough ? (inv.adBudget || 0) : 0)
-              const dAmt = inv.discountType === 'percentage' ? Math.round(baseSub * inv.discountValue / 100) : inv.discountValue
+              const dAmt = inv.discountType === 'percentage' ? Math.round((baseSub * inv.discountValue / 100) * 100) / 100 : inv.discountValue
               const aft = Math.max(0, baseSub - dAmt)
-              const gAmt = Math.round(aft * inv.gstPct / 100)
+              const gAmt = Math.round((aft * inv.gstPct / 100) * 100) / 100
               const tot = aft + gAmt
 
               let pct = 100
@@ -2261,17 +2282,17 @@ function InvoicesPageContent() {
                 }
               }
               const scaleFactor = pct / 100
-              const scaledSub = Math.round(baseSub * scaleFactor)
-              const scaledDAmt = Math.round(dAmt * scaleFactor)
+              const scaledSub = Math.round((baseSub * scaleFactor) * 100) / 100
+              const scaledDAmt = Math.round((dAmt * scaleFactor) * 100) / 100
               const scaledAft = Math.max(0, scaledSub - scaledDAmt)
-              const scaledGAmt = Math.round(scaledAft * inv.gstPct / 100)
+              const scaledGAmt = Math.round((scaledAft * inv.gstPct / 100) * 100) / 100
               const scaledTot = scaledAft + scaledGAmt
 
               const scaledItems: any[] = []
               svcs.forEach(s => {
                 if (s.catId === '3') {
                   // 1. One-time Setup Cost
-                  const scaledSetup = Math.round(s.price * scaleFactor)
+                  const scaledSetup = Math.round((s.price * scaleFactor) * 100) / 100
                   scaledItems.push({
                     serviceName: inv.paymentScheduleEntry ? `${s.name} - Setup Cost - ${inv.paymentScheduleEntry}` : `${s.name} - Setup Cost`,
                     finalPrice: scaledSetup,
@@ -2280,10 +2301,10 @@ function InvoicesPageContent() {
                     category: s.category,
                     pricing_model: 'fixed',
                     deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
-              tax: Math.round(scaledSetup * inv.gstPct / 100)
+              tax: Math.round((scaledSetup * inv.gstPct / 100) * 100) / 100
                   })
                   // 2. Monthly Service Fee
-                  const scaledFee = Math.round(adBudgetFee * scaleFactor)
+                  const scaledFee = Math.round((adBudgetFee * scaleFactor) * 100) / 100
                   scaledItems.push({
                     serviceName: inv.paymentScheduleEntry ? `${s.name} - Monthly Service Fee - ${inv.paymentScheduleEntry}` : `${s.name} - Monthly Service Fee`,
                     finalPrice: scaledFee,
@@ -2292,10 +2313,10 @@ function InvoicesPageContent() {
                     category: s.category,
                     pricing_model: 'monthly',
               deliverables: s.deliverables,
-              tax: Math.round(scaledFee * inv.gstPct / 100)
+              tax: Math.round((scaledFee * inv.gstPct / 100) * 100) / 100
                   })
                 } else {
-                  const scaledPrice = Math.round(s.price * scaleFactor)
+                  const scaledPrice = Math.round((s.price * scaleFactor) * 100) / 100
                   let customName = s.name
                   if (inv.paymentScheduleEntry) {
                     customName = `${s.name} - ${inv.paymentScheduleEntry}`
@@ -2308,14 +2329,14 @@ function InvoicesPageContent() {
                     category: s.category,
                     pricing_model: s.model,
               deliverables: s.deliverables,
-              tax: Math.round(scaledPrice * inv.gstPct / 100)
+              tax: Math.round((scaledPrice * inv.gstPct / 100) * 100) / 100
                   })
                 }
               })
 
               // Append ad budget to items list if billed through
               if (inv.adBudgetBillThrough && inv.adBudget && inv.adBudget > 0) {
-                const scaledBudget = Math.round(inv.adBudget * scaleFactor)
+                const scaledBudget = Math.round((inv.adBudget * scaleFactor) * 100) / 100
                 scaledItems.push({
                   serviceName: inv.paymentScheduleEntry ? `Ad Budget (Paid Ads Spend) - ${inv.paymentScheduleEntry}` : "Ad Budget (Paid Ads Spend)",
                   finalPrice: scaledBudget,

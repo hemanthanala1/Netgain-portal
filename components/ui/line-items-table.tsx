@@ -8,7 +8,7 @@ import { Label } from './label'
 import { Textarea } from './textarea'
 import { ServiceAutocomplete } from './service-autocomplete'
 import { Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, roundToTwo } from '@/lib/utils'
 
 export interface LineItem {
   id?: string
@@ -136,7 +136,7 @@ export function LineItemsTable({
   const subtotal = items.reduce((sum, item) => sum + lineSubtotal(item), 0)
   const discountTotal = items.reduce((sum, item) => sum + item.discount, 0)
   const taxTotal = items.reduce(
-    (sum, item) => sum + Math.round(lineTotal(item) * (item.tax / 100)),
+    (sum, item) => sum + roundToTwo(lineTotal(item) * (item.tax / 100)),
     0
   )
   const grandTotal = items.reduce((sum, item) => sum + item.total, 0) + (isSimple ? 0 : taxTotal)

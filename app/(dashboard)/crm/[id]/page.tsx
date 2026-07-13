@@ -28,7 +28,6 @@ const statusLabels: Record<string, string> = {
   won: 'Won', lost: 'Lost', active: 'Active Client',
 }
 
-const mockClient = { id: '1', name: 'Aaron Shah', business: 'Urban Edge Co.', type: 'E-Commerce', email: 'aaron@urbanedge.in', phone: '9876543210', gst: '29AABCU9603R1ZM', website: 'urbanedge.in', address: 'Andheri East, Mumbai — 400069', city: 'Mumbai', status: 'quotation_sent', revenue: 47998, joined: '2024-05-15' }
 
 const safeTimestamp = (dateStr: string | null | undefined) => {
   if (!dateStr) return 0
@@ -93,10 +92,6 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       } catch (err) {
         console.error('Error fetching note history:', err)
       }
-    } else {
-      setNoteHistory([
-        { id: 'h1', note_id: noteId, content_before: 'Met with client to discuss roadmap.', content_after: 'Met with client to discuss roadmap and finalized milestones.', edited_by: 'Staff Member', edited_at: new Date().toISOString() }
-      ])
     }
     setLoadingNoteHistory(false)
   }
@@ -283,8 +278,6 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         } catch (err: any) {
           toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
         }
-      } else {
-        setClient(mockClient)
       }
       setLoading(false)
     }
@@ -303,10 +296,6 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         const { data: aData } = await supabase.from('crm_activities').select('*').eq('client_id', params.id).order('created_at', { ascending: false })
         if (active && aData) setActivities(aData)
         await fetchDocumentsAndMeetings(client)
-      } else {
-        setNotes([{ id: 'n1', content: 'Met with client to review the service roadmap.', author: 'Staff Member', created_at: '2024-06-05T11:00:00Z' }])
-        setActivities([{ id: 'a1', type: 'call', description: 'Log introductory call.', activity_date: '2024-06-01', created_at: '2024-06-01T14:00:00Z' }])
-        setDocuments([{ id: 'd1', doc_id: 'NG-QUO-2024-1123', type: 'Quotation', amount: 47998, status: 'sent', date: '2024-06-04' }])
       }
     }
 
@@ -326,92 +315,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           else if (eventType === 'UPDATE') {
             if (newRec.is_deleted) {
               setNotes(prev => prev.filter(n => n.id !== newRec.id))
-            } else {
-              setNotes(prev => prev.map(n => n.id === newRec.id ? newRec : n))
             }
-          }
-          else if (eventType === 'DELETE') setNotes(prev => prev.filter(n => n.id !== oldRec.id))
-        }).subscribe()
-
-      activitiesChannel = supabase.channel(`crm_activities_${params.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_activities', filter: `client_id=eq.${params.id}` }, (payload: any) => {
-          if (!active) return
-          const { eventType, new: newRec, old: oldRec } = payload
-          if (eventType === 'INSERT') setActivities(prev => [newRec, ...prev])
-          else if (eventType === 'UPDATE') setActivities(prev => prev.map(a => a.id === newRec.id ? newRec : a))
-          else if (eventType === 'DELETE') setActivities(prev => prev.filter(a => a.id !== oldRec.id))
-        }).subscribe()
-
-      if (client.email) {
-        meetingsChannel = supabase.channel(`crm_meetings_${params.id}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings', filter: `client_email=eq.${client.email}` }, () => { if (active) fetchDocumentsAndMeetings(client) })
-          .subscribe()
-      }
-
-      const tables = ['quotations', 'invoices', 'sows', 'agreements', 'projects', 'project_requirements', 'project_files', 'client_notifications']
-      tables.forEach(table => {
-        const channel = supabase.channel(`crm_docs_${table}_${params.id}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table }, () => { if (active) fetchDocumentsAndMeetings(client) })
-          .subscribe()
-        docsChannels.push(channel)
-      })
-    }
-
-    return () => {
-      active = false
-      if (notesChannel) supabase.removeChannel(notesChannel)
-      if (activitiesChannel) supabase.removeChannel(activitiesChannel)
-      if (meetingsChannel) supabase.removeChannel(meetingsChannel)
-      docsChannels.forEach(ch => supabase.removeChannel(ch))
-    }
-  }, [client, params.id])
-
-  const handleAddNote = async () => {
-    if (!newNote.trim()) return
-    setSubmitting(true)
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase.from('crm_notes').insert([{ client_id: params.id, content: newNote.trim(), author: 'Staff Member' }])
-        if (error) { toast({ title: 'Error adding note', description: error.message, variant: 'destructive' }) }
-        else {
-          setNewNote('')
-          toast({ title: 'Note Added' })
-          await supabase.from('crm_activities').insert([{ client_id: params.id, type: 'note', description: `Added a note: "${newNote.trim().substring(0, 60)}${newNote.trim().length > 60 ? '...' : ''}"` }])
-        }
-      } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
-    } else {
-      setNotes(prev => [{ id: Math.random().toString(), client_id: params.id, content: newNote.trim(), author: 'Staff Member', created_at: new Date().toISOString() }, ...prev])
-      setNewNote('')
-    }
-    setSubmitting(false)
-  }
-
-  const handleEditNote = async () => {
-    if (!editingNoteId || !editNoteContent.trim()) return
-    setSubmitting(true)
-    if (isSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('crm_notes')
-          .update({ content: editNoteContent.trim(), last_modified: new Date().toISOString() })
-          .eq('id', editingNoteId)
-        if (error) {
-          toast({ title: 'Error updating note', description: error.message, variant: 'destructive' })
-        } else {
-          toast({ title: 'Note Updated ✓' })
-          setNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, content: editNoteContent.trim(), last_modified: new Date().toISOString() } : n))
-          setEditingNoteId(null)
-          setEditNoteContent('')
-        }
-      } catch (err: any) {
-        toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
-      }
-    } else {
-      setNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, content: editNoteContent.trim(), last_modified: new Date().toISOString() } : n))
-      setEditingNoteId(null)
-      setEditNoteContent('')
-      toast({ title: 'Note Updated (Mock) ✓' })
-    }
     setSubmitting(false)
   }
 
@@ -434,10 +338,6 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
       }
-    } else {
-      setNotes(prev => prev.filter(n => n.id !== deletingNoteId))
-      setDeletingNoteId(null)
-      toast({ title: 'Note Deleted (Mock) ✓' })
     }
     setSubmitting(false)
   }

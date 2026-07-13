@@ -73,12 +73,13 @@ export interface PdfPayload {
     signedAt: string
     verificationId: string
   }
+  paidAt?: string | null
 }
 
 // Formatters
 const formatCurrency = (val?: number) => {
-  if (val === undefined || isNaN(val)) return 'INR 0'
-  return `INR ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(val)}`
+  if (val === undefined || isNaN(val)) return 'INR 0.00'
+  return `INR ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val)}`
 }
 const stripHtml = (html?: string) => html ? html.replace(/<[^>]*>?/gm, '') : ''
 
@@ -136,7 +137,30 @@ const MarkdownRenderer = ({ content, style }: { content?: string | string[], sty
     </View>
   )
 }
-const getDocDate = () => new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+const getDocDate = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+
+// PAID Stamp Overlay — rendered over invoice pages when paid
+function PaidStamp({ paidAt }: { paidAt: string }) {
+  return (
+    <View style={{
+      position: 'absolute',
+      top: 100,
+      right: 40,
+      width: 110,
+      height: 110,
+      borderRadius: 55,
+      borderWidth: 4,
+      borderColor: '#DC2626',
+      backgroundColor: 'rgba(220,38,38,0.06)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transform: [{ rotate: '-12deg' }],
+    }}>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#DC2626', letterSpacing: 2, textTransform: 'uppercase' }}>PAID</Text>
+      <Text style={{ fontSize: 6, color: '#DC2626', marginTop: 2, textAlign: 'center', lineHeight: 1.3, fontWeight: 'bold' }}>{paidAt}</Text>
+    </View>
+  )
+}
 
 // Default Fallback Colors
 const fallbackTheme = {
@@ -370,6 +394,7 @@ function ModernTemplate({ payload }: { payload: PdfPayload }) {
           <Text style={st.footerText}>{payload.companySettings?.name} - {payload.companySettings?.website}</Text>
           <Text style={st.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
+        {payload.paidAt && <PaidStamp paidAt={payload.paidAt} />}
       </Page>
     </Document>
   )
@@ -483,10 +508,21 @@ function CorporateTemplate({ payload }: { payload: PdfPayload }) {
             <Text style={[st.boxTitle, { color: p }]}>Execution</Text>
             <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
               <View>
+                 {payload.signatureDetails.signatureImage ? (
+                   <Image src={payload.signatureDetails.signatureImage} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
+                 ) : (
+                   <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333', marginBottom: 5 }}>{payload.signatureDetails.signatureText}</Text>
+                 )}
                  <Text style={st.textBold}>{payload.signatureDetails.clientName}</Text>
                  <Text style={st.text}>Signed: {payload.signatureDetails.signedAt}</Text>
+                 <Text style={[st.text, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
               </View>
               <View>
+                 {payload.companySettings?.signature ? (
+                   <Image src={payload.companySettings.signature} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
+                 ) : (
+                   <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333', marginBottom: 5 }}>{payload.founderSettings?.name}</Text>
+                 )}
                  <Text style={st.textBold}>{payload.founderSettings?.name}</Text>
                  <Text style={st.text}>Authorized Representative</Text>
               </View>
@@ -499,6 +535,7 @@ function CorporateTemplate({ payload }: { payload: PdfPayload }) {
           <Text style={st.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
         <Text style={st.confidential} fixed>Strictly Confidential & Proprietary</Text>
+        {payload.paidAt && <PaidStamp paidAt={payload.paidAt} />}
       </Page>
     </Document>
   )
@@ -615,6 +652,7 @@ function MinimalTemplate({ payload }: { payload: PdfPayload }) {
           <Text style={minStyles.footerText}>{payload.companySettings?.name}</Text>
           <Text style={minStyles.footerText} render={({ pageNumber }) => `${pageNumber}`} />
         </View>
+        {payload.paidAt && <PaidStamp paidAt={payload.paidAt} />}
       </Page>
     </Document>
   )
@@ -735,6 +773,7 @@ function LuxuryTemplate({ payload }: { payload: PdfPayload }) {
         <View style={st.footer} fixed>
           <Text style={st.footerText}>{payload.companySettings?.name} - {payload.companySettings?.website}</Text>
         </View>
+        {payload.paidAt && <PaidStamp paidAt={payload.paidAt} />}
       </Page>
     </Document>
   )

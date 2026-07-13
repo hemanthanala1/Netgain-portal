@@ -769,7 +769,7 @@ export default function ClientDashboardPage() {
             if (verifyRes.ok) {
               toast({ title: '✅ Payment Successful!', description: 'Your invoice has been marked as paid.' })
               fetchClientData(true) // Refresh data
-              if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, status: 'paid' } as any)
+              if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, status: 'paid', raw: { ...doc.raw, paid_at: new Date().toISOString() } } as any)
             } else {
               const verifyData = await verifyRes.json()
               toast({ title: 'Payment Verification Failed', description: verifyData.error, variant: 'destructive' })
@@ -2669,16 +2669,31 @@ export default function ClientDashboardPage() {
               {/* Document body preview with iframe */}
               <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
-                   <iframe 
-                     id="doc-viewer-iframe"
-                     src={currentDoc.token 
-                       ? `/api/document-pdf?token=${currentDoc.token}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : 0}#toolbar=0` 
-                       : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : 0}#toolbar=0`} 
-                     className="w-full h-full border-0 bg-white"
-                     style={{ minHeight: '400px' }}
-                     title={currentDoc.title}
-                     scrolling="yes"
-                   />
+                   {(() => {
+                    const getCacheBuster = (doc: any) => {
+                      const times = [
+                        doc.signed_at ? new Date(doc.signed_at).getTime() : 0,
+                        doc.raw?.paid_at ? new Date(doc.raw.paid_at).getTime() : 0,
+                        doc.raw?.published_at ? new Date(doc.raw.published_at).getTime() : 0,
+                        doc.raw?.created_at ? new Date(doc.raw.created_at).getTime() : 0,
+                        doc.raw?.created ? new Date(doc.raw.created).getTime() : 0
+                      ]
+                      return Math.max(...times) + '-v2'
+                    }
+                    const vParam = getCacheBuster(currentDoc)
+                    return (
+                      <iframe 
+                        id="doc-viewer-iframe"
+                        src={currentDoc.token 
+                          ? `/api/document-pdf?token=${currentDoc.token}&v=${vParam}#toolbar=0` 
+                          : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${vParam}#toolbar=0`} 
+                        className="w-full h-full border-0 bg-white"
+                        style={{ minHeight: '400px' }}
+                        title={currentDoc.title}
+                        scrolling="yes"
+                      />
+                    )
+                  })()}
                 </div>
 
                 {/* Sidebar Action Panel */}

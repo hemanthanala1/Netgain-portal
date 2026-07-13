@@ -17,7 +17,7 @@ import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
 import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
-import { formatCurrency, formatDate, getDocStatusColor, generateDocId } from '@/lib/utils'
+import { formatCurrency, formatDate, getDocStatusColor, generateDocId, roundToTwo } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { ShareDialog } from '@/components/ui/share-dialog'
 import { PublishDialog } from '@/components/ui/publish-dialog'
@@ -278,7 +278,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">
-            Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)))}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
+            Calculated Service Fee: <span className="font-semibold text-gold">{formatCurrency(Math.round(((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100)) * 100) / 100)}</span> ({form.adBudgetPct}% of {formatCurrency(form.adBudget || 0)})
           </div>
         )}
 
@@ -342,7 +342,7 @@ const FormBody = ({ form, setForm, allSvcs, selSvcs, subtotal, discAmt, gstAmt, 
             {paymentSchedules.find(p => p.id === form.paymentScheduleId).points.map((pt: any, i: number) => (
               <div key={i} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{pt.label} ({pt.pct}%)</span>
-                <span className="font-medium">{formatCurrency(Math.round(grandTotal * (pt.pct / 100)))}</span>
+                <span className="font-medium">{formatCurrency(Math.round((grandTotal * (pt.pct / 100)) * 100) / 100)}</span>
               </div>
             ))}
           </div>
@@ -759,7 +759,7 @@ function QuotationsPageContent() {
   // Calculate dynamic price for Paid Advertising services (catId === '3')
   const adBudgetFee = form.adBudgetOverride 
     ? (form.adBudgetFixed || 0) 
-    : Math.round((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
+    : roundToTwo((form.adBudget || 0) * ((form.adBudgetPct || 15) / 100))
 
   const computedSub = selSvcs.reduce((sum, s) => {
     if (s.catId === '3') {
@@ -776,8 +776,8 @@ function QuotationsPageContent() {
         const ratio = val / currentTotal
         newItems = newItems.map((item: any) => ({
           ...item,
-          unit_price: Math.round(item.unit_price * ratio),
-          total: Math.round(item.unit_price * ratio) * (item.quantity || 1)
+          unit_price: roundToTwo(item.unit_price * ratio),
+          total: roundToTwo(item.unit_price * ratio) * (item.quantity || 1)
         }))
       }
     }
@@ -792,13 +792,13 @@ function QuotationsPageContent() {
     : (form.customSubtotal !== null && form.customSubtotal !== undefined ? form.customSubtotal : (computedSub + (form.adBudgetBillThrough ? (form.adBudget || 0) : 0)))
 
   const discAmt = form.items && form.items.length > 0
-    ? lineItemsDiscount + Math.round((lineItemsSubtotal - lineItemsDiscount) * form.discountPct / 100)
-    : Math.round(subtotal * form.discountPct / 100)
+    ? lineItemsDiscount + roundToTwo((lineItemsSubtotal - lineItemsDiscount) * form.discountPct / 100)
+    : roundToTwo(subtotal * form.discountPct / 100)
 
   const afterDisc = subtotal - discAmt
-  const gstAmt = Math.round(afterDisc * form.gstPct / 100)
+  const gstAmt = roundToTwo(afterDisc * form.gstPct / 100)
 
-  const grandTotal = afterDisc + gstAmt
+  const grandTotal = roundToTwo(afterDisc + gstAmt)
 
   const filtered = quotes.filter(q => {
     const matchSearch = q.client.toLowerCase().includes(search.toLowerCase()) || q.docId.toLowerCase().includes(search.toLowerCase()) || q.contact.toLowerCase().includes(search.toLowerCase())
@@ -871,9 +871,9 @@ function QuotationsPageContent() {
       const lineItemsDiscount = data.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
 
       sub = lineItemsSubtotal
-      dAmt = lineItemsDiscount + Math.round((lineItemsSubtotal - lineItemsDiscount) * disc / 100)
+      dAmt = lineItemsDiscount + roundToTwo((lineItemsSubtotal - lineItemsDiscount) * disc / 100)
       const afterOverallDisc = sub - dAmt
-      const gAmt = Math.round(afterOverallDisc * gst / 100)
+      const gAmt = roundToTwo(afterOverallDisc * gst / 100)
       tot = afterOverallDisc + gAmt
 
       data.items.forEach((item: any) => {
@@ -893,7 +893,7 @@ function QuotationsPageContent() {
       // Calculate dynamic price for Paid Advertising services (catId === '3')
       const adBudgetFee = data.adBudgetOverride 
         ? (data.adBudgetFixed || 0) 
-        : Math.round((data.adBudget || 0) * ((data.adBudgetPct || 15) / 100))
+        : roundToTwo((data.adBudget || 0) * ((data.adBudgetPct || 15) / 100))
 
       const computedSub = svcs.reduce((sum, s) => {
         if (s.catId === '3') {
@@ -903,9 +903,9 @@ function QuotationsPageContent() {
       }, 0)
 
       sub = computedSub + (data.adBudgetBillThrough ? (data.adBudget || 0) : 0)
-      dAmt  = Math.round(sub * disc / 100)
+      dAmt  = roundToTwo(sub * disc / 100)
       const aft   = sub - dAmt
-      const gAmt  = Math.round(aft * gst / 100)
+      const gAmt  = roundToTwo(aft * gst / 100)
       tot   = aft + gAmt
 
       svcs.forEach(s => {
@@ -919,7 +919,7 @@ function QuotationsPageContent() {
             timeline: s.timeline,
             pricing_model: 'fixed',
             deliverables: [`Campaign structure setup and onboarding for ${s.name}`],
-            tax: Math.round(s.price * gst / 100)
+            tax: roundToTwo(s.price * gst / 100)
           })
           pdfItems.push({
             serviceName: `${s.name} - Monthly Service Fee`,
@@ -930,7 +930,7 @@ function QuotationsPageContent() {
             timeline: s.timeline,
             pricing_model: 'monthly',
             deliverables: s.deliverables,
-            tax: Math.round(adBudgetFee * gst / 100)
+            tax: roundToTwo(adBudgetFee * gst / 100)
           })
         } else {
           pdfItems.push({
@@ -942,7 +942,7 @@ function QuotationsPageContent() {
             timeline: s.timeline,
             pricing_model: s.model,
             deliverables: s.deliverables,
-            tax: Math.round(s.price * gst / 100)
+            tax: roundToTwo(s.price * gst / 100)
           })
         }
       })
@@ -1136,14 +1136,13 @@ function QuotationsPageContent() {
         }
       }
 
-      await buildAndDownloadPdf(newQ, form.selectedIds, form.discountPct, form.gstPct, form.projectTitle, docId, form.paymentScheduleId)
       const updatedQuotes = [newQ, ...quotes]
       setQuotes(updatedQuotes)
       setCachedData('quotations', { quotes: updatedQuotes, servicesData, paymentSchedules, companyDocs })
       invalidateCache('dashboard')
       setShowCreate(false)
       setForm(blankForm(companyDocs))
-      toast({ title: '✅ Quotation Generated!', description: `${docId} downloaded.` })
+      toast({ title: '✅ Quotation Generated!', description: `${docId} saved. Use Actions → Download to get the PDF.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
@@ -1636,7 +1635,7 @@ function QuotationsPageContent() {
               // Calculate dynamic price for Paid Advertising services (catId === '3')
               const adBudgetFee = quoteObj.adBudgetOverride 
                 ? (quoteObj.adBudgetFixed || 0) 
-                : Math.round((quoteObj.adBudget || 0) * ((quoteObj.adBudgetPct || 15) / 100))
+                : Math.round(((quoteObj.adBudget || 0) * ((quoteObj.adBudgetPct || 15) / 100)) * 100) / 100
 
               const computedSub = svcs.reduce((sum, s) => {
                 if (s.catId === '3') {
@@ -1646,9 +1645,9 @@ function QuotationsPageContent() {
               }, 0)
 
               const sub = computedSub + (quoteObj.adBudgetBillThrough ? (quoteObj.adBudget || 0) : 0)
-              const dAmt = Math.round(sub * quoteObj.discountPct / 100)
+              const dAmt = Math.round((sub * quoteObj.discountPct / 100) * 100) / 100
               const aft = sub - dAmt
-              const gAmt = Math.round(aft * quoteObj.gstPct / 100)
+              const gAmt = Math.round((aft * quoteObj.gstPct / 100) * 100) / 100
               const tot = aft + gAmt
 
               const pdfItems: any[] = []

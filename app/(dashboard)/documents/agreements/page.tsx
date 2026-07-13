@@ -570,7 +570,7 @@ function AgreementsPageContent() {
       sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
       const lineDisc = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
       dAmt = lineDisc
-      const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
       tot = (sub - dAmt) + lineTax
 
       servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
@@ -651,7 +651,7 @@ function AgreementsPageContent() {
         ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
         : 0
       const lineTax = form.items && form.items.length > 0
-        ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        ? form.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
         : 0
       const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
 
@@ -664,8 +664,6 @@ function AgreementsPageContent() {
         history: targetHistory,
         items: form.items || []
       }
-
-      await downloadPdf(newAgr)
 
       if (isSupabaseConfigured()) {
         const { error } = await supabase.from('agreements').insert([{
@@ -719,7 +717,7 @@ function AgreementsPageContent() {
       setCachedData('agreements', { agreements: updatedList, sourceDocs, servicesMap, companyDocs })
       invalidateCache('dashboard')
       setShowCreate(false); resetForm(null, companyDocs)
-      toast({ title: '✅ Agreement Generated!', description: `${docId} downloaded.` })
+      toast({ title: '✅ Agreement Generated!', description: `${docId} saved. Use Actions → Download to get the PDF.` })
     } catch (e: any) { toast({ title: 'PDF Error', description: e.message, variant: 'destructive' }) }
     finally { setGenerating(false) }
   }
@@ -736,7 +734,7 @@ function AgreementsPageContent() {
       ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
       : 0
     const lineTax = form.items && form.items.length > 0
-      ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      ? form.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
       : 0
     const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
 
@@ -1026,7 +1024,7 @@ function AgreementsPageContent() {
                   if (form.items && form.items.length > 0) {
                     sub = form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
                     const lineDisc = form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
-                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
                     tot = (sub - lineDisc) + lineTax
                     servicesStr = form.items.map((i: any) => i.service_name).join(', ')
                   }
@@ -1167,7 +1165,7 @@ function AgreementsPageContent() {
                   if (form.items && form.items.length > 0) {
                     sub = form.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
                     const lineDisc = form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
-                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                    const lineTax = form.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
                     tot = (sub - lineDisc) + lineTax
                     servicesStr = form.items.map((i: any) => i.service_name).join(', ')
                   }
@@ -1387,7 +1385,7 @@ function AgreementsPageContent() {
               if (agr.items && agr.items.length > 0) {
                 sub = agr.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
                 dAmt = agr.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
-                const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+                const lineTax = agr.items.reduce((sum: number, item: any) => sum + Math.round((((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)) * 100) / 100, 0)
                 calculatedValue = (sub - dAmt) + lineTax
                 servicesStr = agr.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
                 pdfItems = agr.items.map((item: any) => ({

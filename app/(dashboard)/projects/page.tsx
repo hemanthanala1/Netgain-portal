@@ -1310,24 +1310,7 @@ function CampaignStrategyPageContent() {
                       </Card>
                     </div>
 
-                    <div className="mt-4 bg-card border border-border rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between items-center pb-2 border-b border-border">
-                        <span className="text-xs font-semibold text-muted-foreground">Mock Timesheet Schema</span>
-                        <Badge variant="outline" className="text-[9px] border-gold/30 text-gold bg-gold/5">Architecture Schema</Badge>
-                      </div>
-                      <pre className="text-[10px] text-muted-foreground font-mono overflow-x-auto bg-black/20 p-2.5 rounded border border-border">
-{`interface TimesheetEntry {
-  id: string; // uuid
-  project_id: string; // foreign key
-  team_member_id: string; // foreign key
-  date: string; // YYYY-MM-DD
-  hours: number; // decimal (e.g. 7.5)
-  billable: boolean;
-  notes: string;
-  milestone_id?: string;
-}`}
-                      </pre>
-                    </div>
+                    
                   </div>
                 </>
               )}

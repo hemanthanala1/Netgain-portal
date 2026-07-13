@@ -57,17 +57,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 })
     }
 
+    // Fetch the current invoice history first
+    const { data: invoiceRow } = await supabase
+      .from('invoices')
+      .select('history')
+      .eq('doc_id', invoiceId)
+      .maybeSingle()
+
+    const nowISO = new Date().toISOString()
+    const paidLabel = new Date(nowISO).toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    })
+    const existingHistory = Array.isArray(invoiceRow?.history) ? invoiceRow.history : []
+    const newHistory = [
+      ...existingHistory,
+      {
+        date: nowISO.split('T')[0],
+        action: `Payment received via Razorpay — Invoice marked Paid on ${paidLabel}`,
+        canDownload: true
+      }
+    ]
+
     // Update the invoice in Supabase
     const { error: updateError } = await supabase
       .from('invoices')
       .update({
         status: 'paid',
+        paid_at: nowISO,
+        history: newHistory,
         payment_gateway: 'razorpay',
         payment_id: razorpay_payment_id,
         payment_order_id: razorpay_order_id,
         payment_signature: razorpay_signature,
         payment_method: 'Razorpay Online',
-        payment_date: new Date().toISOString()
+        payment_date: nowISO
       })
       .eq('doc_id', invoiceId)
 

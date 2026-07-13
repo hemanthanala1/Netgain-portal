@@ -53,15 +53,6 @@ export default function BusinessTypesPage() {
       } catch (err: any) {
         toast({ title: 'Error loading business types', description: err.message, variant: 'destructive' })
       }
-    } else {
-      // Offline mock data fallback
-      setTypes([
-        { id: '1', name: 'Restaurant', status: 'active', created_at: new Date().toISOString() },
-        { id: '2', name: 'Hospital', status: 'active', created_at: new Date().toISOString() },
-        { id: '3', name: 'School', status: 'active', created_at: new Date().toISOString() },
-        { id: '4', name: 'College', status: 'active', created_at: new Date().toISOString() },
-        { id: '5', name: 'Software Company', status: 'active', created_at: new Date().toISOString() },
-      ])
     }
     setLoading(false)
   }
@@ -101,12 +92,6 @@ export default function BusinessTypesPage() {
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
       }
-    } else {
-      const mockNew = { id: String(Date.now()), name, status: 'active', created_at: new Date().toISOString() }
-      setTypes(prev => [...prev, mockNew].sort((a, b) => a.name.localeCompare(b.name)))
-      setShowCreate(false)
-      setNewTypeName('')
-      toast({ title: 'Business Type Created (Mock) ✓' })
     }
     setSubmitting(false)
   }
@@ -137,11 +122,6 @@ export default function BusinessTypesPage() {
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
       }
-    } else {
-      setTypes(prev => prev.map(t => t.id === editingType.id ? { ...t, name } : t).sort((a, b) => a.name.localeCompare(b.name)))
-      setEditingType(null)
-      setEditTypeName('')
-      toast({ title: 'Business Type Updated (Mock) ✓' })
     }
     setSubmitting(false)
   }
@@ -187,10 +167,6 @@ export default function BusinessTypesPage() {
       } catch (err: any) {
         toast({ title: 'Database Error', description: err.message, variant: 'destructive' })
       }
-    } else {
-      setTypes(prev => prev.filter(t => t.id !== deleteId))
-      setDeleteId(null)
-      toast({ title: 'Business Type Deleted (Mock) ✓' })
     }
   }
 

@@ -14,7 +14,7 @@ import { Drawer } from '@/components/ui/drawer'
 import { DeleteDialog } from '@/components/ui/dialog-variants'
 import { Search, Plus, Download, Send, Trash2, Pencil, Loader2, FileText, History, Globe, MoreHorizontal, Eye } from 'lucide-react'
 import { DocumentPreviewModal } from '@/components/ui/document-preview-modal'
-import { formatCurrency, formatDate, generateDocId, getDocStatusColor } from '@/lib/utils'
+import { formatCurrency, formatDate, generateDocId, getDocStatusColor, roundToTwo } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -614,7 +614,7 @@ function SOWPageContent() {
       sub = f.items.reduce((sum: number, item: any) => sum + (Number(item.unit_price) * Number(item.quantity)), 0)
       const lineDisc = f.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
       dAmt = lineDisc
-      const lineTax = f.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+      const lineTax = f.items.reduce((sum: number, item: any) => sum + roundToTwo(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
       tot = (sub - dAmt) + lineTax
 
       deliverablesMarkdown = f.items.map((item: any) => `**${item.service_name}**\n${item.description || ''}`).join('\n\n')
@@ -861,13 +861,6 @@ function SOWPageContent() {
       const docId = editItem ? editItem.docId : generateDocId('NG-SOW')
       const payload = buildPayload(form, form.client, form.project, docId)
 
-      const res = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF failed') }
-      const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-      a.download = `SOW_${docId}_${form.client.replace(/\s+/g, '_')}.pdf`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-
       const targetId = editItem ? editItem.id : String(Date.now())
       const targetCreated = editItem ? editItem.created : new Date().toISOString().slice(0, 10)
       const targetHistory = editItem 
@@ -882,7 +875,7 @@ function SOWPageContent() {
         ? form.items.reduce((sum: number, item: any) => sum + Number(item.discount), 0)
         : 0
       const lineTax = form.items && form.items.length > 0
-        ? form.items.reduce((sum: number, item: any) => sum + Math.round(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
+        ? form.items.reduce((sum: number, item: any) => sum + roundToTwo(((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount)) * (Number(item.tax) / 100)), 0)
         : 0
       const calculatedValue = (lineSubtotal - lineDiscount) + lineTax
 
@@ -973,12 +966,12 @@ function SOWPageContent() {
         const updatedList = sows.map(s => s.id === editItem.id ? newSOW : s)
         setSows(updatedList)
         setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
-        toast({ title: '✅ SOW Updated!', description: `${docId} updated and downloaded.` })
+        toast({ title: '✅ SOW Updated!', description: `${docId} saved. Use Actions → Download to get the PDF.` })
       } else {
         const updatedList = [newSOW, ...sows]
         setSows(updatedList)
         setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
-        toast({ title: '✅ SOW Generated!', description: `${docId} downloaded successfully.` })
+        toast({ title: '✅ SOW Generated!', description: `${docId} saved. Use Actions → Download to get the PDF.` })
       }
       invalidateCache('dashboard')
       
