@@ -28,6 +28,8 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { DataTable } from '@/components/ui/data-table'
 import { TableSkeleton } from '@/components/ui/skeletons'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ClientAutocomplete } from '@/components/ui/client-autocomplete'
 
 interface Meeting {
   id: string
@@ -58,6 +60,7 @@ function MeetingsListContent() {
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [generateMeetLink, setGenerateMeetLink] = useState(true)
   const [newMeeting, setNewMeeting] = useState({
     client_name: '',
     client_email: '',
@@ -75,11 +78,29 @@ function MeetingsListContent() {
     }
     setIsSubmitting(true)
     try {
-      const { error } = await supabase.from('meetings').insert([{
-        ...newMeeting,
-        status: 'upcoming'
-      }])
-      if (error) throw error
+      if (generateMeetLink) {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        const res = await fetch('/api/meetings/create', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ newMeeting, generateMeetLink })
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to generate meeting link')
+        }
+      } else {
+        const { error } = await supabase.from('meetings').insert([{
+          ...newMeeting,
+          status: 'upcoming'
+        }])
+        if (error) throw error
+      }
       toast({ title: 'Meeting Scheduled ✓' })
       setShowAddModal(false)
       setNewMeeting({
@@ -327,18 +348,29 @@ function MeetingsListContent() {
       }
     } else if (action === 'status_cancelled') {
       try {
-        const { error } = await supabase.from('meetings').update({ status: 'cancelled' }).in('id', ids)
-        if (error) throw error
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        const res = await fetch('/api/meetings/cancel', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ids })
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to cancel meetings')
+
         setMeetings(prev => prev.map(m => ids.includes(m.id) ? { ...m, status: 'cancelled' } : m))
-        toast({ title: 'Meetings marked cancelled' })
+        toast({ title: 'Meetings marked cancelled and invitees notified (if applicable)' })
       } catch (err: any) {
-        toast({ title: 'Error updating meetings', description: err.message, variant: 'destructive' })
+        toast({ title: 'Error cancelling meetings', description: err.message, variant: 'destructive' })
       }
     }
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       {/* Header section */}
       <PageHeader
         title="Meetings & Communications"
@@ -442,14 +474,20 @@ function MeetingsListContent() {
       </div>
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-[425px] bg-[#07110e] border-border text-foreground">
+        <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto bg-[#07110e] border-border text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-gold">Schedule New Meeting</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Client Name *</Label>
-              <Input placeholder="E.g. John Doe" value={newMeeting.client_name} onChange={e => setNewMeeting({...newMeeting, client_name: e.target.value})} className="bg-black/50 border-border/50" />
+              <ClientAutocomplete
+                value={newMeeting.client_name}
+                onChange={val => setNewMeeting({...newMeeting, client_name: val})}
+                onSelect={client => setNewMeeting({...newMeeting, client_name: client.name, client_email: client.email || ''})}
+                placeholder="E.g. John Doe"
+                className="bg-black/50 border-border/50"
+              />
             </div>
             <div className="space-y-2">
               <Label>Client Email *</Label>
@@ -477,7 +515,11 @@ function MeetingsListContent() {
             </div>
             <div className="space-y-2">
               <Label>Meeting Link</Label>
-              <Input placeholder="https://meet.google.com/..." value={newMeeting.meet_link} onChange={e => setNewMeeting({...newMeeting, meet_link: e.target.value})} className="bg-black/50 border-border/50" />
+              <Input placeholder="https://meet.google.com/..." value={newMeeting.meet_link} onChange={e => setNewMeeting({...newMeeting, meet_link: e.target.value})} className="bg-black/50 border-border/50" disabled={generateMeetLink} />
+            </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox id="generate-meet" checked={generateMeetLink} onCheckedChange={(c) => setGenerateMeetLink(!!c)} />
+              <Label htmlFor="generate-meet" className="font-normal text-sm text-muted-foreground cursor-pointer">Generate Google Meet link (requires Calendar connected)</Label>
             </div>
           </div>
           <DialogFooter>

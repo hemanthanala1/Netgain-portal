@@ -11,7 +11,7 @@ import {
   ChevronRight, Zap, BarChart3, FileCode2, X, DollarSign, Calendar,
   Sparkles, BookOpen, Brain, LifeBuoy, PieChart
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 const navItems = [
@@ -77,6 +77,31 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
   const { user } = useUser()
   const isExpanded = !collapsed || !!onMobileClose
 
+  const [companyName, setCompanyName] = useState('NETGAIN')
+  const [companyLogo, setCompanyLogo] = useState('/logo.png')
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/settings')
+        if (res.ok) {
+          const data = await res.json()
+          if (data?.company?.name) setCompanyName(data.company.name)
+          if (data?.company?.logo) setCompanyLogo(data.company.logo)
+        }
+      } catch (e) {}
+    }
+    fetchSettings()
+
+    const handleUpdate = (e: any) => {
+      if (e.detail?.name) setCompanyName(e.detail.name)
+      if (e.detail?.logo !== undefined) setCompanyLogo(e.detail.logo || '/logo.png')
+    }
+
+    window.addEventListener('company-settings-updated', handleUpdate)
+    return () => window.removeEventListener('company-settings-updated', handleUpdate)
+  }, [])
+
   return (
     <motion.aside
       animate={{ width: isExpanded ? 256 : 72 }}
@@ -92,13 +117,13 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
         >
           <div className="relative shrink-0">
             <img
-              src="/logo.png"
+              src={companyLogo}
               className="h-8 w-8 rounded-lg object-contain"
-              alt="Netgain Logo"
+              alt={`${companyName} Logo`}
             />
           </div>
           <div className="overflow-hidden">
-            <p className="text-[13px] font-bold text-foreground whitespace-nowrap tracking-tight">NETGAIN</p>
+            <p className="text-[13px] font-bold text-foreground whitespace-nowrap tracking-tight uppercase">{companyName}</p>
             <p className="text-[10px] text-primary whitespace-nowrap font-semibold tracking-widest -mt-0.5 uppercase">Business OS</p>
           </div>
         </motion.div>
@@ -106,7 +131,7 @@ export function Sidebar({ onMobileCloseAction: onMobileClose }: { onMobileCloseA
         {/* Collapsed logo */}
         {!isExpanded && (
           <div className="absolute left-1/2 -translate-x-1/2">
-            <img src="/logo.png" className="h-8 w-8 rounded-lg object-contain" alt="Netgain Logo" />
+            <img src={companyLogo} className="h-8 w-8 rounded-lg object-contain" alt={`${companyName} Logo`} />
           </div>
         )}
 

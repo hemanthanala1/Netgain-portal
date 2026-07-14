@@ -311,6 +311,11 @@ function CampaignStrategyPageContent() {
   const [reportVisibility, setReportVisibility] = useState('Published to Client')
   const [uploadingReportState, setUploadingReportState] = useState(false)
 
+  // Approvals Form States
+  const [approvalTitle, setApprovalTitle] = useState('')
+  const [showApprovalForm, setShowApprovalForm] = useState(false)
+  const [creatingApproval, setCreatingApproval] = useState(false)
+
   // Links Form States
   const [linkTitle, setLinkTitle] = useState('')
   const [linkCategory, setLinkCategory] = useState('Live Website')
@@ -599,15 +604,58 @@ function CampaignStrategyPageContent() {
       setReportTitle('')
 
       fetchProjectWorkspaceData(projectId)
-      await logWorkspaceActivity(projectId, 'Report Uploaded', `Uploaded report: ${reportTitle} (${reportType}) - Visibility: ${reportVisibility}`)
+      await logWorkspaceActivity(projectId, 'Report Published', `Published report: ${reportTitle} (${reportType}) - Visibility: ${reportVisibility}`)
 
       if (reportVisibility === 'Published to Client') {
-        await notifyClient(clientName, 'New Performance Report Uploaded', `A new ${reportType} report has been published to your workspace: ${reportTitle}`)
+        await notifyClient(clientName, 'New Project Report Available', `A new report has been published to your workspace: ${reportTitle}`)
       }
     } catch (e: any) {
       toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
     } finally {
       setUploadingReportState(false)
+    }
+  }
+
+  const handleAddApproval = async (projectId: string, clientName: string) => {
+    if (!approvalTitle.trim()) return
+    setCreatingApproval(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.from('project_approvals').insert([{
+          project_id: projectId,
+          title: approvalTitle,
+          description: '',
+          status: 'Pending',
+          requested_at: new Date().toISOString()
+        }]).select()
+        
+        if (!error && data) {
+          setWorkspaceApprovals(prev => [data[0], ...prev])
+          await logWorkspaceActivity(projectId, 'Approval Requested', `Requested: ${approvalTitle}`)
+          await notifyClient(clientName, 'Action Required: Approval Needed', `A new approval has been requested for your project: ${approvalTitle}`)
+          toast({ title: 'Approval Requested', description: 'The approval has been added to the queue.' })
+          setShowApprovalForm(false)
+          setApprovalTitle('')
+        } else if (error) {
+          toast({ title: 'Error', description: error.message, variant: 'destructive' })
+        }
+      } catch (err: any) {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' })
+      }
+    }
+    setCreatingApproval(false)
+  }
+
+  const handleDeleteApproval = async (approvalId: string) => {
+    if (!confirm('Are you sure you want to delete this approval request?')) return
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('project_approvals').delete().eq('id', approvalId)
+      if (!error) {
+        setWorkspaceApprovals(prev => prev.filter(a => a.id !== approvalId))
+        toast({ title: 'Deleted', description: 'Approval request removed.' })
+      } else {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' })
+      }
     }
   }
 
@@ -1589,7 +1637,7 @@ function CampaignStrategyPageContent() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
+                          className="h-8 p-0 flex items-center text-xs text-muted-foreground cursor-pointer bg-transparent border-input file:h-full file:bg-primary file:text-primary-foreground file:border-none file:px-3 file:mr-2 file:text-xs file:font-semibold file:cursor-pointer"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1708,7 +1756,7 @@ function CampaignStrategyPageContent() {
                         <Input 
                           type="file" 
                           onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 bg-transparent border-input file:bg-primary file:text-primary-foreground file:border-none file:rounded file:px-3 file:py-1 file:text-xs file:font-semibold"
+                          className="h-8 p-0 flex items-center text-xs text-muted-foreground cursor-pointer bg-transparent border-input file:h-full file:bg-primary file:text-primary-foreground file:border-none file:px-3 file:mr-2 file:text-xs file:font-semibold file:cursor-pointer"
                         />
                       </div>
                       <div className="space-y-1">
@@ -2224,7 +2272,33 @@ function CampaignStrategyPageContent() {
                       <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Approvals Queue</h4>
                       <p className="text-[10px] text-muted-foreground mt-0.5">Track sign-offs, SOW approvals, and budget adjustments</p>
                     </div>
+                    <Button variant="gold" size="sm" className="h-7 text-[10px] font-bold" onClick={() => setShowApprovalForm(!showApprovalForm)}>
+                      {showApprovalForm ? 'Cancel' : 'Request Approval'}
+                    </Button>
                   </div>
+                  
+                  {showApprovalForm && (
+                    <Card className="bg-card border-border p-4 space-y-3">
+                      <h4 className="text-xs font-bold text-gold uppercase">New Approval Request</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <Label>Approval Title *</Label>
+                          <Input placeholder="e.g. Phase 1 Signoff" value={approvalTitle} onChange={e => setApprovalTitle(e.target.value)} className="h-8" />
+                        </div>
+                        <div className="flex items-end">
+                          <Button 
+                            variant="gold" 
+                            className="w-full h-8 text-xs font-bold" 
+                            onClick={() => handleAddApproval(detailProject.id, detailProject.client)}
+                            disabled={creatingApproval || !approvalTitle.trim()}
+                          >
+                            {creatingApproval ? 'Submitting...' : 'Submit Request'}
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
                   <div className="space-y-3">
                     {workspaceApprovals.length === 0 ? (
                       <div className="text-center py-10 border border-dashed border-border rounded-xl">
@@ -2232,7 +2306,7 @@ function CampaignStrategyPageContent() {
                         <p className="text-xs text-muted-foreground mt-1">Approval requests will appear here once created.</p>
                       </div>
                     ) : workspaceApprovals.map((approval: any) => (
-                      <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all">
+                      <Card key={approval.id} className="bg-card border-border hover:border-gold/15 transition-all relative group">
                         <CardContent className="p-3.5 flex items-center justify-between gap-4">
                           <div>
                             <p className="text-xs font-semibold text-foreground">{approval.title || approval.name}</p>
@@ -2289,6 +2363,15 @@ function CampaignStrategyPageContent() {
                                 </Button>
                               </>
                             )}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleDeleteApproval(approval.id)} 
+                              className="h-7 w-7 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                              aria-label="Delete Approval"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>

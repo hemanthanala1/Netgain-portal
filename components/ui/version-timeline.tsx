@@ -147,8 +147,8 @@ export function UniversalTimeline({
   return (
     <div className={cn('space-y-4', className)}>
       {enableFilters && (
-        <div className="flex flex-col sm:flex-row gap-2 bg-muted/20 p-3 rounded-xl border border-border/50 text-xs mb-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 bg-muted/20 p-3 rounded-xl border border-border/50 text-xs mb-4">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"

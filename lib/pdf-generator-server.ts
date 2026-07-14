@@ -40,12 +40,15 @@ export async function generatePdfBuffer(payload: PdfPayload, supabase: SupabaseC
 
   // Company info for header / footer
   const company = {
+    ...(saved?.company || {}),
     name:    saved?.company?.name    || 'Netgain Studio',
     email:   saved?.company?.email   || 'mail.netgain@gmail.com',
     phone:   saved?.company?.phone   || '9347102347 | 9392469669',
     website: saved?.company?.website || 'netgain.studio',
     gst:     saved?.company?.gst     || '',
     address: saved?.company?.address || 'Hyderabad, Telangana, India',
+    signature: saved?.founder?.signature || saved?.company?.signature || '',
+    stamp:   saved?.company?.stamp   || '',
     // Payload companySettings always wins over saved for doc-specific overrides
     ...(payload.companySettings || {}),
   }

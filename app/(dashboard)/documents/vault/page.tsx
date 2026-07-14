@@ -263,8 +263,9 @@ function VaultListContent() {
 
   // File Vault Enhancements
   const [selectedFolder, setSelectedFolder] = useState('all')
-  const [previewDoc, setPreviewDoc] = useState<VaultDoc | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [settingsVersion, setSettingsVersion] = useState(0)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [customTags, setCustomTags] = useState<Record<string, string[]>>({})
   const [newTag, setNewTag] = useState('')
@@ -559,6 +560,11 @@ function VaultListContent() {
   }
 
   const handleRealtimeChange = (table: string, eventType: string, newRecord: any, oldRecord: any) => {
+    if (table === 'company_settings') {
+      fetchDocuments()
+      setSettingsVersion(v => v + 1)
+      return
+    }
     const mapRecord = (tbl: string, rec: any): VaultDoc | null => {
       if (!rec) return null
       switch (tbl) {
@@ -603,7 +609,7 @@ function VaultListContent() {
 
     let activeChannels: any[] = []
     if (isSupabaseConfigured()) {
-      const tables = ['quotations', 'invoices', 'sows', 'agreements', 'prds', 'marketing_reports']
+      const tables = ['quotations', 'invoices', 'sows', 'agreements', 'prds', 'marketing_reports', 'company_settings']
       activeChannels = tables.map(table => {
         return supabase
           .channel(`vault_${table}_realtime`)
@@ -1083,12 +1089,12 @@ function VaultListContent() {
   }
 
   useEffect(() => {
-    if (previewDoc) {
-      handlePreviewLoad(previewDoc)
+    if (showPreview && selectedDoc) {
+      handlePreviewLoad(selectedDoc)
     } else {
       setPreviewBlobUrl(null)
     }
-  }, [previewDoc])
+  }, [showPreview, selectedDoc, settingsVersion])
 
   const handleDownload = async (doc: VaultDoc) => {
     setDownloadingId(doc.id)
@@ -1371,7 +1377,7 @@ function VaultListContent() {
                   <Button 
                     variant="outline" 
                     className="w-full h-8 text-xs border-border text-muted-foreground hover:text-foreground hover:bg-card gap-2"
-                    onClick={() => setPreviewDoc(selectedDoc)}
+                    onClick={() => setShowPreview(true)}
                   >
                     <Expand className="h-3.5 w-3.5" /> Open Full Preview
                   </Button>
@@ -1380,14 +1386,25 @@ function VaultListContent() {
                 {/* 1. Document Lifecycle Progress Tracker */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">Workflow Status</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-1.5 text-center text-[9px] font-medium font-mono text-muted-foreground">
-                    {[
+                  <div className={`grid ${selectedDoc.type === 'Invoice' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-5'} gap-1.5 text-center text-[9px] font-medium font-mono text-muted-foreground`}>
+                    {(selectedDoc.type === 'Invoice' ? [
+                      { l: 'Draft', active: ['draft', 'sent', 'sent to client', 'viewed', 'paid', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Sent', active: ['sent', 'sent to client', 'viewed', 'paid', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Viewed', active: ['viewed', 'paid', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Paid', active: ['paid', 'completed'].includes(selectedDoc.status.toLowerCase()) }
+                    ] : selectedDoc.type === 'PRD' || selectedDoc.type === 'Marketing' ? [
+                      { l: 'Draft', active: ['draft', 'internal review', 'approved', 'sent to client', 'viewed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Reviewed', active: ['internal review', 'approved', 'sent to client', 'viewed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Approved', active: ['approved', 'sent to client', 'viewed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Sent', active: ['sent to client', 'viewed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
+                      { l: 'Completed', active: ['completed'].includes(selectedDoc.status.toLowerCase()) }
+                    ] : [
                       { l: 'Draft', active: ['draft', 'internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Reviewed', active: ['internal review', 'approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Approved', active: ['approved', 'sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Sent', active: ['sent to client', 'viewed', 'signed', 'completed'].includes(selectedDoc.status.toLowerCase()) },
                       { l: 'Signed', active: ['signed', 'completed'].includes(selectedDoc.status.toLowerCase()) }
-                    ].map((step, idx) => (
+                    ]).map((step, idx) => (
                       <div key={idx} className="space-y-1.5">
                         <div className={`h-1.5 rounded-full transition-all duration-300 ${step.active ? 'gold-gradient' : 'bg-muted'}`} />
                         <p className={step.active ? 'text-[#D4AF37] font-semibold' : ''}>{step.l}</p>
@@ -1743,7 +1760,7 @@ function VaultListContent() {
       )}
 
       {/* File Preview Modal Overlay */}
-      {previewDoc && (
+      {showPreview && selectedDoc && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
           <div className="w-full max-w-5xl h-[85vh] flex flex-col bg-background border border-border rounded-xl overflow-hidden shadow-2xl">
             {/* Modal Header */}
@@ -1753,15 +1770,15 @@ function VaultListContent() {
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-foreground text-sm">{previewDoc.title}</h3>
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{previewDoc.docId}</p>
+                  <h3 className="font-bold text-foreground text-sm">{selectedDoc.title}</h3>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{selectedDoc.docId}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-8 gap-2 bg-card text-muted-foreground border-border hover:text-foreground" onClick={() => handleDownload(previewDoc)}>
+                <Button variant="outline" size="sm" className="h-8 gap-2 bg-card text-muted-foreground border-border hover:text-foreground" onClick={() => handleDownload(selectedDoc)}>
                   <Download className="h-4 w-4" /> Download PDF
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setPreviewDoc(null)}>
+                <Button variant="ghost" size="icon" aria-label="Action" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setShowPreview(false)}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>

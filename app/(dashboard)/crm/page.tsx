@@ -177,26 +177,41 @@ function CRMPageContent() {
       if (!cached) setLoading(true)
 
       try {
-        const { data, error } = await supabase.from('crm_clients').select('*').order('created_at', { ascending: false })
+        const [clientsRes, invoicesRes] = await Promise.all([
+          supabase.from('crm_clients').select('*').order('created_at', { ascending: false }),
+          supabase.from('invoices').select('client, amount, status').in('status', ['paid', 'completed'])
+        ])
+
+        const { data, error } = clientsRes
+        const { data: invoicesData } = invoicesRes
+
         if (error) {
           toast({ title: 'Error fetching clients', description: error.message, variant: 'destructive' })
         } else if (data) {
-            const mapped = data.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              business: c.business,
-              type: c.type,
-              email: c.email,
-              phone: c.phone,
-              status: c.status,
-              revenue: Number(c.revenue) || 0,
-              lastContact: c.last_contact,
-              city: c.city,
-              gst: c.gst,
-              address: c.address,
-              website: c.website,
-              pan: c.pan || ''
-            }))
+            const mapped = data.map((c: any) => {
+              const clientInvoices = invoicesData?.filter(i => 
+                i.client?.toLowerCase().trim() === c.name?.toLowerCase().trim() || 
+                i.client?.toLowerCase().trim() === c.business?.toLowerCase().trim()
+              ) || []
+              const realRevenue = clientInvoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0)
+
+              return {
+                id: c.id,
+                name: c.name,
+                business: c.business,
+                type: c.type,
+                email: c.email,
+                phone: c.phone,
+                status: c.status,
+                revenue: realRevenue,
+                lastContact: c.last_contact,
+                city: c.city,
+                gst: c.gst,
+                address: c.address,
+                website: c.website,
+                pan: c.pan || ''
+              }
+            })
             setClients(mapped)
             setCachedData('crm_clients', mapped)
           }

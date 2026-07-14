@@ -666,6 +666,9 @@ export default function ClientDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'marketing_reports' }, () => {
         refreshClientData()
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+        refreshClientData()
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'client_notifications' }, (payload) => {
         const n = payload.new as any
         if (n.client_id === clientCompany || n.client_id === session.email) {
@@ -2676,7 +2679,8 @@ export default function ClientDashboardPage() {
                         doc.raw?.paid_at ? new Date(doc.raw.paid_at).getTime() : 0,
                         doc.raw?.published_at ? new Date(doc.raw.published_at).getTime() : 0,
                         doc.raw?.created_at ? new Date(doc.raw.created_at).getTime() : 0,
-                        doc.raw?.created ? new Date(doc.raw.created).getTime() : 0
+                        doc.raw?.created ? new Date(doc.raw.created).getTime() : 0,
+                        companySettings?.updatedAt ? new Date(companySettings.updatedAt).getTime() : 0
                       ]
                       return Math.max(...times) + '-v2'
                     }

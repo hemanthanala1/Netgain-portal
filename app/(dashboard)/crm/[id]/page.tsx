@@ -595,7 +595,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <CardContent className="p-5">
               <h3 className="text-sm font-semibold mb-3">Quick Stats</h3>
               <div className="space-y-3">
-                {[{ label: 'Total Revenue', val: formatCurrency(client.revenue), color: 'text-gold' }, { label: 'Client Since', val: formatDate(client.joined), color: '' }, { label: 'Documents', val: `${documents.length} (${docBreakdown || 'None'})`, color: '' }].map(s => (
+                {[{ label: 'Total Revenue', val: formatCurrency(documents.filter(d => d.type === 'Invoice' && (d.status === 'paid' || d.status === 'completed')).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0)), color: 'text-gold' }, { label: 'Client Since', val: formatDate(client.joined), color: '' }, { label: 'Documents', val: `${documents.length} (${docBreakdown || 'None'})`, color: '' }].map(s => (
                   <div key={s.label}><p className="text-xs text-muted-foreground">{s.label}</p><p className={`text-sm font-semibold mt-0.5 ${s.color}`}>{s.val}</p></div>
                 ))}
               </div>

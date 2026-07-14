@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus, Calendar, Link, Unlink, Shield, History, Bell, Sparkles, Search } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
@@ -44,15 +45,52 @@ const SecretField = ({ id, value, onChange, placeholder, showKey, setShowKey }: 
   </div>
 )
 
-const ImageUploader = ({ label, field, company, setCompany, toast }: { label: string; field: 'logo' | 'stamp' | 'signature'; company: any; setCompany: (updater: (c: any) => any) => void; toast: any }) => {
+const removeWhiteBackground = (imageSrc: string): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'Anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(imageSrc)
+        return
+      }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const data = imageData.data
+      
+      const threshold = 225 // Threshold for white background (removes light gray/white)
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i]
+        const g = data[i + 1]
+        const b = data[i + 2]
+        const a = data[i + 3]
+        
+        if (a > 0 && r > threshold && g > threshold && b > threshold) {
+          data[i + 3] = 0 // Make pixel transparent
+        }
+      }
+      ctx.putImageData(imageData, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(imageSrc)
+    img.src = imageSrc
+  })
+}
+
+const ImageUploader = ({ label, field, stateObj, setStateObj, toast }: { label: string; field: string; stateObj: any; setStateObj: (updater: (c: any) => any) => void; toast: any }) => {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const base64 = reader.result as string
-      setCompany(c => ({ ...c, [field]: base64 }))
-      toast({ title: 'Image Uploaded', description: `${field} uploaded and updated locally.` })
+      const transparentBase64 = await removeWhiteBackground(base64)
+      setStateObj(c => ({ ...c, [field]: transparentBase64 }))
+      toast({ title: 'Image Uploaded', description: `${field} uploaded and background automatically removed.` })
     }
     reader.readAsDataURL(file)
   }
@@ -60,15 +98,15 @@ const ImageUploader = ({ label, field, company, setCompany, toast }: { label: st
   return (
     <FieldRow label={label}>
       <div className="flex items-center gap-4">
-        {company[field] && <img src={company[field]} alt={label} className="h-12 w-auto object-contain bg-white/5 p-1 rounded border border-border" />}
+        {stateObj[field] && <img src={stateObj[field]} alt={label} className="h-12 w-auto object-contain bg-white/5 p-1 rounded border border-border" />}
         <Label className="cursor-pointer">
           <Input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <div className="flex h-9 items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground gap-1.5 cursor-pointer">
             <Upload className="h-3.5 w-3.5" />
-            {company[field] ? 'Change ' + label : 'Upload ' + label}
+            {stateObj[field] ? 'Change ' + label : 'Upload ' + label}
           </div>
         </Label>
-        {company[field] && <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-400 h-9" onClick={() => setCompany(c => ({ ...c, [field]: '' }))}>Remove</Button>}
+        {stateObj[field] && <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-400 h-9" onClick={() => setStateObj(c => ({ ...c, [field]: '' }))}>Remove</Button>}
       </div>
     </FieldRow>
   )
@@ -104,7 +142,11 @@ function SettingsPageContent() {
     notifyOnLogin: true,
     notifyOnInvoice: true,
     notifyOnProject: true,
-    notifyOnSupport: true
+    notifyOnSupport: true,
+    sigQuotation: true,
+    sigInvoice: true,
+    sigSow: true,
+    sigAgreement: true
   })
 
   const [founder, setFounder] = useState({
@@ -112,6 +154,7 @@ function SettingsPageContent() {
     designation: 'Founder & CEO',
     email: 'devon@netgain.studio',
     phone: '9876543210',
+    signature: '',
   })
 
   const [bank, setBank] = useState({
@@ -376,6 +419,10 @@ function SettingsPageContent() {
         module: 'system'
       })
 
+      window.dispatchEvent(new CustomEvent('company-settings-updated', { 
+        detail: { name: company.name, logo: company.logo } 
+      }))
+
       setSaved(true)
       toast({ title: '✅ Settings Saved!', description: 'All PDF documents will use the updated company info.' })
       setTimeout(() => setSaved(false), 3000)
@@ -472,9 +519,33 @@ function SettingsPageContent() {
                 <Textarea className="resize-none h-16" value={company.address} onChange={e => setCompany({ ...company, address: e.target.value })} placeholder="Street, City, State — PIN" />
               </FieldRow>
               <Separator />
-              <ImageUploader label="Company Logo" field="logo" company={company} setCompany={setCompany} toast={toast} />
-              <ImageUploader label="Company Stamp" field="stamp" company={company} setCompany={setCompany} toast={toast} />
-              <ImageUploader label="Authorized Signature" field="signature" company={company} setCompany={setCompany} toast={toast} />
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-[#D4AF37]">Company Visuals & Documents</h3>
+                    <ImageUploader label="Company Logo" field="logo" stateObj={company} setStateObj={setCompany} toast={toast} />
+                    <ImageUploader label="Company Stamp" field="stamp" stateObj={company} setStateObj={setCompany} toast={toast} />
+                    <ImageUploader label="Authorized Signature" field="signature" stateObj={company} setStateObj={setCompany} toast={toast} />
+                    
+                    <FieldRow label="Display Signature On" hint="Select which documents should automatically include the company's authorized signature.">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="sigQuotation" checked={company.sigQuotation} onCheckedChange={(c) => setCompany(prev => ({ ...prev, sigQuotation: !!c }))} />
+                          <Label htmlFor="sigQuotation" className="text-sm cursor-pointer">Quotations</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="sigInvoice" checked={company.sigInvoice} onCheckedChange={(c) => setCompany(prev => ({ ...prev, sigInvoice: !!c }))} />
+                          <Label htmlFor="sigInvoice" className="text-sm cursor-pointer">Invoices</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="sigSow" checked={company.sigSow} onCheckedChange={(c) => setCompany(prev => ({ ...prev, sigSow: !!c }))} />
+                          <Label htmlFor="sigSow" className="text-sm cursor-pointer">Scopes of Work (SOW)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="sigAgreement" checked={company.sigAgreement} onCheckedChange={(c) => setCompany(prev => ({ ...prev, sigAgreement: !!c }))} />
+                          <Label htmlFor="sigAgreement" className="text-sm cursor-pointer">Agreements</Label>
+                        </div>
+                      </div>
+                    </FieldRow>
+                  </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -489,7 +560,7 @@ function SettingsPageContent() {
               <FieldRow label="Email"><Input type="email" value={founder.email} onChange={e => setFounder({ ...founder, email: e.target.value })} /></FieldRow>
               <FieldRow label="Phone"><Input value={founder.phone} onChange={e => setFounder({ ...founder, phone: e.target.value })} /></FieldRow>
               <Separator />
-              <FieldRow label="Personal Signature"><Button variant="outline" size="sm" className="gap-1.5"><Upload className="h-3.5 w-3.5" />Upload Signature</Button></FieldRow>
+              <ImageUploader label="Personal Signature" field="signature" stateObj={founder} setStateObj={setFounder} toast={toast} />
             </CardContent>
           </Card>
         </TabsContent>
