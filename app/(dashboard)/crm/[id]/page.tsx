@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 import { useUser } from '@/components/user-provider'
@@ -35,7 +35,7 @@ const safeTimestamp = (dateStr: string | null | undefined) => {
   return isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
-export default function ClientDetailPage({ params }: { params: { id: string } }) {
+function ClientDetailPage({ id }: { id: string }) {
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [editClient, setEditClient] = useState<any | null>(null)
@@ -123,7 +123,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       const accountId = `pa_${Date.now()}`
       const { error } = await supabase.from('client_accounts').insert([{
         id: accountId,
-        client_id: params.id,
+        client_id: id,
         email: client.email,
         password: pwd,
         status: 'active'
@@ -134,7 +134,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         toast({ title: 'Portal Account Created ✓', description: `Client can now log in at /client/login with their email and the password you set.` })
         setShowCreatePortal(false)
         setPortalPassword('')
-        await fetchPortalAccount(params.id)
+        await fetchPortalAccount(id)
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' })
@@ -158,7 +158,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         toast({ title: 'Password Reset ✓', description: 'New password has been saved.' })
         setShowResetPassword(false)
         setPortalPassword('')
-        await fetchPortalAccount(params.id)
+        await fetchPortalAccount(id)
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' })
@@ -180,7 +180,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         toast({ title: 'Error updating status', description: error.message, variant: 'destructive' })
       } else {
         toast({ title: newStatus === 'active' ? 'Account Activated ✓' : 'Account Deactivated', description: `Portal access has been ${newStatus === 'active' ? 'restored' : 'suspended'}.` })
-        await fetchPortalAccount(params.id)
+        await fetchPortalAccount(id)
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' })
@@ -256,7 +256,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       setLoading(true)
       if (isSupabaseConfigured()) {
         try {
-          const { data, error } = await supabase.from('crm_clients').select('*').eq('id', params.id).single()
+          const { data, error } = await supabase.from('crm_clients').select('*').eq('id', id).single()
           if (error) {
             toast({ title: 'Error loading client details', description: error.message, variant: 'destructive' })
           } else if (data) {
@@ -282,7 +282,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       setLoading(false)
     }
     fetchClient()
-  }, [params.id])
+  }, [id])
 
   useEffect(() => {
     if (!client) return
@@ -291,9 +291,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
     async function fetchAllData() {
       if (isSupabaseConfigured()) {
-        const { data: nData } = await supabase.from('crm_notes').select('*').eq('client_id', params.id).neq('is_deleted', true).order('created_at', { ascending: false })
+        const { data: nData } = await supabase.from('crm_notes').select('*').eq('client_id', id).neq('is_deleted', true).order('created_at', { ascending: false })
         if (active && nData) setNotes(nData)
-        const { data: aData } = await supabase.from('crm_activities').select('*').eq('client_id', params.id).order('created_at', { ascending: false })
+        const { data: aData } = await supabase.from('crm_activities').select('*').eq('client_id', id).order('created_at', { ascending: false })
         if (active && aData) setActivities(aData)
         await fetchDocumentsAndMeetings(client)
       }
@@ -307,8 +307,8 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     let docsChannels: any[] = []
 
     if (isSupabaseConfigured()) {
-      notesChannel = supabase.channel(`crm_notes_${params.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_notes', filter: `client_id=eq.${params.id}` }, (payload: any) => {
+      notesChannel = supabase.channel(`crm_notes_${id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_notes', filter: `client_id=eq.${id}` }, (payload: any) => {
           if (!active) return
           const { eventType, new: newRec, old: oldRec } = payload
           if (eventType === 'INSERT') setNotes(prev => [newRec, ...prev])
@@ -327,7 +327,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       active = false
       if (notesChannel) supabase.removeChannel(notesChannel)
     }
-  }, [client, params.id])
+  }, [client, id])
 
   const handleAddNote = async () => {
     if (!newNote.trim()) return
@@ -335,7 +335,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.from('crm_notes').insert([{
-          client_id: params.id,
+          client_id: id,
           content: newNote.trim(),
           author: user?.name || user?.email || 'Staff'
         }])
@@ -454,12 +454,12 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setSubmitting(true)
     if (isSupabaseConfigured()) {
       try {
-        const { error } = await supabase.from('crm_activities').insert([{ client_id: params.id, type: newActivityType, description: newActivityDescription.trim() }])
+        const { error } = await supabase.from('crm_activities').insert([{ client_id: id, type: newActivityType, description: newActivityDescription.trim() }])
         if (error) { toast({ title: 'Error logging activity', description: error.message, variant: 'destructive' }) }
         else { setNewActivityDescription(''); toast({ title: 'Activity Logged' }) }
       } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
     } else {
-      setActivities(prev => [{ id: Math.random().toString(), client_id: params.id, type: newActivityType, description: newActivityDescription.trim(), created_at: new Date().toISOString() }, ...prev])
+      setActivities(prev => [{ id: Math.random().toString(), client_id: id, type: newActivityType, description: newActivityDescription.trim(), created_at: new Date().toISOString() }, ...prev])
       setNewActivityDescription('')
     }
     setSubmitting(false)
@@ -1657,5 +1657,13 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function ClientDetailPageWrapper({ params }: { params: { id: string } }) {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <ClientDetailPage id={params.id} />
+    </Suspense>
   )
 }
