@@ -99,12 +99,15 @@ export async function POST(request: NextRequest) {
         const startDateTime = new Date(`${newMeeting.meeting_date}T${newMeeting.meeting_time}:00`)
         const endDateTime = new Date(startDateTime.getTime() + (newMeeting.meeting_duration || 30) * 60000)
 
-        // Fetch timezone from Google Calendar API or default
-        timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+        // Use timezone from request or fallback to UTC
+        timezone = newMeeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
         const eventPayload = {
           summary: newMeeting.event_type || 'Meeting',
-          description: `Meeting with ${newMeeting.client_name}`,
+          description: [
+            `Meeting with ${newMeeting.client_name}`,
+            newMeeting.notes ? `\nAgenda:\n${newMeeting.notes}` : ''
+          ].filter(Boolean).join('\n'),
           start: {
             dateTime: startDateTime.toISOString(),
             timeZone: timezone,
