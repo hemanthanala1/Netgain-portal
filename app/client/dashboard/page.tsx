@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 
 interface ClientDoc {
@@ -96,7 +97,7 @@ interface ClientNotification {
   timeline?: any[]
 }
 
-export default function ClientDashboardPage() {
+function ClientDashboardContent() {
   const { theme, setTheme } = useTheme()
   const [session, setSession] = useState<any>(null)
   const [sessionReady, setSessionReady] = useState(false)
@@ -4004,5 +4005,13 @@ export default function ClientDashboardPage() {
       </div>
     </div>
     </>
+  )
+}
+
+export default function ClientDashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}>
+      <ClientDashboardContent />
+    </Suspense>
   )
 }

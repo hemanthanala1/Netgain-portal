@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ const recentActivity = [
   { action: 'Generated SOW', detail: 'Custom SaaS Platform Build — TechCore', time: new Date(Date.now() - 172800000).toISOString() },
 ]
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { toast } = useToast()
   const router = useRouter()
   const { user, loading, refreshUser } = useUser()
@@ -622,5 +622,13 @@ export default function ProfilePage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}>
+      <ProfileContent />
+    </Suspense>
   )
 }

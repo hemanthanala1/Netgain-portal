@@ -9,6 +9,7 @@ const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ['localhost:3000', 'localhost:3001'] },
   },
+  outputFileTracing: false,
   // pdf-parse must run server-side only (Node.js APIs)
   webpack: (config, { isServer }) => {
     if (!isServer) {
