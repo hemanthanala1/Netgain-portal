@@ -7,9 +7,17 @@ const nextConfig = {
     ],
   },
   experimental: {
-    serverActions: { allowedOrigins: ['localhost:3000', 'localhost:3001'] },
+    serverActions: {
+      allowedOrigins: [
+        'localhost:3000',
+        'localhost:3001',
+        'erp.netgainstudio.com',
+        '*.vercel.app',
+      ],
+    },
   },
-  outputFileTracing: false,
+  // NOTE: outputFileTracing must NOT be disabled on Vercel — it is required
+  // for dynamic routes (like /crm/[id]) to work correctly in production.
   // pdf-parse must run server-side only (Node.js APIs)
   webpack: (config, { isServer }) => {
     if (!isServer) {
