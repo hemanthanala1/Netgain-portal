@@ -154,7 +154,7 @@ function PaidStamp({ paidAt }: { paidAt: string }) {
       backgroundColor: 'rgba(220,38,38,0.06)',
       alignItems: 'center',
       justifyContent: 'center',
-      transform: [{ rotate: '-12deg' }],
+      transform: 'rotate(-12deg)',
     }}>
       <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#DC2626', letterSpacing: 2, textTransform: 'uppercase' }}>PAID</Text>
       <Text style={{ fontSize: 6, color: '#DC2626', marginTop: 2, textAlign: 'center', lineHeight: 1.3, fontWeight: 'bold' }}>{paidAt}</Text>

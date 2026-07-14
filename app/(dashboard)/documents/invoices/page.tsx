@@ -932,8 +932,8 @@ function InvoicesPageContent() {
       adBudgetBillThrough: inv.adBudgetBillThrough,
       paidAt: inv.paid_at 
         ? new Date(inv.paid_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
-        : (inv.status === 'paid' && (inv.published_at || inv.created_at || inv.created))
-          ? new Date(inv.published_at || inv.created_at || inv.created).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+        : (inv.status === 'paid' && (inv.published_at || (inv as any).created_at || inv.created))
+          ? new Date(inv.published_at || (inv as any).created_at || inv.created).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
           : undefined,
       docsSettings: {
         gstRate: String(gst),

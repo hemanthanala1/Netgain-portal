@@ -315,7 +315,66 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           else if (eventType === 'UPDATE') {
             if (newRec.is_deleted) {
               setNotes(prev => prev.filter(n => n.id !== newRec.id))
+            } else {
+              setNotes(prev => prev.map(n => n.id === newRec.id ? newRec : n))
             }
+          }
+        })
+        .subscribe()
+    }
+
+    return () => {
+      active = false
+      if (notesChannel) supabase.removeChannel(notesChannel)
+    }
+  }, [client, params.id])
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.from('crm_notes').insert([{
+          client_id: params.id,
+          content: newNote.trim(),
+          author: user?.name || user?.email || 'Staff'
+        }])
+        if (error) throw error
+        toast({ title: 'Note added' })
+        setNewNote('')
+      } catch (err: any) {
+        toast({ title: 'Error adding note', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      setNotes(prev => [{ id: Math.random().toString(), content: newNote.trim(), author: 'Staff', created_at: new Date().toISOString() }, ...prev])
+      setNewNote('')
+    }
+    setSubmitting(false)
+  }
+
+  const handleEditNote = async () => {
+    if (!editNoteContent.trim() || !editingNoteId) return
+    setSubmitting(true)
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('crm_notes')
+          .update({ 
+            content: editNoteContent.trim(), 
+            last_modified: new Date().toISOString(),
+            edited_by: user?.name || user?.email || 'Staff'
+          })
+          .eq('id', editingNoteId)
+        if (error) throw error
+        toast({ title: 'Note updated' })
+        setEditingNoteId(null)
+      } catch (err: any) {
+        toast({ title: 'Error editing note', description: err.message, variant: 'destructive' })
+      }
+    } else {
+      setNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, content: editNoteContent.trim() } : n))
+      setEditingNoteId(null)
+    }
     setSubmitting(false)
   }
 

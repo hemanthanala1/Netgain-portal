@@ -238,7 +238,7 @@ export async function buildPdfPayload(
             finalPrice: scaledFinalPrice,
             category: 'Service',
             pricing_model: 'fixed',
-            deliverables: item.description ? item.description.split('\n').map(d => d.trim()).filter(Boolean) : []
+            deliverables: item.description ? item.description.split('\n').map((d: string) => d.trim()).filter(Boolean) : []
           }
         })
       } else {

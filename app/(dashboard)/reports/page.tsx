@@ -816,7 +816,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3.5 text-xs">
-                    {[].map((c, i) => (
+                    {([] as any[]).map((c, i) => (
                       <div key={i} className="flex justify-between items-center p-2.5 rounded-lg border border-border/40 bg-muted/10">
                         <div>
                           <p className="font-semibold text-foreground">{c.name}</p>
