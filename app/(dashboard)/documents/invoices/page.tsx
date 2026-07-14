@@ -711,6 +711,7 @@ function InvoicesPageContent() {
       customSubtotal: inv.customSubtotal || null,
       items: (inv.items && inv.items.length > 0) ? inv.items : legacyItems,
     })
+    setTemplateId((inv as any).template_id || (inv as any).templateId || companyDocs?.defaultTemplateId || 'modern')
   }
 
   function toggleSvc(id: string) {
@@ -1064,6 +1065,7 @@ function InvoicesPageContent() {
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
           custom_subtotal: form.customSubtotal,
+          template_id: templateId,
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -1177,6 +1179,7 @@ function InvoicesPageContent() {
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
           custom_subtotal: form.customSubtotal,
+          template_id: templateId,
         }).eq('id', editInvoice.id)
 
         if (error) {

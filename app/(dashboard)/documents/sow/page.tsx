@@ -347,6 +347,7 @@ function SOWPageContent() {
         customTerms: getSowTerms(sow, docs),
         items: sow.items || []
       })
+      setTemplateId((sow as any).template_id || (sow as any).templateId || docs?.defaultTemplateId || 'modern')
     } else {
       setForm({
         client: '',
@@ -924,7 +925,8 @@ function SOWPageContent() {
           status: targetStatus,
           created: targetCreated,
           history: targetHistory,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          template_id: templateId
         }
 
         const { error } = editItem 

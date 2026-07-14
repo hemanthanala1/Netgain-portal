@@ -63,7 +63,7 @@ export default function ReportsPage() {
         supabase.from('expenses').select('*').order('date', { ascending: false }),
         supabase.from('salaries').select('*'),
         supabase.from('meetings').select('*'),
-        supabase.from('client_notifications').select('*').eq('type', 'support'),
+        supabase.from('client_notifications').select('*').eq('type', 'support').neq('client_id', 'admin'),
         supabase.from('team_members').select('*'),
         supabase.from('services').select('*'),
       ])

@@ -90,6 +90,7 @@ export async function buildPdfPayload(
   // Base payload fields
   const basePayload: Partial<PdfPayload> = {
     docType: docType as any,
+    templateId: doc.template_id || 'modern',
     clientName: doc.contact || doc.client || 'Client',
     companyName: doc.client || undefined,
     projectTitle: doc.project_title || doc.project || doc.title || `${docType} — ${doc.client}`,

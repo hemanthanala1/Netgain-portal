@@ -376,7 +376,7 @@ function ModernTemplate({ payload }: { payload: PdfPayload }) {
 
         {/* Signatures */}
         {(payload.signatureDetails || showCompanySig) && (
-          <View style={{ marginTop: 40 }}>
+          <View style={{ marginTop: 40 }} wrap={false}>
             <Text style={st.sectionTitle}>Execution</Text>
             <View style={{ flexDirection: 'row', gap: 60 }}>
               {showCompanySig && (
@@ -531,7 +531,7 @@ function CorporateTemplate({ payload }: { payload: PdfPayload }) {
         </View>
 
         {(payload.signatureDetails || showCompanySig) && (
-          <View style={{ marginTop: 20 }}>
+          <View style={{ paddingHorizontal: 40, marginTop: 30 }} wrap={false}>
             <Text style={[st.boxTitle, { color: p }]}>Execution</Text>
             <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
               {showCompanySig && (
@@ -665,7 +665,7 @@ function MinimalTemplate({ payload }: { payload: PdfPayload }) {
         </View>
 
         {(payload.signatureDetails || showCompanySig) && (
-          <View style={{ marginTop: 30 }}>
+          <View style={{ paddingHorizontal: 40, marginTop: 20 }} wrap={false}>
             <Text style={[minStyles.label, { color: '#111827', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
             <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
               {showCompanySig && (
@@ -801,7 +801,7 @@ function LuxuryTemplate({ payload }: { payload: PdfPayload }) {
         </View>
 
         {(payload.signatureDetails || showCompanySig) && (
-          <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+          <View style={{ paddingHorizontal: 20, marginTop: 20 }} wrap={false}>
             <Text style={[st.titleText, { color: gold, borderBottomWidth: 1, borderBottomColor: '#D1D5DB', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
             <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
               {showCompanySig && (

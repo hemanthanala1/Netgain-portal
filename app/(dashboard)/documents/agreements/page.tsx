@@ -341,6 +341,7 @@ function AgreementsPageContent() {
         customTerms: getAgreementTerms(agr, docs),
         items: agr.items || []
       } as any)
+      setTemplateId((agr as any).template_id || (agr as any).templateId || docs?.defaultTemplateId || 'modern')
     } else {
       setForm({
         client: '',
@@ -683,7 +684,8 @@ function AgreementsPageContent() {
           status: form.status,
           created: targetCreated,
           history: targetHistory,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          template_id: templateId
         }])
         if (error) {
           toast({ title: 'Error saving to database', description: error.message, variant: 'destructive' })
@@ -762,7 +764,8 @@ function AgreementsPageContent() {
           jurisdiction: form.jurisdiction,
           status: form.status,
           history: targetHistory,
-          custom_terms: form.customTerms
+          custom_terms: form.customTerms,
+          template_id: templateId
         }).eq('id', editItem.id)
 
         if (error) {

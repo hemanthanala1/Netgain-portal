@@ -700,6 +700,7 @@ function VaultListContent() {
 
     const payload = {
       docType: 'Quotation' as const,
+      templateId: raw.template_id || 'modern',
       clientName: raw.contact || raw.client,
       projectTitle: raw.project_title || `Quotation — ${raw.client}`,
       companyName: raw.client,
@@ -793,6 +794,7 @@ function VaultListContent() {
 
     const payload = {
       docType: 'Invoice' as const,
+      templateId: raw.template_id || 'modern',
       clientName: raw.contact || raw.client,
       projectTitle: `Invoice — ${raw.doc_id || doc.docId}`,
       companyName: raw.client,
@@ -897,6 +899,7 @@ function VaultListContent() {
 
     const payload = {
       docType: 'SOW' as const,
+      templateId: raw.template_id || 'modern',
       clientName: raw.contact || clientName,
       projectTitle: project || `SOW — ${clientName}`,
       companyName: clientName,
@@ -976,6 +979,7 @@ function VaultListContent() {
 
     const payload = {
       docType: 'Agreement' as const,
+      templateId: raw.template_id || 'modern',
       clientName: raw.contact || raw.client,
       projectTitle: `${raw.type} — ${raw.client}`,
       companyName: raw.client,

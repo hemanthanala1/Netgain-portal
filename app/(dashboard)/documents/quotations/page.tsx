@@ -852,6 +852,7 @@ function QuotationsPageContent() {
       customSubtotal: q.customSubtotal || null,
       items: (q.items && q.items.length > 0) ? q.items : legacyItems,
     })
+    setTemplateId((q as any).template_id || (q as any).templateId || companyDocs?.defaultTemplateId || 'modern')
   }
 
   function toggleSvc(id: string) {
@@ -1103,6 +1104,7 @@ function QuotationsPageContent() {
             ad_budget_override: form.adBudgetOverride,
             ad_budget_bill_through: form.adBudgetBillThrough,
             custom_subtotal: form.customSubtotal,
+            template_id: templateId,
           }])
           if (error) {
             toast({ title: 'Error generating quotation', description: error.message, variant: 'destructive' })
@@ -1212,6 +1214,7 @@ function QuotationsPageContent() {
           ad_budget_override: form.adBudgetOverride,
           ad_budget_bill_through: form.adBudgetBillThrough,
           custom_subtotal: form.customSubtotal,
+          template_id: templateId,
         }).eq('id', editQuote.id)
         if (error) {
           toast({ title: 'Error saving changes', description: error.message, variant: 'destructive' })
