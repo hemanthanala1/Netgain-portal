@@ -1390,6 +1390,30 @@ function QuotationsPageContent() {
     setQuotes(updatedQuotes)
     setCachedData('quotations', { quotes: updatedQuotes, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
+
+    // 🔔 Push notification to client when document is published/republished
+    if (action === 'publish' || action === 'republish' || action === 'replace') {
+      const clientId = publishDoc.email || publishDoc.client
+      if (clientId) {
+        const targetType = publishDoc.email ? 'client' : 'company'
+        const targetId = publishDoc.email || publishDoc.client
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetType,
+            targetId,
+            payload: {
+              title: action === 'publish' ? '📄 New Quotation Shared' : '📄 Quotation Updated',
+              body: `${publishDoc.projectTitle || 'A quotation'} has been ${action === 'publish' ? 'shared' : 'updated'} in your portal. Tap to review.`,
+              url: '/client/dashboard',
+              type: 'document',
+              tag: `quotation-${id}`,
+            }
+          })
+        }).catch(console.warn)
+      }
+    }
   }
 
 

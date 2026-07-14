@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Moon, Sun, Bell, Plus, Settings, User, LogOut, ChevronDown, Shield, MessageSquare, X, Check, AlertCircle, Info, Menu } from 'lucide-react'
+import { Moon, Sun, Bell, Plus, Settings, User, LogOut, ChevronDown, Shield, MessageSquare, X, Check, AlertCircle, Info, Menu, BellOff, BellRing } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,7 @@ import { useUser } from '@/components/user-provider'
 import { GlobalSearch } from '@/components/ui/global-search'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 
 const breadcrumbMap: Record<string, { module: string, page: string }> = {
   '/dashboard': { module: 'Core', page: 'Dashboard' },
@@ -122,6 +123,33 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
   const unreadCount = notifs.filter(n => !n.read).length
   const { user } = useUser()
   const { toast } = useToast()
+  const [showPushBanner, setShowPushBanner] = useState(false)
+
+  // ── Web Push Notifications (Admin Portal) ────────────────────────────────
+  const { permission, isSupported, isSubscribed, isRegistering, requestPermission } = usePushNotifications({
+    userType: 'admin',
+    userId: user?.id || '',
+    enabled: !!user?.id,
+  })
+
+  // Show the permission banner if supported but not yet granted
+  useEffect(() => {
+    if (isSupported && permission === 'default' && user?.id) {
+      const timer = setTimeout(() => setShowPushBanner(true), 2000)
+      return () => clearTimeout(timer)
+    }
+    if (permission === 'granted' || permission === 'denied') {
+      setShowPushBanner(false)
+    }
+  }, [isSupported, permission, user?.id])
+
+  const handleEnablePush = async () => {
+    const granted = await requestPermission()
+    setShowPushBanner(false)
+    if (granted) {
+      toast({ title: '🔔 Notifications enabled', description: 'You will now receive real-time alerts even when the tab is closed.' })
+    }
+  }
 
   const filteredNotifs = useMemo(() => {
     return notifs.filter((n: any) => {
@@ -191,6 +219,38 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
   }
 
   return (
+    <>
+      {/* ── Push Notification Permission Banner ── */}
+      {showPushBanner && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-3 bg-card border border-border/80 shadow-xl rounded-2xl px-4 py-3 max-w-sm">
+            <div className="flex-shrink-0 h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+              <BellRing className="h-4 w-4 text-primary animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground leading-tight">Enable notifications</p>
+              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">Get instant alerts for client activity & documents</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                size="sm"
+                className="h-7 text-[11px] rounded-lg px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleEnablePush}
+                disabled={isRegistering}
+              >
+                {isRegistering ? 'Enabling...' : 'Enable'}
+              </Button>
+              <button
+                className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                onClick={() => setShowPushBanner(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/95 backdrop-blur px-6 sticky top-0 z-30 transition-colors">
       <div className="flex items-center gap-4">
         {onMenuClick && (
@@ -370,5 +430,6 @@ export function TopBar({ onMenuClickAction: onMenuClick }: { onMenuClickAction?:
         </DropdownMenu>
       </div>
     </header>
+    </>
   )
 }

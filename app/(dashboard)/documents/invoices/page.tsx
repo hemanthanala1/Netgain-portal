@@ -1371,6 +1371,30 @@ function InvoicesPageContent() {
     setInvoices(updatedInvoices)
     setCachedData('invoices', { invoices: updatedInvoices, servicesData, paymentSchedules, companyDocs })
     invalidateCache('dashboard')
+
+    // 🔔 Push notification to client when invoice is published
+    if (action === 'publish' || action === 'republish' || action === 'replace') {
+      const clientId = publishDoc.email || publishDoc.client
+      if (clientId) {
+        const targetType = publishDoc.email ? 'client' : 'company'
+        const targetId = publishDoc.email || publishDoc.client
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetType,
+            targetId,
+            payload: {
+              title: '💳 New Invoice Shared',
+              body: `Invoice ${publishDoc.docId || ''} has been shared in your portal. Tap to view and pay.`,
+              url: '/client/dashboard',
+              type: 'payment',
+              tag: `invoice-${id}`,
+            }
+          })
+        }).catch(console.warn)
+      }
+    }
   }
 
 

@@ -839,6 +839,30 @@ function SOWPageContent() {
     setSows(updatedList)
     setCachedData('sows', { sows: updatedList, sourceDocs, servicesMap, companyDocs })
     invalidateCache('dashboard')
+
+    // 🔔 Push notification to client when SOW is published
+    if (action === 'publish' || action === 'republish' || action === 'replace') {
+      const clientId = publishDoc.email || publishDoc.client
+      if (clientId) {
+        const targetType = publishDoc.email ? 'client' : 'company'
+        const targetId = publishDoc.email || publishDoc.client
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetType,
+            targetId,
+            payload: {
+              title: '📄 Scope of Work Shared',
+              body: `A Scope of Work document has been ${action === 'publish' ? 'shared' : 'updated'} in your portal. Tap to review and sign.`,
+              url: '/client/dashboard',
+              type: 'document',
+              tag: `sow-${id}`,
+            }
+          })
+        }).catch(console.warn)
+      }
+    }
   }
 
 

@@ -21,13 +21,14 @@ import {
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
   Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink,
-  Sun, Moon
+  Sun, Moon, BellRing
 } from 'lucide-react'
 import useSWR from 'swr'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { GlobalSearch } from '@/components/ui/global-search'
 import { UniversalTimeline } from '@/components/ui/version-timeline'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
 import {
@@ -127,6 +128,15 @@ export default function ClientDashboardPage() {
   const [notifications, setNotifications] = useState<ClientNotification[]>([])
   const [companySettings, setCompanySettings] = useState<any>(null)
   const [clientDetails, setClientDetails] = useState<any>(null)
+  const [showPushBanner, setShowPushBanner] = useState(false)
+
+  // ── Web Push Notifications (Client Portal) ────────────────────────────
+  const { permission: pushPermission, isSupported: pushSupported, isRegistering: pushRegistering, requestPermission: requestPushPermission, unsubscribe: unsubscribePush } = usePushNotifications({
+    userType: 'client',
+    userId: session?.email || '',
+    clientCompany: session?.company || '',
+    enabled: !!session?.email,
+  })
 
   const pendingActions = useMemo(() => {
     const actions: { label: string; actionText: string; type: string; onClick: () => void }[] = []
@@ -388,12 +398,12 @@ export default function ClientDashboardPage() {
     { name: 'Sacramento', value: 'Sacramento', family: 'Sacramento, cursive' }
   ]
   
+  const router = useRouter()
+  const { toast } = useToast()
+
   // Support Form State
   const [supportSubject, setSupportSubject] = useState('')
   const [supportMessage, setSupportMessage] = useState('')
-  
-  const router = useRouter()
-  const { toast } = useToast()
 
   // ─── 1. Read session from localStorage (client-side only) ───
   useEffect(() => {
@@ -411,6 +421,25 @@ export default function ClientDashboardPage() {
     }
     setSessionReady(true)
   }, [])
+
+  // Show push permission banner 2 seconds after login if not yet granted
+  useEffect(() => {
+    if (pushSupported && pushPermission === 'default' && session?.email) {
+      const timer = setTimeout(() => setShowPushBanner(true), 2500)
+      return () => clearTimeout(timer)
+    }
+    if (pushPermission === 'granted' || pushPermission === 'denied') {
+      setShowPushBanner(false)
+    }
+  }, [pushSupported, pushPermission, session?.email])
+
+  const handleEnableClientPush = async () => {
+    const granted = await requestPushPermission()
+    setShowPushBanner(false)
+    if (granted) {
+      toast({ title: '🔔 Notifications enabled', description: 'You’ll get alerts when documents are shared or requirements are added.' })
+    }
+  }
 
   // ─── 2. Fetch Client Data ───
   // ─── 2. If no session, redirect to login ───
@@ -834,6 +863,23 @@ export default function ClientDashboardPage() {
       })
       if (error) throw error
       toast({ title: 'Support Ticket Raised', description: 'We will get back to you shortly.' })
+
+      // 🔔 Notify ALL admins via push notification
+      fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetType: 'all_admins',
+          payload: {
+            title: `🎫 Support Ticket: ${supportSubject}`,
+            body: `${session?.name || session?.company || 'A client'} raised a support ticket: "${supportMessage.slice(0, 80)}${supportMessage.length > 80 ? '...' : ''}"`,
+            url: '/support',
+            type: 'support',
+            tag: 'support-ticket',
+          }
+        })
+      }).catch(console.warn)
+
       setSupportSubject('')
       setSupportMessage('')
       await fetchClientData(true)
@@ -845,6 +891,8 @@ export default function ClientDashboardPage() {
   }
 
   const handleLogout = () => {
+    // Unsubscribe from push notifications on logout
+    unsubscribePush().catch(console.warn)
     localStorage.removeItem('netgain_client_session')
     toast({ title: 'Logged Out', description: 'Safe travels!' })
     router.push('/client/login')
@@ -1329,6 +1377,22 @@ export default function ClientDashboardPage() {
         const proj = projects.find(p => p.id === selectedProjectId)
         await logWorkspaceActivityClient(selectedProjectId, 'Requirement Submitted', `Submitted: ${activeSubmittingReq.title}`)
         await notifyAdmin(selectedProjectId, `Requirement Submitted - ${proj?.title || 'Project'}`, `Client has submitted details for requirement: "${activeSubmittingReq.title}"`)
+
+        // 🔔 Push notification to all admins
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetType: 'all_admins',
+            payload: {
+              title: `📋 Requirement Submitted`,
+              body: `${session?.name || session?.company || 'Client'} submitted "${activeSubmittingReq.title}" for ${proj?.title || 'a project'}`,
+              url: '/projects',
+              type: 'requirement',
+              tag: `req-${activeSubmittingReq.id}`,
+            }
+          })
+        }).catch(console.warn)
       }
     } catch (e: any) {
       toast({ title: 'Submission Failed', description: e.message, variant: 'destructive' })
@@ -1373,6 +1437,22 @@ export default function ClientDashboardPage() {
       const proj = projects.find(p => p.id === selectedProjectId)
       await logWorkspaceActivityClient(selectedProjectId, 'Client File Uploaded', `Uploaded asset: ${clientGeneralFile.name} (${clientFileCategory})`)
       await notifyAdmin(selectedProjectId, `New File Uploaded - ${proj?.title || 'Project'}`, `Client has uploaded asset "${clientGeneralFile.name}" under category "${clientFileCategory}"`)
+
+      // 🔔 Push notification to all admins
+      fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetType: 'all_admins',
+          payload: {
+            title: `📁 File Uploaded by Client`,
+            body: `${session?.name || session?.company || 'Client'} uploaded "${clientGeneralFile.name}" (${clientFileCategory}) to ${proj?.title || 'a project'}`,
+            url: '/projects',
+            type: 'file',
+            tag: `file-upload-${Date.now()}`,
+          }
+        })
+      }).catch(console.warn)
     } catch (e: any) {
       toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
     } finally {
@@ -1446,6 +1526,38 @@ export default function ClientDashboardPage() {
     )
   }
   return (
+    <>
+      {/* ── Push Notification Permission Banner (Client Portal) ── */}
+      {showPushBanner && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300 w-[calc(100vw-32px)] max-w-sm">
+          <div className="flex items-center gap-3 bg-card border border-border/80 shadow-xl rounded-2xl px-4 py-3">
+            <div className="flex-shrink-0 h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+              <BellRing className="h-4 w-4 text-primary animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground leading-tight">Enable notifications</p>
+              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">Get instant alerts when documents are shared with you</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                size="sm"
+                className="h-7 text-[11px] rounded-lg px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleEnableClientPush}
+                disabled={pushRegistering}
+              >
+                {pushRegistering ? 'Enabling...' : 'Enable'}
+              </Button>
+              <button
+                className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                onClick={() => setShowPushBanner(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="flex h-[100dvh] w-full overflow-hidden bg-background sm:p-4 md:p-6 lg:p-8 font-sans">
       <div className="flex flex-1 overflow-hidden bg-card rounded-none sm:rounded-[2.5rem] shadow-none sm:shadow-xl border-0 sm:border sm:border-border/50 ring-0 sm:ring-1 sm:ring-black/5 relative">
         {/* Mobile Sidebar overlay */}
@@ -3034,5 +3146,6 @@ export default function ClientDashboardPage() {
       </Dialog>
       </div>
     </div>
+    </>
   )
 }
