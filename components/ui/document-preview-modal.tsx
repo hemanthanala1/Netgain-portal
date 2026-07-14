@@ -46,14 +46,14 @@ export function DocumentPreviewModal({
         </div>
         
         {/* Modal Body / iframe Placeholder */}
-        <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center relative overflow-hidden">
+        <div className="flex-1 bg-[#1A1A1A] flex flex-col items-center justify-center text-center relative overflow-hidden" style={{ colorScheme: 'light' }}>
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-4">
               <RefreshCw className="h-8 w-8 animate-spin text-[#D4AF37]" />
               <p className="text-sm font-medium text-muted-foreground tracking-wide">Generating Document Preview...</p>
             </div>
           ) : blobUrl ? (
-            <iframe src={`${blobUrl}#view=FitH`} className="w-full h-full border-0 bg-white" />
+            <iframe src={`${blobUrl}#view=FitH`} className="w-full h-full border-0 bg-white" style={{ colorScheme: 'light' }} />
           ) : (
             <div className="flex flex-col items-center justify-center gap-3">
               <p className="text-sm font-semibold text-muted-foreground">Failed to load document preview</p>

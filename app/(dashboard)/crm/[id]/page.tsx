@@ -1357,11 +1357,12 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             return (
               <>
                 {/* Left Side: PDF IFrame Preview */}
-                <div className="flex-1 h-full bg-black/40 border-r border-border relative font-sans">
+                <div className="flex-1 h-full bg-black/40 border-r border-border relative font-sans" style={{ colorScheme: 'light' }}>
                   <iframe
                     id="preview-doc-iframe"
                     src={`/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${currentDoc.signed_at ? new Date(currentDoc.signed_at).getTime() : pdfVersion}`}
-                    className="w-full h-full border-0 rounded-l-2xl"
+                    className="w-full h-full border-0 rounded-l-2xl bg-white"
+                    style={{ colorScheme: 'light' }}
                     title={`Preview of ${currentDoc.doc_id}`}
                   />
                 </div>

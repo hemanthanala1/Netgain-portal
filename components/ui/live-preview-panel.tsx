@@ -149,7 +149,7 @@ export function LivePreviewPanel({ payload, debounceMs = 1400, visible = true }:
             )}
             <div
               className="w-full h-full flex justify-center"
-              style={{ overflow: 'auto' }}
+              style={{ overflow: 'auto', colorScheme: 'light' }}
             >
               <iframe
                 src={`${blobUrl}#view=FitH`}
@@ -160,6 +160,7 @@ export function LivePreviewPanel({ payload, debounceMs = 1400, visible = true }:
                   height: `${Math.round(zoom * 1.3)}%`,
                   minHeight: '500px',
                   transformOrigin: 'top center',
+                  colorScheme: 'light',
                 }}
                 title="Document Preview"
               />

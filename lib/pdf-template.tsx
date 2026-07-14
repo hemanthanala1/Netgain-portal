@@ -215,8 +215,8 @@ const modernStyles = (primary: string, secondary: string, accent: string) => Sty
   notesBox: { marginBottom: 30, fontSize: 9, color: secondary, lineHeight: 1.5 },
   footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 },
   footerText: { fontSize: 8, color: secondary },
-  signatureBox: { width: 160, marginTop: 40, borderTopWidth: 1, borderTopColor: '#CBD5E1', paddingTop: 8 },
-  signatureImg: { width: 120, height: 40, objectFit: 'contain', marginBottom: 4 }
+  signatureBox: { width: 160, borderTopWidth: 1, borderTopColor: '#CBD5E1', paddingTop: 8 },
+  signatureImg: { width: 120, height: 35, objectFit: 'contain' }
 })
 
 function ModernTemplate({ payload }: { payload: PdfPayload }) {
@@ -377,31 +377,37 @@ function ModernTemplate({ payload }: { payload: PdfPayload }) {
         {/* Signatures */}
         {(payload.signatureDetails || showCompanySig) && (
           <View style={{ marginTop: 40 }} wrap={false}>
-            <Text style={st.sectionTitle}>Execution</Text>
-            <View style={{ flexDirection: 'row', gap: 60 }}>
+            {payload.docType !== 'SOW' && payload.docType !== 'Agreement' && (
+              <Text style={st.sectionTitle}>Execution</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 60, marginTop: payload.docType === 'SOW' || payload.docType === 'Agreement' ? 30 : 15 }}>
               {showCompanySig && (
-                <View style={{ marginTop: 10 }}>
-                   {payload.companySettings?.signature ? (
-                     <Image src={payload.companySettings.signature} style={st.signatureImg} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p, marginBottom: 10 }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
-                   )}
+                <View style={st.signatureBox}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.companySettings?.signature ? (
+                       <Image src={payload.companySettings.signature} style={st.signatureImg} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
+                     )}
+                   </View>
                    <Text style={st.infoTextBold}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
                    <Text style={st.infoLabel}>Authorized Representative</Text>
                 </View>
               )}
-             {payload.signatureDetails && (
-               <View style={st.signatureBox}>
-                 {payload.signatureDetails.signatureImage ? (
-                   <Image src={payload.signatureDetails.signatureImage} style={st.signatureImg} />
-                 ) : (
-                   <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p, marginBottom: 10 }}>{payload.signatureDetails.signatureText}</Text>
-                 )}
-                 <Text style={st.infoTextBold}>{payload.signatureDetails.clientName}</Text>
-                 <Text style={st.infoText}>Verified: {payload.signatureDetails.signedAt}</Text>
-                 <Text style={[st.infoText, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
-               </View>
-             )}
+              {payload.signatureDetails && (
+                <View style={st.signatureBox}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.signatureDetails.signatureImage ? (
+                       <Image src={payload.signatureDetails.signatureImage} style={st.signatureImg} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 24, color: p }}>{payload.signatureDetails.signatureText}</Text>
+                     )}
+                   </View>
+                   <Text style={st.infoTextBold}>{payload.signatureDetails.clientName}</Text>
+                   <Text style={st.infoText}>Verified: {payload.signatureDetails.signedAt}</Text>
+                   <Text style={[st.infoText, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -532,26 +538,32 @@ function CorporateTemplate({ payload }: { payload: PdfPayload }) {
 
         {(payload.signatureDetails || showCompanySig) && (
           <View style={{ paddingHorizontal: 40, marginTop: 30 }} wrap={false}>
-            <Text style={[st.boxTitle, { color: p }]}>Execution</Text>
-            <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
+            {payload.docType !== 'SOW' && payload.docType !== 'Agreement' && (
+              <Text style={[st.boxTitle, { color: p }]}>Execution</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 60, marginTop: payload.docType === 'SOW' || payload.docType === 'Agreement' ? 30 : 10 }}>
               {showCompanySig && (
-                <View>
-                   {payload.companySettings?.signature ? (
-                     <Image src={payload.companySettings.signature} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333', marginBottom: 5 }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.companySettings?.signature ? (
+                       <Image src={payload.companySettings.signature} style={{ width: 120, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333' }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
+                     )}
+                   </View>
                    <Text style={st.textBold}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
                    <Text style={st.text}>Authorized Representative</Text>
                 </View>
               )}
               {payload.signatureDetails && (
-                <View>
-                   {payload.signatureDetails.signatureImage ? (
-                     <Image src={payload.signatureDetails.signatureImage} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333', marginBottom: 5 }}>{payload.signatureDetails.signatureText}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.signatureDetails.signatureImage ? (
+                       <Image src={payload.signatureDetails.signatureImage} style={{ width: 120, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#333333' }}>{payload.signatureDetails.signatureText}</Text>
+                     )}
+                   </View>
                    <Text style={st.textBold}>{payload.signatureDetails.clientName}</Text>
                    <Text style={st.text}>Signed: {payload.signatureDetails.signedAt}</Text>
                    <Text style={[st.text, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
@@ -666,26 +678,32 @@ function MinimalTemplate({ payload }: { payload: PdfPayload }) {
 
         {(payload.signatureDetails || showCompanySig) && (
           <View style={{ paddingHorizontal: 40, marginTop: 20 }} wrap={false}>
-            <Text style={[minStyles.label, { color: '#111827', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
-            <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
+            {payload.docType !== 'SOW' && payload.docType !== 'Agreement' && (
+              <Text style={[minStyles.label, { color: '#111827', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 60, marginTop: payload.docType === 'SOW' || payload.docType === 'Agreement' ? 30 : 10 }}>
               {showCompanySig && (
-                <View>
-                   {payload.companySettings?.signature ? (
-                     <Image src={payload.companySettings.signature} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#111827', marginBottom: 5 }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.companySettings?.signature ? (
+                       <Image src={payload.companySettings.signature} style={{ width: 120, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#111827' }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
+                     )}
+                   </View>
                    <Text style={minStyles.title}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
                    <Text style={minStyles.desc}>Authorized Representative</Text>
                 </View>
               )}
               {payload.signatureDetails && (
-                <View>
-                   {payload.signatureDetails.signatureImage ? (
-                     <Image src={payload.signatureDetails.signatureImage} style={{ width: 120, height: 40, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#111827', marginBottom: 5 }}>{payload.signatureDetails.signatureText}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.signatureDetails.signatureImage ? (
+                       <Image src={payload.signatureDetails.signatureImage} style={{ width: 120, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 18, color: '#111827' }}>{payload.signatureDetails.signatureText}</Text>
+                     )}
+                   </View>
                    <Text style={minStyles.title}>{payload.signatureDetails.clientName}</Text>
                    <Text style={minStyles.desc}>Signed: {payload.signatureDetails.signedAt}</Text>
                    <Text style={[minStyles.desc, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>
@@ -802,26 +820,32 @@ function LuxuryTemplate({ payload }: { payload: PdfPayload }) {
 
         {(payload.signatureDetails || showCompanySig) && (
           <View style={{ paddingHorizontal: 20, marginTop: 20 }} wrap={false}>
-            <Text style={[st.titleText, { color: gold, borderBottomWidth: 1, borderBottomColor: '#D1D5DB', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
-            <View style={{ flexDirection: 'row', gap: 60, marginTop: 10 }}>
+            {payload.docType !== 'SOW' && payload.docType !== 'Agreement' && (
+              <Text style={[st.titleText, { color: gold, borderBottomWidth: 1, borderBottomColor: '#D1D5DB', paddingBottom: 4, marginBottom: 10 }]}>Execution</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 60, marginTop: payload.docType === 'SOW' || payload.docType === 'Agreement' ? 30 : 10 }}>
               {showCompanySig && (
-                <View>
-                   {payload.companySettings?.signature ? (
-                     <Image src={payload.companySettings.signature} style={{ width: 140, height: 50, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 20, color: char, marginBottom: 5 }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: gold, paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.companySettings?.signature ? (
+                       <Image src={payload.companySettings.signature} style={{ width: 140, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 20, color: char }}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
+                     )}
+                   </View>
                    <Text style={[st.service, { fontSize: 11 }]}>{payload.founderSettings?.name || payload.companySettings?.name}</Text>
                    <Text style={st.desc}>Authorized Representative</Text>
                 </View>
               )}
               {payload.signatureDetails && (
-                <View>
-                   {payload.signatureDetails.signatureImage ? (
-                     <Image src={payload.signatureDetails.signatureImage} style={{ width: 140, height: 50, objectFit: 'contain', marginBottom: 5 }} />
-                   ) : (
-                     <Text style={{ fontFamily: 'DancingScript', fontSize: 20, color: char, marginBottom: 5 }}>{payload.signatureDetails.signatureText}</Text>
-                   )}
+                <View style={{ borderTopWidth: 1, borderTopColor: gold, paddingTop: 8, width: 160 }}>
+                   <View style={{ height: 40, justifyContent: 'flex-end', marginBottom: 5 }}>
+                     {payload.signatureDetails.signatureImage ? (
+                       <Image src={payload.signatureDetails.signatureImage} style={{ width: 140, height: 35, objectFit: 'contain' }} />
+                     ) : (
+                       <Text style={{ fontFamily: 'DancingScript', fontSize: 20, color: char }}>{payload.signatureDetails.signatureText}</Text>
+                     )}
+                   </View>
                    <Text style={[st.service, { fontSize: 11 }]}>{payload.signatureDetails.clientName}</Text>
                    <Text style={st.desc}>Signed: {payload.signatureDetails.signedAt}</Text>
                    <Text style={[st.desc, { fontSize: 6 }]}>ID: {payload.signatureDetails.verificationId}</Text>

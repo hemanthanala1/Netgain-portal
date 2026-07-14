@@ -458,11 +458,12 @@ export default function ClientSigningPortal({ params }: { params: { token: strin
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="relative aspect-[3/4] sm:aspect-[1/1.4] w-full bg-background">
+              <div className="relative aspect-[3/4] sm:aspect-[1/1.4] w-full bg-background" style={{ colorScheme: 'light' }}>
                 <iframe
                   key={pdfVersion}
                   src={`/api/document-pdf?token=${token}&v=${pdfVersion}`}
-                  className="w-full h-full border-none rounded-b-lg"
+                  className="w-full h-full border-none rounded-b-lg bg-white"
+                  style={{ colorScheme: 'light' }}
                   title="Document PDF Preview"
                 />
               </div>

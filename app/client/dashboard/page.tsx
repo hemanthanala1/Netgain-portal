@@ -2783,7 +2783,7 @@ export default function ClientDashboardPage() {
 
               {/* Document body preview with iframe */}
               <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px' }}>
+                <div className="lg:col-span-3 bg-black border border-border rounded-2xl overflow-hidden shadow-2xl relative" style={{ height: 'calc(100dvh - 200px)', minHeight: '400px', colorScheme: 'light' }}>
                    {(() => {
                     const getCacheBuster = (doc: any) => {
                       const times = [
@@ -2804,7 +2804,7 @@ export default function ClientDashboardPage() {
                           ? `/api/document-pdf?token=${currentDoc.token}&v=${vParam}#toolbar=0` 
                           : `/api/document-pdf?id=${currentDoc.id}&type=${currentDoc.type}&v=${vParam}#toolbar=0`} 
                         className="w-full h-full border-0 bg-white"
-                        style={{ minHeight: '400px' }}
+                        style={{ minHeight: '400px', colorScheme: 'light' }}
                         title={currentDoc.title}
                         scrolling="yes"
                       />
