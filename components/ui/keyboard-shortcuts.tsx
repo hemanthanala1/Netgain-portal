@@ -20,6 +20,7 @@ export function KeyboardShortcuts() {
     let keyTimeout: NodeJS.Timeout
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.key) return
       // 1. Ignore shortcuts when typing in inputs/textareas
       const activeEl = document.activeElement
       if (

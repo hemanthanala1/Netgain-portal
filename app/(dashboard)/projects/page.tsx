@@ -21,6 +21,7 @@ import { ApprovalBadge } from '@/components/ui/approval-badge'
 import { FileUpload } from '@/components/ui/file-upload'
 import { VersionTimeline, UniversalTimeline } from '@/components/ui/version-timeline'
 import { ProjectManagerAutocomplete } from '@/components/ui/project-manager-autocomplete'
+import { GoogleDriveExplorer } from '@/components/ui/google-drive-explorer'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
   History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
@@ -66,6 +67,7 @@ function CampaignStrategyPageContent() {
   const { toast } = useToast()
   const [generating, setGenerating] = useState(false)
   const { user } = useUser()
+  const [adminStorageSettings, setAdminStorageSettings] = useState<any>(null)
   
   const [teamMembersList, setTeamMembersList] = useState<any[]>([])
   const [newRiskAssignee, setNewRiskAssignee] = useState('')
@@ -745,13 +747,16 @@ function CampaignStrategyPageContent() {
             setProjects(mapped); setCachedData('projects', mapped)
           }
 
-          // Fetch custom campaign categories
-          const { data: settings } = await supabase.from('company_settings').select('docs').limit(1).maybeSingle()
+          // Fetch custom campaign categories & storage settings
+          const { data: settings } = await supabase.from('company_settings').select('docs, storage').limit(1).maybeSingle()
           if (settings?.docs?.campaignCategories) {
             setCategories(settings.docs.campaignCategories)
           }
           if (settings?.docs?.projectTypes) {
             setProjectTypes(settings.docs.projectTypes)
+          }
+          if (settings?.storage) {
+            setAdminStorageSettings(settings.storage)
           }
 
           // Fetch team members globally
@@ -1627,104 +1632,12 @@ function CampaignStrategyPageContent() {
             {/* ── FILES & DOCUMENTS TAB ── */}
             <TabsContent value="workspace-files" className="mt-4 space-y-4">
               {detailProject && (
-                <div className="space-y-4">
-                  {/* File Uploader Card */}
-                  <Card className="bg-card border-border p-4 space-y-3">
-                    <h4 className="text-xs font-bold text-gold uppercase">Upload Project Document / Resource File</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="space-y-1">
-                        <Label>Select File *</Label>
-                        <Input 
-                          type="file" 
-                          onChange={e => setUploadFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 p-0 flex items-center text-xs text-muted-foreground cursor-pointer bg-transparent border-input file:h-full file:bg-primary file:text-primary-foreground file:border-none file:px-3 file:mr-2 file:text-xs file:font-semibold file:cursor-pointer"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Category</Label>
-                        <Select value={fileCategory} onValueChange={setFileCategory}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {['Proposal', 'Quotation', 'Scope of Work', 'Agreement', 'Invoice', 'Reports', 'Design Files', 'Development Files', 'Source Code', 'Testing Reports', 'Training Documents', 'Manuals', 'Other Documents'].map(cat => (
-                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Version</Label>
-                        <Input type="number" value={fileVersion} onChange={e => setFileVersion(e.target.value)} className="h-8" />
-                      </div>
-                      <div className="space-y-1 sm:col-span-2">
-                        <Label>Visibility</Label>
-                        <Select value={fileVisibility} onValueChange={setFileVisibility}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Internal Only">Internal Only</SelectItem>
-                            <SelectItem value="Published to Client">Published to Client</SelectItem>
-                            <SelectItem value="Hidden">Hidden</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-end">
-                        <Button 
-                          variant="gold" 
-                          className="w-full h-8 text-xs font-bold" 
-                          onClick={() => handleUploadFile(detailProject.id, detailProject.client)}
-                          disabled={uploadingFileState || !uploadFile}
-                        >
-                          {uploadingFileState ? 'Uploading...' : 'Upload & Register File'}
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Registered Files List */}
-                  <div className="border border-border rounded-xl overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs min-w-[700px]">
-                        <thead>
-                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
-                            <th className="text-left py-2 px-3 font-semibold">File Name</th>
-                            <th className="text-left py-2 px-3 font-semibold">Category</th>
-                            <th className="text-left py-2 px-3 font-semibold">Version</th>
-                            <th className="text-left py-2 px-3 font-semibold">Upload Date</th>
-                            <th className="text-left py-2 px-3 font-semibold">Visibility</th>
-                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workspaceFiles.map((file: any) => (
-                            <tr key={file.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={file.name}>{file.name}</td>
-                              <td className="py-2 px-3 text-muted-foreground">{file.category}</td>
-                              <td className="py-2 px-3 text-muted-foreground">V{file.version}</td>
-                              <td className="py-2 px-3 text-muted-foreground">{formatDate(file.uploaded_at)}</td>
-                              <td className="py-2 px-3">
-                                <Select value={file.visibility} onValueChange={v => handleUpdateFileVisibility(detailProject.id, file.id, file.name, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
-                                    <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
-                                    <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <a href={file.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
-                                </a>
-                              </td>
-                            </tr>
-                          ))}
-                          {workspaceFiles.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No workspace files uploaded yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
+                <GoogleDriveExplorer
+                  projectId={detailProject.id}
+                  projectTitle={detailProject.title}
+                  clientName={detailProject.client}
+                  adminSettings={adminStorageSettings}
+                />
               )}
             </TabsContent>
 

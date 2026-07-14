@@ -9,9 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Save, Upload, Eye, EyeOff, Shield, Activity, LogOut, CheckCircle2, Loader2, Camera } from 'lucide-react'
+import { Save, Upload, Eye, EyeOff, Shield, Activity, LogOut, CheckCircle2, Loader2, Camera, Link2, Cloud, RefreshCw, AlertTriangle, Unlink, HardDrive } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { formatDateTime, getInitials } from '@/lib/utils'
 import { useUser } from '@/components/user-provider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
@@ -36,6 +36,125 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [googleConn, setGoogleConn] = useState<any>(null)
+  const [loadingConn, setLoadingConn] = useState(true)
+  const [actioningConn, setActioningConn] = useState(false)
+
+  const searchParams = useSearchParams()
+
+  const fetchConnection = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      if (!token) {
+        setLoadingConn(false)
+        return
+      }
+      const res = await fetch('/api/storage/google/connection', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await res.json()
+      if (res.ok && data.connected) {
+        setGoogleConn(data)
+      } else {
+        setGoogleConn(null)
+      }
+    } catch (e) {
+      console.error('Error fetching Google connection:', e)
+    } finally {
+      setLoadingConn(false)
+    }
+  }
+
+  const handleConnectGoogle = async () => {
+    setActioningConn(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch(`/api/storage/google/auth-url?token=${token}`)
+      const data = await res.json()
+      if (res.ok && data.url) {
+        window.location.href = data.url
+      } else {
+        toast({ title: 'Connection Failed', description: data.error || 'Failed to get auth URL', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Connection Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm('Are you sure you want to disconnect your Google Drive account?')) return
+    setActioningConn(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch('/api/storage/google/connection', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (res.ok) {
+        setGoogleConn(null)
+        toast({ title: 'Disconnected successfully', description: 'Your Google Drive account has been disconnected.' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'Disconnection Failed', description: data.error || 'Could not disconnect account', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Disconnection Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  const handleRefreshGoogle = async () => {
+    setActioningConn(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch('/api/storage/google/connection', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        await fetchConnection()
+        toast({ title: 'Connection refreshed', description: 'Google Drive storage quota and status updated.' })
+      } else {
+        toast({ title: 'Refresh Failed', description: data.error || 'Could not refresh token', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Refresh Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchConnection()
+  }, [])
+
+  useEffect(() => {
+    const tab = searchParams?.get('tab')
+    const connected = searchParams?.get('connected')
+    const error = searchParams?.get('error')
+
+    if (connected === 'true') {
+      toast({ title: 'Account Connected!', description: 'Your Google Drive account is now linked to your profile.' })
+      router.replace('/profile')
+    } else if (error) {
+      toast({ title: 'Connection Failed', description: decodeURIComponent(error) || 'OAuth callback failed', variant: 'destructive' })
+      router.replace('/profile')
+    }
+  }, [searchParams])
 
   const [profile, setProfile] = useState({
     name: '',
@@ -270,10 +389,11 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={searchParams?.get('tab') || 'profile'}>
         <TabsList>
           <TabsTrigger value="profile" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Profile</TabsTrigger>
           <TabsTrigger value="security" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Security</TabsTrigger>
+          <TabsTrigger value="connections" className="gap-1.5"><Link2 className="h-3.5 w-3.5" />Connected Accounts</TabsTrigger>
           <TabsTrigger value="activity" className="gap-1.5"><Activity className="h-3.5 w-3.5" />Activity</TabsTrigger>
         </TabsList>
 
@@ -391,6 +511,111 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted-foreground shrink-0">{formatDateTime(act.time)}</p>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Connected Accounts Tab ── */}
+        <TabsContent value="connections">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold tracking-wide">Cloud Storage Connections</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="rounded-xl border border-border bg-card p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                    <Cloud className="h-6 w-6 text-gold" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-base">Google Drive</h3>
+                      {googleConn ? (
+                        googleConn.status === 'connected' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs font-semibold">Connected</Badge>
+                        ) : (
+                          <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-xs font-semibold">Error</Badge>
+                        )
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground border-border text-xs font-semibold">Not Connected</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground max-w-md">
+                      Link your Google account (Personal or Workspace) to access your Drive workspaces, manage files, and sync collaborator permissions from inside the ERP.
+                    </p>
+                    {googleConn && (
+                      <div className="space-y-2 mt-4">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="text-muted-foreground">Connected Email:</span>
+                          <span className="font-medium text-foreground">{googleConn.email}</span>
+                        </div>
+                        {googleConn.storageTotal > 0 && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[11px] text-muted-foreground">
+                              <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {(googleConn.storageUsed / (1024 * 1024 * 1024)).toFixed(2)} GB used</span>
+                              <span>{(googleConn.storageTotal / (1024 * 1024 * 1024)).toFixed(0)} GB total</span>
+                            </div>
+                            <div className="w-full bg-black/40 border border-border h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gold h-full rounded-full transition-all duration-500" 
+                                style={{ width: `${Math.min(100, (googleConn.storageUsed / googleConn.storageTotal) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0 w-full sm:w-auto md:w-44">
+                  {googleConn ? (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleRefreshGoogle} 
+                        disabled={actioningConn} 
+                        className="gap-1.5 text-xs w-full justify-center"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${actioningConn ? 'animate-spin' : ''}`} />
+                        Refresh Connection
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleConnectGoogle} 
+                        disabled={actioningConn} 
+                        className="gap-1.5 text-xs w-full justify-center text-gold border-gold/20 hover:bg-gold/10"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Reconnect Account
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleDisconnectGoogle} 
+                        disabled={actioningConn} 
+                        className="gap-1.5 text-xs w-full justify-center text-red-400 border-red-500/20 hover:bg-red-500/10"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      variant="gold" 
+                      size="sm" 
+                      onClick={handleConnectGoogle} 
+                      disabled={actioningConn} 
+                      className="gap-1.5 text-xs w-full justify-center font-bold"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      Connect Account
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
           ai: { ...data.ai, ...masked.ai },
           payment: { ...data.payment, ...masked.payment },
           docs: data.docs,
+          storage: data.storage || {},
           isGoogleConnected: !!(data.comm?.googleRefreshToken || data.comm?.googleAccessToken || (data as any).google_oauth),
           googleEmail: data.comm?.googleEmail || null,
           updatedAt: data.updated_at
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { company, founder, bank, comm, ai, docs, payment } = body
+    const { company, founder, bank, comm, ai, docs, payment, storage } = body
 
     const authHeader = request.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '')
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
           ai: processedAi,
           payment: processedPayment,
           docs: docs || {},
+          storage: storage || {},
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' })
 

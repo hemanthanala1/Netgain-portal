@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,13 +21,14 @@ import {
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
   Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink,
-  Sun, Moon, BellRing
+  Sun, Moon, BellRing, Cloud, HardDrive, Unlink, Bug, Palette, Laptop, Inbox, Archive
 } from 'lucide-react'
 import useSWR from 'swr'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { GlobalSearch } from '@/components/ui/global-search'
 import { UniversalTimeline } from '@/components/ui/version-timeline'
+import { GoogleDriveExplorer } from '@/components/ui/google-drive-explorer'
 import { usePushNotifications } from '@/hooks/use-push-notifications'
 
 // Simple Dialog mock/adapter in case custom Dialog components are missing
@@ -84,6 +85,15 @@ interface ClientNotification {
   is_read: boolean
   created_at: string
   type?: string
+  status?: string
+  priority?: string
+  assigned_to?: string
+  reply?: string
+  updated_at?: string
+  project_id?: string
+  request_type?: string
+  attachments?: any[]
+  timeline?: any[]
 }
 
 export default function ClientDashboardPage() {
@@ -129,6 +139,209 @@ export default function ClientDashboardPage() {
   const [companySettings, setCompanySettings] = useState<any>(null)
   const [clientDetails, setClientDetails] = useState<any>(null)
   const [showPushBanner, setShowPushBanner] = useState(false)
+
+  // ─── Support Center State Variables ───
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatFiles, setChatFiles] = useState<File[]>([])
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [activeTicketTab, setActiveTicketTab] = useState<string>('open')
+
+  // guided ticket form states
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false)
+  const [newTicketType, setNewTicketType] = useState('general')
+  const [newTicketProjectId, setNewTicketProjectId] = useState('none')
+  const [newTicketPriority, setNewTicketPriority] = useState('medium')
+  const [newTicketSubject, setNewTicketSubject] = useState('')
+  const [newTicketDescription, setNewTicketDescription] = useState('')
+  const [newTicketFiles, setNewTicketFiles] = useState<File[]>([])
+
+  useEffect(() => {
+    const fetchTeam = async () => {
+      if (session && isSupabaseConfigured()) {
+        const { data } = await supabase.from('team_members').select('id, name, email, profile_id')
+        setTeamMembers(data || [])
+      }
+    }
+    fetchTeam()
+  }, [session])
+
+  const getAssignedManagerName = (assignedToId: string) => {
+    if (!assignedToId) return 'Unassigned'
+    const member = teamMembers.find(m => m.profile_id === assignedToId || m.id === assignedToId || m.email?.toLowerCase() === assignedToId.toLowerCase())
+    return member ? member.name : 'Netgain Support Manager'
+  }
+
+  const fetchTicketMessages = async (ticketId: string) => {
+    setLoadingMessages(true)
+    try {
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true })
+      if (!error && data) {
+        setChatMessages(data)
+      }
+    } catch (err) {
+      console.error('Error fetching ticket messages:', err)
+    } finally {
+      setLoadingMessages(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedTicket) {
+      fetchTicketMessages(selectedTicket.id)
+      
+      const channel = supabase
+        .channel(`ticket-messages-${selectedTicket.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'support_messages', filter: `ticket_id=eq.${selectedTicket.id}` },
+          (payload: any) => {
+            setChatMessages(prev => {
+              if (prev.some(m => m.id === payload.new.id)) return prev
+              return [...prev, payload.new]
+            })
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [selectedTicket])
+
+  // Cloud Connections State
+  const [googleConn, setGoogleConn] = useState<any>(null)
+  const [loadingConn, setLoadingConn] = useState(true)
+  const [actioningConn, setActioningConn] = useState(false)
+  const searchParams = useSearchParams()
+
+  const fetchConnection = async () => {
+    if (!session?.id) return
+    try {
+      const res = await fetch('/api/storage/google/connection', {
+        headers: {
+          Authorization: `Bearer client:${session.id}`
+        }
+      })
+      const data = await res.json()
+      if (res.ok && data.connected) {
+        setGoogleConn(data)
+      } else {
+        setGoogleConn(null)
+      }
+    } catch (e) {
+      console.error('Error fetching Google connection:', e)
+    } finally {
+      setLoadingConn(false)
+    }
+  }
+
+  const handleConnectGoogle = async () => {
+    if (!session?.id) return
+    setActioningConn(true)
+    try {
+      const res = await fetch(`/api/storage/google/auth-url?clientUserId=${session.id}`)
+      const data = await res.json()
+      if (res.ok && data.url) {
+        window.location.href = data.url
+      } else {
+        toast({ title: 'Connection Failed', description: data.error || 'Failed to get auth URL', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Connection Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm('Are you sure you want to disconnect your Google Drive account?')) return
+    setActioningConn(true)
+    try {
+      const res = await fetch('/api/storage/google/connection', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer client:${session.id}`
+        }
+      })
+      if (res.ok) {
+        setGoogleConn(null)
+        toast({ title: 'Disconnected successfully', description: 'Your Google Drive account has been disconnected.' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'Disconnection Failed', description: data.error || 'Could not disconnect account', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Disconnection Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  const handleRefreshGoogle = async () => {
+    if (!session?.id) return
+    setActioningConn(true)
+    try {
+      const res = await fetch('/api/storage/google/connection', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer client:${session.id}`
+        }
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast({ title: 'Connection Refreshed', description: 'Google Drive connection status and storage usage refreshed successfully.' })
+        await fetchConnection()
+      } else {
+        toast({ title: 'Refresh Failed', description: data.error || 'Could not refresh connection', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Refresh Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setActioningConn(false)
+    }
+  }
+
+  // Load connection and check redirects
+  useEffect(() => {
+    if (session?.id) {
+      fetchConnection()
+    }
+  }, [session])
+
+  useEffect(() => {
+    const connected = searchParams.get('connected')
+    const error = searchParams.get('error')
+
+    if (connected === 'true') {
+      toast({ title: '✅ Google Drive Connected!', description: 'Your Google account has been successfully linked.' })
+      window.history.replaceState({}, '', '/client/dashboard?tab=profile')
+    }
+
+    if (error === 'google_oauth_not_configured') {
+      toast({
+        title: '⚠️ Google OAuth Not Configured',
+        description: 'Please contact support to configure Google Client Credentials.',
+        variant: 'destructive'
+      })
+      window.history.replaceState({}, '', '/client/dashboard?tab=profile')
+    } else if (error) {
+      toast({
+        title: '⚠️ Connection Error',
+        description: decodeURIComponent(error),
+        variant: 'destructive'
+      })
+      window.history.replaceState({}, '', '/client/dashboard?tab=profile')
+    }
+  }, [searchParams])
 
   // ── Web Push Notifications (Client Portal) ────────────────────────────
   const { permission: pushPermission, isSupported: pushSupported, isRegistering: pushRegistering, requestPermission: requestPushPermission, unsubscribe: unsubscribePush } = usePushNotifications({
@@ -849,44 +1062,202 @@ export default function ClientDashboardPage() {
     }
   }
 
-  const handleSendSupport = async (e: React.FormEvent) => {
+  const handleClientSubmitTicket = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!supportSubject.trim() || !supportMessage.trim()) return
+    if (!newTicketSubject.trim() || !newTicketDescription.trim()) return
     setSubmittingAction(true)
     try {
-      const { error } = await supabase.from('client_notifications').insert({
-        client_id: session?.company || session?.email,
-        title: `Support: ${supportSubject}`,
-        message: supportMessage,
-        type: 'support',
-        is_read: false
-      })
-      if (error) throw error
-      toast({ title: 'Support Ticket Raised', description: 'We will get back to you shortly.' })
+      const targetProjId = newTicketProjectId === 'none' ? null : newTicketProjectId
+      const uploadedAttachments: any[] = []
+      if (newTicketFiles.length > 0) {
+        for (const file of newTicketFiles) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('projectId', targetProjId || '')
+          formData.append('category', 'Support')
+          formData.append('uploadedBy', session?.name || 'Client')
 
-      // 🔔 Notify ALL admins via push notification
+          const res = await fetch('/api/project-files/upload', { method: 'POST', body: formData })
+          const data = await res.json()
+          if (res.ok && data.url) {
+            uploadedAttachments.push({ name: file.name, url: data.url, provider: 'internal' })
+            
+            if (targetProjId) {
+              await supabase.from('project_files').insert({
+                project_id: targetProjId,
+                name: data.fileName || file.name,
+                file_path: data.url,
+                category: 'Other Documents',
+                version: 1,
+                visibility: 'Published to Client',
+                uploaded_by: session?.name || 'Client'
+              })
+            }
+          }
+        }
+      }
+
+      const { data: newTicket, error } = await supabase
+        .from('client_notifications')
+        .insert({
+          client_id: session?.company || session?.email,
+          title: newTicketSubject.trim(),
+          message: newTicketDescription.trim(),
+          type: 'support',
+          is_read: false,
+          status: 'open',
+          priority: newTicketPriority,
+          project_id: targetProjId,
+          request_type: newTicketType,
+          attachments: uploadedAttachments,
+          timeline: [
+            { event: 'Ticket created', date: new Date().toISOString(), by: session?.name || 'You', notes: `Created under project: ${projects.find(p => p.id === targetProjId)?.title || 'General'}` }
+          ]
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      toast({ title: 'Support Ticket Raised', description: 'Our support team has been notified.' })
+
       fetch('/api/push/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetType: 'all_admins',
           payload: {
-            title: `🎫 Support Ticket: ${supportSubject}`,
-            body: `${session?.name || session?.company || 'A client'} raised a support ticket: "${supportMessage.slice(0, 80)}${supportMessage.length > 80 ? '...' : ''}"`,
+            title: `🎫 New ${newTicketType} Request`,
+            body: `${session?.name || 'A client'} raised support ticket: "${newTicketSubject}"`,
             url: '/support',
             type: 'support',
-            tag: 'support-ticket',
+            tag: 'support-ticket'
           }
         })
       }).catch(console.warn)
 
-      setSupportSubject('')
-      setSupportMessage('')
+      setIsSubmitModalOpen(false)
+      setNewTicketSubject('')
+      setNewTicketDescription('')
+      setNewTicketFiles([])
+      setNewTicketProjectId('none')
       await fetchClientData(true)
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+      toast({ title: 'Error raising ticket', description: err.message, variant: 'destructive' })
     } finally {
       setSubmittingAction(false)
+    }
+  }
+
+  const handleClientSendReply = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim() && chatFiles.length === 0) return
+    setSendingMessage(true)
+    try {
+      const uploadedAttachments: any[] = []
+      if (chatFiles.length > 0) {
+        for (const file of chatFiles) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('projectId', selectedTicket?.project_id || '')
+          formData.append('category', 'Support')
+          formData.append('uploadedBy', session?.name || 'Client')
+
+          const res = await fetch('/api/project-files/upload', { method: 'POST', body: formData })
+          const data = await res.json()
+          if (res.ok && data.url) {
+            uploadedAttachments.push({ name: file.name, url: data.url, provider: 'internal' })
+          }
+        }
+      }
+
+      const { error: msgErr } = await supabase
+        .from('support_messages')
+        .insert({
+          ticket_id: selectedTicket.id,
+          sender_id: session?.id || session?.email,
+          sender_name: session?.name || 'Client',
+          sender_role: 'client',
+          message: chatInput.trim(),
+          attachments: uploadedAttachments
+        })
+
+      if (msgErr) throw msgErr
+
+      const updatedTimeline = [
+        ...(selectedTicket.timeline || []),
+        { event: 'Your reply', date: new Date().toISOString(), by: session?.name || 'You', notes: chatInput.slice(0, 50) }
+      ]
+
+      await supabase
+        .from('client_notifications')
+        .update({
+          reply: chatInput.trim(),
+          status: 'waiting_for_team',
+          updated_at: new Date().toISOString(),
+          is_read: false,
+          timeline: updatedTimeline
+        })
+        .eq('id', selectedTicket.id)
+
+      setChatInput('')
+      setChatFiles([])
+      
+      setSelectedTicket((prev: any) => {
+        if (!prev) return null;
+        return { 
+          ...prev, 
+          reply: chatInput.trim(), 
+          status: 'waiting_for_team', 
+          timeline: updatedTimeline 
+        };
+      })
+
+      fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetType: 'all_admins',
+          payload: {
+            title: `💬 Reply on: ${selectedTicket.title}`,
+            body: `${session?.name || 'Client'}: ${chatInput.slice(0, 80)}`,
+            url: '/support',
+            type: 'support',
+            tag: `ticket-reply-${selectedTicket.id}`
+          }
+        })
+      }).catch(console.warn)
+
+      await fetchClientData(true)
+    } catch (err: any) {
+      toast({ title: 'Reply Failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+
+  const handleClientCloseTicket = async () => {
+    if (!confirm('Are you sure you want to close this support request?')) return
+    try {
+      const updatedTimeline = [
+        ...(selectedTicket.timeline || []),
+        { event: 'Request closed', date: new Date().toISOString(), by: session?.name || 'You', notes: 'Closed by you' }
+      ]
+
+      await supabase
+        .from('client_notifications')
+        .update({
+          status: 'closed',
+          updated_at: new Date().toISOString(),
+          timeline: updatedTimeline
+        })
+        .eq('id', selectedTicket.id)
+
+      setSelectedTicket((prev: any) => prev ? { ...prev, status: 'closed', timeline: updatedTimeline } : null)
+      toast({ title: 'Request Closed', description: 'Your request has been successfully closed.' })
+      await fetchClientData(true)
+    } catch (err: any) {
+      toast({ title: 'Action Failed', description: err.message, variant: 'destructive' })
     }
   }
 
@@ -1479,7 +1850,7 @@ export default function ClientDashboardPage() {
     { id: 'invoices', label: 'Invoices', icon: Coins, badge: docs.filter(d => d.type === 'Invoice').length },
     { id: 'meetings', label: 'Meetings', icon: Calendar },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.filter(n => !n.is_read).length },
-    { id: 'support', label: 'Support', icon: HelpCircle },
+    { id: 'support', label: 'Support Center', icon: HelpCircle },
     { id: 'profile', label: 'Company Profile', icon: User }
   ]
 
@@ -2334,56 +2705,12 @@ export default function ClientDashboardPage() {
             </div>
 
             {selectedProjectId ? (
-              <div className="space-y-6">
-                <Card className="bg-card border-border/80 p-5 space-y-3">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider">Upload Brand Asset / Reference File</h3>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                    <div className="space-y-1 sm:col-span-2 border border-dashed border-border rounded-xl p-4 bg-muted/10">
-                      <Label className="text-muted-foreground block mb-1.5">Select Files (Brand guidelines, design references, ZIPs, etc.)</Label>
-                      <Input 
-                        type="file" 
-                        onChange={e => setClientGeneralFile(e.target.files ? e.target.files[0] : null)}
-                        className="bg-transparent border-none file:bg-primary file:text-primary-foreground file:text-xs file:font-bold file:px-3 file:py-1 file:rounded file:border-none file:cursor-pointer"
-                      />
-                    </div>
-                    <div className="space-y-2 flex flex-col justify-between">
-                      <div className="space-y-1">
-                        <Label>Category</Label>
-                        <Select value={clientFileCategory} onValueChange={setClientFileCategory}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Brand Logo">Brand Logo</SelectItem>
-                            <SelectItem value="Brand Colors">Brand Colors</SelectItem>
-                            <SelectItem value="Reference Images">Reference Images</SelectItem>
-                            <SelectItem value="Business Documents">Business Documents</SelectItem>
-                            <SelectItem value="Marketing Assets">Marketing Assets</SelectItem>
-                            <SelectItem value="Other Documents">Other Documents</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button 
-                        className="h-8 text-xs font-bold w-full"
-                        onClick={handleClientUploadFile}
-                        disabled={uploadingClientFile || !clientGeneralFile}
-                      >
-                        {uploadingClientFile ? 'Uploading...' : 'Upload Asset'}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Shared Assets & Files</h3>
-                  <DataTable
-                    data={combinedFilesAndLinks}
-                    columns={filesColumns}
-                    searchPlaceholder="Search files by name..."
-                    searchKeys={['name', 'category']}
-                    exportFileName="project_assets"
-                  />
-                </div>
-              </div>
+              <GoogleDriveExplorer
+                projectId={selectedProjectId}
+                projectTitle={projects.find(p => p.id === selectedProjectId)?.title || 'Project'}
+                clientName={session?.company || 'Client'}
+                adminSettings={companySettings?.storage}
+              />
             ) : (
               <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
             )}
@@ -2604,93 +2931,521 @@ export default function ClientDashboardPage() {
 
         {/* Support View */}
         {activeTab === 'support' && !selectedDoc && (
-          <div className="p-6 space-y-6 max-w-4xl">
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Customer Support Center</h1>
-              <p className="text-xs text-muted-foreground mt-1">Submit support tickets, report account discrepancies, or schedule a founder consultation.</p>
+          <div className="p-6 space-y-8 max-w-5xl">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Support Center</h1>
+                <p className="text-xs text-muted-foreground mt-1">Raise bug reports, request design revisions, or check status of existing requests.</p>
+              </div>
+              <Button 
+                variant="gold" 
+                size="sm" 
+                onClick={() => {
+                  setNewTicketType('general');
+                  setIsSubmitModalOpen(true);
+                }}
+                className="font-bold text-xs gap-1.5"
+              >
+                <HelpCircle className="h-4 w-4" /> Raise General Ticket
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="bg-card border-border/80 lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold text-primary uppercase tracking-wider">Raise Support Ticket</CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground">Describe your inquiry and our team will get back to you within 2-4 hours.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSendSupport} className="space-y-4 text-xs">
-                    <div className="space-y-1">
-                      <Label htmlFor="subj" className="text-muted-foreground">Subject / Category</Label>
-                      <Input
-                        id="subj"
-                        placeholder="e.g. Account Billing Query, Project Milestone Revision"
-                        value={supportSubject}
-                        onChange={e => setSupportSubject(e.target.value)}
-                        className="bg-muted/10 border-border text-foreground focus-visible:ring-gold"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="msg" className="text-muted-foreground">Description of Issue</Label>
-                      <Textarea
-                        id="msg"
-                        placeholder="Please details what you need..."
-                        value={supportMessage}
-                        onChange={e => setSupportMessage(e.target.value)}
-                        className="bg-muted/10 border-border text-foreground min-h-[150px] resize-y focus-visible:ring-gold"
-                      />
-                    </div>
-                    <Button type="submit" className="w-full text-xs font-semibold gap-2 h-9" disabled={submittingAction}>
-                      {submittingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                      Send Ticket
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <div className="space-y-4 text-xs">
-                <Card className="bg-card border-border/80">
-                  <CardHeader><CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Direct Account Support</CardTitle></CardHeader>
-                  <CardContent className="space-y-3 leading-relaxed">
-                    <div>
-                      <p className="text-muted-foreground font-medium">Primary Email</p>
-                      <p className="text-primary font-semibold mt-0.5">{companySettings?.company?.email || 'support@netgainstudio.com'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground font-medium">Finance & Invoices</p>
-                      <p className="text-primary font-semibold mt-0.5">{companySettings?.company?.email || 'accounts@netgainstudio.com'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground font-medium">Head Office Consultation</p>
-                      <p className="text-foreground/90 font-semibold mt-0.5">{companySettings?.company?.phone || '+91 (800) 555-NETGAIN'}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-card border-border/80 text-foreground">
-                  <CardHeader className="pb-2 border-b border-border/50">
-                    <CardTitle className="text-xs font-bold text-primary uppercase tracking-wider">Sent Support Tickets</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-4 max-h-[300px] overflow-y-auto pt-4">
-                    {clientSupportTickets.map(ticket => (
-                      <div key={ticket.id} className="p-2.5 rounded-lg bg-muted/10 border border-border/50 space-y-1.5">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-foreground/90 truncate max-w-[120px]">{ticket.title}</span>
-                          <Badge className={`text-[8px] font-mono capitalize ${ticket.is_read ? 'bg-slate-500/10 text-muted-foreground border border-slate-500/20' : 'bg-amber-500/15 text-amber-500 border border-amber-500/25'}`}>
-                            {ticket.is_read ? 'Read' : 'Open'}
-                          </Badge>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground leading-normal line-clamp-2">{ticket.message}</p>
-                        <p className="text-[9px] text-muted-foreground font-mono">{formatDate(ticket.created_at)}</p>
-                      </div>
-                    ))}
-                    {clientSupportTickets.length === 0 && (
-                      <div className="text-center text-muted-foreground text-xs py-4">No support tickets raised yet.</div>
+            {/* Guided Help Request Cards */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold text-primary uppercase tracking-wider">Quick Request Categories</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { type: 'bug', label: 'Report Bug', emoji: '🐞', color: 'border-red-500/20 hover:border-red-500/50 bg-red-500/5' },
+                  { type: 'design', label: 'Design Revision', emoji: '🎨', color: 'border-purple-500/20 hover:border-purple-500/50 bg-purple-500/5' },
+                  { type: 'dev_issue', label: 'Development Issue', emoji: '💻', color: 'border-blue-500/20 hover:border-blue-500/50 bg-blue-500/5' },
+                  { type: 'feature_req', label: 'Feature Request', emoji: '⚡', color: 'border-amber-500/20 hover:border-amber-500/50 bg-amber-500/5' },
+                  { type: 'change_req', label: 'Change Request', emoji: '🔄', color: 'border-emerald-500/20 hover:border-emerald-500/50 bg-emerald-500/5' },
+                  { type: 'billing', label: 'Billing Support', emoji: '💰', color: 'border-gold/20 hover:border-gold/50 bg-gold/5' },
+                  { type: 'document', label: 'Document Support', emoji: '📄', color: 'border-sky-500/20 hover:border-sky-500/50 bg-sky-500/5' },
+                  { type: 'meeting', label: 'Meeting Request', emoji: '📅', color: 'border-indigo-500/20 hover:border-indigo-500/50 bg-indigo-500/5' },
+                  { type: 'general', label: 'General Question', emoji: '❓', color: 'border-slate-500/20 hover:border-slate-500/50 bg-slate-500/5' }
+                ].map(card => (
+                  <Card 
+                    key={card.type}
+                    onClick={() => {
+                      setNewTicketType(card.type);
+                      if (projects.length > 0) setNewTicketProjectId(projects[0].id);
+                      setIsSubmitModalOpen(true);
+                    }}
+                    className={cn(
+                      'border p-4 flex flex-col justify-between items-start gap-4 cursor-pointer hover:-translate-y-0.5 transition-all duration-200 select-none group',
+                      card.color
                     )}
-                  </CardContent>
-                </Card>
+                  >
+                    <div className="text-2xl">{card.emoji}</div>
+                    <div className="w-full">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-foreground group-hover:text-gold transition-colors">{card.label}</span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="space-y-4">
+              <div className="flex border-b border-border/60">
+                {[
+                  { key: 'open', label: 'Open Requests' },
+                  { key: 'waiting_for_team', label: 'Waiting for Netgain' },
+                  { key: 'waiting_for_client', label: 'Waiting for You' },
+                  { key: 'resolved', label: 'Resolved & Closed' }
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTicketTab(tab.key)}
+                    className={cn(
+                      'px-4 py-2.5 text-xs font-semibold border-b-2 transition-all -mb-px',
+                      activeTicketTab === tab.key 
+                        ? 'border-gold text-primary font-bold' 
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tickets List */}
+              <div className="space-y-3">
+                {(() => {
+                  const filtered = clientSupportTickets.filter(ticket => {
+                    const status = (ticket.status || 'open').toLowerCase();
+                    if (activeTicketTab === 'open') {
+                      return ['open', 'assigned', 'in_progress', 'testing'].includes(status);
+                    }
+                    if (activeTicketTab === 'waiting_for_team') {
+                      return status === 'waiting_for_team';
+                    }
+                    if (activeTicketTab === 'waiting_for_client') {
+                      return status === 'waiting_for_client';
+                    }
+                    if (activeTicketTab === 'resolved') {
+                      return ['resolved', 'closed'].includes(status);
+                    }
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-12 border border-dashed border-border/80 bg-card rounded-2xl">
+                        <Inbox className="h-8 w-8 mx-auto text-muted-foreground/60 mb-2" />
+                        <p className="text-sm font-semibold text-muted-foreground">No requests found</p>
+                        <p className="text-xs text-muted-foreground mt-1">If you need help, click one of the quick categories above to open a ticket.</p>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map(ticket => {
+                    const project = projects.find(p => p.id === ticket.project_id);
+                    const managerName = getAssignedManagerName(ticket.assigned_to || '');
+                    const lastUpdated = formatDate(ticket.updated_at || ticket.created_at);
+
+                    return (
+                      <Card 
+                        key={ticket.id}
+                        onClick={() => setSelectedTicket(ticket)}
+                        className={cn(
+                          'bg-card border-border/50 hover:border-border/80 transition-all cursor-pointer p-5 relative overflow-hidden select-none hover:shadow-md group',
+                          !ticket.is_read && 'border-gold/30 shadow-[0_0_15px_rgba(212,175,55,0.05)]'
+                        )}
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-primary px-1.5 py-0.5 rounded bg-primary/10 border border-gold/10">
+                                {ticket.request_type || 'general'}
+                              </span>
+                              <h3 className="font-semibold text-sm text-foreground truncate max-w-md">{ticket.title}</h3>
+                              {!ticket.is_read && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/20 text-gold font-bold animate-pulse">NEW</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                              <span>Project: <strong className="text-foreground/90 font-medium">{project ? project.title : 'General Support'}</strong></span>
+                              <span>•</span>
+                              <span>Assigned Manager: <strong className="text-foreground/90 font-medium">{managerName}</strong></span>
+                              <span>•</span>
+                              <span>Updated {lastUpdated}</span>
+                            </div>
+                            {ticket.reply && (
+                              <p className="text-xs text-muted-foreground/80 line-clamp-1 italic mt-1 bg-muted/5 p-2 rounded border border-border/20">
+                                Last response: "{ticket.reply}"
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex sm:flex-col items-center sm:items-end gap-2 shrink-0 w-full sm:w-auto justify-between border-t sm:border-t-0 pt-3 sm:pt-0 border-border/30">
+                            <Badge className={cn('capitalize text-[10px] px-2.5 py-1 border', {
+                              'text-blue-400 bg-blue-500/10 border-blue-500/20': ticket.status === 'open' || ticket.status === 'assigned',
+                              'text-amber-400 bg-amber-500/10 border-amber-500/20': ticket.status === 'in_progress' || ticket.status === 'waiting_for_team',
+                              'text-purple-400 bg-purple-500/10 border-purple-500/20': ticket.status === 'testing' || ticket.status === 'waiting_for_client',
+                              'text-emerald-400 bg-emerald-500/10 border-emerald-500/20': ticket.status === 'resolved',
+                              'text-muted-foreground bg-slate-500/10 border-slate-500/20': ticket.status === 'closed'
+                            })}>
+                              {ticket.status === 'waiting_for_team' ? 'Waiting for Netgain' : ticket.status === 'waiting_for_client' ? 'Waiting for You' : ticket.status || 'open'}
+                            </Badge>
+                            <Badge variant="outline" className={cn('text-[9px] border px-2 py-0.5', {
+                              'text-slate-400 border-slate-500/20 bg-slate-500/5': ticket.priority === 'low',
+                              'text-blue-400 border-blue-500/20 bg-blue-500/5': ticket.priority === 'medium',
+                              'text-amber-400 border-amber-500/20 bg-amber-500/5': ticket.priority === 'high',
+                              'text-red-400 border-red-500/20 bg-red-500/5': ticket.priority === 'urgent' || ticket.priority === 'critical'
+                            })}>
+                              {ticket.priority || 'medium'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
         )}
+
+        {/* Guided Request Submission Modal */}
+        <Dialog open={isSubmitModalOpen} onOpenChange={setIsSubmitModalOpen}>
+          <DialogContent className="max-w-lg bg-card border-border/80 text-foreground text-xs p-0 overflow-hidden">
+            <DialogHeader className="p-6 border-b border-border/40 bg-muted/10">
+              <DialogTitle className="text-base font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                Create Support Request
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Raise a guided support request. Pre-selected category: <strong className="text-primary capitalize">{newTicketType}</strong>
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleClientSubmitTicket} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Request Category</Label>
+                  <Select value={newTicketType} onValueChange={setNewTicketType}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bug">🐞 Report Bug</SelectItem>
+                      <SelectItem value="design">🎨 Design Revision</SelectItem>
+                      <SelectItem value="dev_issue">💻 Development Issue</SelectItem>
+                      <SelectItem value="feature_req">⚡ Feature Request</SelectItem>
+                      <SelectItem value="change_req">🔄 Change Request</SelectItem>
+                      <SelectItem value="billing">💰 Billing Support</SelectItem>
+                      <SelectItem value="document">📄 Document Support</SelectItem>
+                      <SelectItem value="meeting">📅 Meeting Request</SelectItem>
+                      <SelectItem value="general">❓ General Question</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Priority Level</Label>
+                  <Select value={newTicketPriority} onValueChange={setNewTicketPriority}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low Priority</SelectItem>
+                      <SelectItem value="medium">Medium Priority</SelectItem>
+                      <SelectItem value="high">High Priority</SelectItem>
+                      <SelectItem value="urgent">Urgent Priority</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Related Project Workspace</Label>
+                <Select value={newTicketProjectId} onValueChange={setNewTicketProjectId}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select project" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">General / No Specific Project</SelectItem>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="t-subj">Subject</Label>
+                <Input
+                  id="t-subj"
+                  placeholder="Summarize your request in one sentence..."
+                  value={newTicketSubject}
+                  onChange={e => setNewTicketSubject(e.target.value)}
+                  className="h-9 bg-muted/10 border-border focus-visible:ring-gold"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="t-desc">Detailed Description</Label>
+                <Textarea
+                  id="t-desc"
+                  placeholder="Provide logs, screenshots, references, or instructions so our team can resolve it..."
+                  value={newTicketDescription}
+                  onChange={e => setNewTicketDescription(e.target.value)}
+                  className="bg-muted/10 border-border focus-visible:ring-gold min-h-[120px] resize-y"
+                  required
+                />
+              </div>
+
+              {/* Attachments Section */}
+              <div className="space-y-1">
+                <Label>Attachments</Label>
+                <div className="border border-dashed border-border p-4 rounded-xl bg-muted/5 hover:bg-muted/10 transition-colors relative flex flex-col items-center justify-center text-center cursor-pointer">
+                  <Input 
+                    type="file" 
+                    multiple 
+                    onChange={e => {
+                      if (e.target.files) {
+                        setNewTicketFiles(Array.from(e.target.files));
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                  <Cloud className="h-6 w-6 text-muted-foreground mb-1.5" />
+                  <p className="font-semibold text-muted-foreground">Select files to upload</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Upload screenshots, logs, or references (max 20MB)</p>
+                </div>
+                {newTicketFiles.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {newTicketFiles.map((f, i) => (
+                      <Badge key={i} variant="outline" className="text-[10px] pl-2 pr-1 py-0.5 flex items-center gap-1.5">
+                        <span className="truncate max-w-[120px]">{f.name}</span>
+                        <button type="button" onClick={() => setNewTicketFiles(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-red-500 font-bold">×</button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-4 border-t border-border/40 gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsSubmitModalOpen(false)}
+                  className="h-9 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  variant="gold" 
+                  disabled={submittingAction}
+                  className="h-9 text-xs font-bold"
+                >
+                  {submittingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit Request'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Conversational Ticket Thread Modal */}
+        <Dialog open={!!selectedTicket} onOpenChange={(open) => { if (!open) setSelectedTicket(null); }}>
+          <DialogContent className="max-w-2xl bg-card border-border/80 text-foreground text-xs p-0 overflow-hidden flex flex-col h-[85vh]">
+            <DialogHeader className="p-5 border-b border-border/40 bg-muted/10 flex flex-row items-center justify-between shrink-0">
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className="bg-primary/10 text-primary border border-gold/10 text-[9px] uppercase tracking-wider font-bold">
+                    {selectedTicket?.request_type || 'general'}
+                  </Badge>
+                  <DialogTitle className="text-sm font-bold text-foreground truncate max-w-lg">
+                    {selectedTicket?.title}
+                  </DialogTitle>
+                </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-3">
+                  <span>Manager: <strong className="text-foreground/80">{getAssignedManagerName(selectedTicket?.assigned_to)}</strong></span>
+                  <span>•</span>
+                  <span>Project: <strong className="text-foreground/80">{projects.find(p => p.id === selectedTicket?.project_id)?.title || 'General'}</strong></span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-start pt-1">
+                <Badge className={cn('capitalize text-[9px] border', {
+                  'text-blue-400 bg-blue-500/10 border-blue-500/20': selectedTicket?.status === 'open' || selectedTicket?.status === 'assigned',
+                  'text-amber-400 bg-amber-500/10 border-amber-500/20': selectedTicket?.status === 'in_progress' || selectedTicket?.status === 'waiting_for_team',
+                  'text-purple-400 bg-purple-500/10 border-purple-500/20': selectedTicket?.status === 'testing' || selectedTicket?.status === 'waiting_for_client',
+                  'text-emerald-400 bg-emerald-500/10 border-emerald-500/20': selectedTicket?.status === 'resolved',
+                  'text-muted-foreground bg-slate-500/10 border-slate-500/20': selectedTicket?.status === 'closed'
+                })}>
+                  {selectedTicket?.status === 'waiting_for_team' ? 'Waiting for Netgain' : selectedTicket?.status === 'waiting_for_client' ? 'Waiting for You' : selectedTicket?.status}
+                </Badge>
+                {selectedTicket?.status !== 'closed' && selectedTicket?.status !== 'resolved' && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={handleClientCloseTicket}
+                    className="h-7 text-[10px] border-red-500/20 text-red-400 hover:bg-red-500/10"
+                  >
+                    Close Request
+                  </Button>
+                )}
+              </div>
+            </DialogHeader>
+
+            {/* Conversation Area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-muted/5 min-h-0">
+              {/* Primary Ticket message */}
+              <div className="flex items-start gap-3">
+                <Avatar className="h-8 w-8 border border-border shrink-0">
+                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">CL</AvatarFallback>
+                </Avatar>
+                <div className="space-y-1 max-w-[80%]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">{session?.name || 'You'}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{selectedTicket && formatDate(selectedTicket.created_at)}</span>
+                  </div>
+                  <div className="p-3 bg-primary/10 border border-gold/10 text-foreground text-xs rounded-xl rounded-tl-none whitespace-pre-wrap leading-relaxed">
+                    {selectedTicket?.message}
+                  </div>
+                  {/* Primary attachments */}
+                  {selectedTicket?.attachments && selectedTicket.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {selectedTicket.attachments.map((att: any, idx: number) => (
+                        <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 border border-border/80 bg-card rounded-lg hover:border-gold/30 hover:bg-muted/10 transition-colors text-[10px]">
+                          <FileText className="h-3.5 w-3.5 text-primary" />
+                          <span className="truncate max-w-[120px] font-medium text-foreground">{att.name}</span>
+                          <Download className="h-3 w-3 text-muted-foreground" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Chat Thread messages */}
+              {loadingMessages ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                chatMessages.map(msg => {
+                  const isMe = msg.sender_role === 'client';
+                  return (
+                    <div key={msg.id} className={cn('flex items-start gap-3', isMe ? 'justify-end' : '')}>
+                      {!isMe && (
+                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                          <AvatarFallback className="bg-gold/10 text-gold font-bold text-xs">NG</AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className={cn('space-y-1 max-w-[80%]', isMe ? 'text-right' : '')}>
+                        <div className="flex items-center gap-2 flex-row-reverse justify-end">
+                          <span className="font-semibold text-foreground">{isMe ? 'You' : msg.sender_name}</span>
+                          <span className="text-[10px] text-muted-foreground/60">{formatDate(msg.created_at)}</span>
+                        </div>
+                        <div className={cn(
+                          'p-3 text-left text-xs rounded-xl whitespace-pre-wrap leading-relaxed',
+                          isMe 
+                            ? 'bg-primary/20 border border-gold/25 text-foreground rounded-tr-none' 
+                            : 'bg-muted/30 border border-border text-foreground rounded-tl-none'
+                        )}>
+                          {msg.message}
+                        </div>
+                        {/* Message attachments */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className={cn('flex flex-wrap gap-1.5 mt-2', isMe ? 'justify-end' : '')}>
+                            {msg.attachments.map((att: any, idx: number) => (
+                              <a key={idx} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 border border-border/80 bg-card rounded-lg hover:border-gold/30 hover:bg-muted/10 transition-colors text-[10px]">
+                                <FileText className="h-3.5 w-3.5 text-primary" />
+                                <span className="truncate max-w-[120px] font-medium text-foreground">{att.name}</span>
+                                <Download className="h-3 w-3 text-muted-foreground" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {isMe && (
+                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                          <AvatarFallback className="bg-primary/20 text-primary font-bold text-xs">CL</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {/* Status & Actions timeline */}
+              {selectedTicket?.timeline && selectedTicket.timeline.length > 0 && (
+                <div className="pt-4 border-t border-border/30 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5" /> Ticket Timeline Log
+                  </p>
+                  <div className="space-y-1.5 pl-2 border-l border-border/50">
+                    {selectedTicket.timeline.map((evt: any, idx: number) => (
+                      <div key={idx} className="text-[11px] text-muted-foreground flex justify-between gap-4">
+                        <span>• <strong className="text-foreground/80 font-medium">{evt.event}</strong> ({evt.notes || '—'})</span>
+                        <span className="font-mono text-[10px] text-muted-foreground/60">{new Date(evt.date).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input Area */}
+            {selectedTicket?.status !== 'closed' && selectedTicket?.status !== 'resolved' ? (
+              <form onSubmit={handleClientSendReply} className="p-4 border-t border-border/40 bg-card shrink-0 space-y-3">
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="Type your response here..."
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    className="flex-1 min-h-[44px] max-h-[120px] bg-muted/10 border-border text-foreground text-xs focus-visible:ring-gold"
+                  />
+                  <Button 
+                    type="submit" 
+                    variant="gold" 
+                    disabled={sendingMessage || (!chatInput.trim() && chatFiles.length === 0)}
+                    className="h-11 px-4 font-bold text-xs gap-1.5 shrink-0"
+                  >
+                    {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    Reply
+                  </Button>
+                </div>
+                
+                {/* File attachment upload trigger */}
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2.5">
+                      <Cloud className="h-3.5 w-3.5" /> Attach Files
+                    </Button>
+                    <Input 
+                      type="file" 
+                      multiple 
+                      onChange={e => {
+                        if (e.target.files) {
+                          setChatFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                  {chatFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {chatFiles.map((f, i) => (
+                        <Badge key={i} variant="outline" className="text-[9px] pl-2 pr-1 py-0 flex items-center gap-1">
+                          <span className="truncate max-w-[80px]">{f.name}</span>
+                          <button type="button" onClick={() => setChatFiles(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-red-500 font-bold">×</button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </form>
+            ) : (
+              <div className="p-4 border-t border-border/40 bg-muted/5 text-center text-xs text-muted-foreground shrink-0 font-medium">
+                This support request has been {selectedTicket?.status} and is closed for further replies.
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Profile View */}
         {activeTab === 'profile' && !selectedDoc && (
@@ -2730,6 +3485,108 @@ export default function ClientDashboardPage() {
                 <div className="sm:col-span-2">
                   <p className="text-muted-foreground font-medium">Billing Address</p>
                   <p className="text-foreground font-bold text-sm mt-0.5">{clientDetails?.address || session?.address || '—'}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border/80 text-xs mt-6">
+              <CardHeader className="border-b border-border/40">
+                <CardTitle className="text-sm font-bold text-primary uppercase tracking-wider">Cloud Storage Connections</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                      <Cloud className="h-6 w-6 text-gold" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-base">Google Drive</h3>
+                        {googleConn ? (
+                          googleConn.status === 'connected' ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs font-semibold">Connected</Badge>
+                          ) : (
+                            <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-xs font-semibold">Error</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground border-border text-xs font-semibold">Not Connected</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground max-w-md">
+                        Link your Google account (Personal or Workspace) to share project workspace deliverables and assets.
+                      </p>
+                      {googleConn && (
+                        <div className="space-y-2 mt-4">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-muted-foreground">Connected Email:</span>
+                            <span className="font-medium text-foreground">{googleConn.email}</span>
+                          </div>
+                          {googleConn.storageTotal > 0 && (
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[11px] text-muted-foreground">
+                                <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" /> {(googleConn.storageUsed / (1024 * 1024 * 1024)).toFixed(2)} GB used</span>
+                                <span>{(googleConn.storageTotal / (1024 * 1024 * 1024)).toFixed(0)} GB total</span>
+                              </div>
+                              <div className="w-full bg-black/40 border border-border h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-gold h-full rounded-full transition-all duration-500" 
+                                  style={{ width: `${Math.min(100, (googleConn.storageUsed / googleConn.storageTotal) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0 w-full sm:w-auto md:w-44">
+                    {googleConn ? (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleRefreshGoogle} 
+                          disabled={actioningConn} 
+                          className="gap-1.5 text-xs w-full justify-center"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${actioningConn ? 'animate-spin' : ''}`} />
+                          Refresh Connection
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleConnectGoogle} 
+                          disabled={actioningConn} 
+                          className="gap-1.5 text-xs w-full justify-center text-gold border-gold/20 hover:bg-gold/10"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Reconnect Account
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleDisconnectGoogle} 
+                          disabled={actioningConn} 
+                          className="gap-1.5 text-xs w-full justify-center text-red-400 border-red-500/20 hover:bg-red-500/10"
+                        >
+                          <Unlink className="h-3.5 w-3.5" />
+                          Disconnect Account
+                        </Button>
+                      </>
+                    ) : (
+                      <Button 
+                        variant="gold" 
+                        size="sm" 
+                        onClick={handleConnectGoogle} 
+                        disabled={actioningConn} 
+                        className="gap-1.5 text-xs w-full justify-center font-bold"
+                      >
+                        {actioningConn ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />}
+                        Connect Account
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

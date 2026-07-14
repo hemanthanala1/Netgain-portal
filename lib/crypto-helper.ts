@@ -14,13 +14,12 @@ export function encrypt(text: string): string {
   const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv)
   let encrypted = cipher.update(text, 'utf8', 'hex')
   encrypted += cipher.final('hex')
-  return `${iv.toString('hex')}:${encrypted}`
+  return iv.toString('hex') + ':' + encrypted
 }
 
 export function decrypt(encryptedText: string): string {
   if (!encryptedText) return ''
   try {
-    // If not matching encrypted format (hex:hex), return as is
     if (!encryptedText.includes(':')) {
       return encryptedText
     }
@@ -29,7 +28,6 @@ export function decrypt(encryptedText: string): string {
     const iv = Buffer.from(parts[0], 'hex')
     const encrypted = parts[1]
     
-    // Simple hex validation
     if (iv.length !== IV_LENGTH) return encryptedText
 
     const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv)
@@ -37,7 +35,7 @@ export function decrypt(encryptedText: string): string {
     decrypted += decipher.final('utf8')
     return decrypted
   } catch (err) {
-    console.error('Decryption failed:', err)
-    return encryptedText
+    console.error('[Crypto Helper Decryption Error]', err)
+    return ''
   }
 }

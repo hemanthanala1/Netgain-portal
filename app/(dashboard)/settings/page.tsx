@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus, Calendar, Link, Unlink, Shield, History, Bell, Sparkles, Search } from 'lucide-react'
+import { Save, Building2, User, CreditCard, MessageSquare, Cpu, Upload, Eye, EyeOff, CheckCircle2, Loader2, FileText, Trash2, Plus, Calendar, Link, Unlink, Shield, History, Bell, Sparkles, Search, HardDrive, Cloud } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
 import { TemplateSelector, type TemplateId } from '@/components/ui/template-selector'
@@ -217,6 +217,18 @@ function SettingsPageContent() {
     currency: 'INR'
   })
 
+  const [storage, setStorage] = useState({
+    enableGoogleDrive: false,
+    enableClientUpload: false,
+    allowFolderUpload: false,
+    allowLargeFiles: false,
+    defaultLocation: 'internal',
+    autoCreateFolder: false,
+    syncPermissions: false,
+    enableActivityLog: false,
+    enablePreview: false
+  })
+
   const [isGoogleConnected, setIsGoogleConnected] = useState(false)
   const [googleEmail, setGoogleEmail] = useState<string | null>(null)
   const [testingChannel, setTestingChannel] = useState<string | null>(null)
@@ -279,6 +291,7 @@ function SettingsPageContent() {
       if (data.ai)       setAi(a => ({ ...a, ...data.ai }))
       if (data.docs)     setDocs(d => ({ ...d, ...data.docs }))
       if (data.payment)  setPayment(p => ({ ...p, ...data.payment }))
+      if (data.storage)  setStorage(s => ({ ...s, ...data.storage }))
       if (data.isGoogleConnected !== undefined) setIsGoogleConnected(data.isGoogleConnected)
       if (data.googleEmail !== undefined) setGoogleEmail(data.googleEmail)
 
@@ -408,7 +421,7 @@ function SettingsPageContent() {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ company, founder, bank, comm, ai, docs, payment }),
+        body: JSON.stringify({ company, founder, bank, comm, ai, docs, payment, storage }),
       })
       if (!res.ok) throw new Error('Save failed')
       
@@ -483,6 +496,7 @@ function SettingsPageContent() {
           <TabsTrigger value="branding" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" />Branding</TabsTrigger>
           <TabsTrigger value="security" className="gap-1.5"><Shield className="h-3.5 w-3.5" />Security & Backup</TabsTrigger>
           <TabsTrigger value="notifications" className="gap-1.5"><Bell className="h-3.5 w-3.5" />Notifications</TabsTrigger>
+          <TabsTrigger value="storage" className="gap-1.5"><HardDrive className="h-3.5 w-3.5" />Storage Providers</TabsTrigger>
           <TabsTrigger value="audit" className="gap-1.5"><History className="h-3.5 w-3.5" />Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -1442,6 +1456,98 @@ function SettingsPageContent() {
               </FieldRow>
               <FieldRow label="Currency">
                 <Input value={payment.currency} onChange={e => setPayment({ ...payment, currency: e.target.value })} placeholder="INR" />
+              </FieldRow>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── STORAGE PROVIDERS ──────────────────────────────── */}
+        <TabsContent value="storage">
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Cloud className="h-4 w-4 text-gold" />Storage Providers & Google Drive</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <FieldRow label="Enable Google Drive Integration" hint="Allow users and clients to connect and link Google Drive Folders">
+                <Select value={storage.enableGoogleDrive ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, enableGoogleDrive: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Default Upload Location" hint="Default destination when uploading files">
+                <Select value={storage.defaultLocation} onValueChange={(v) => setStorage({ ...storage, defaultLocation: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Netgain Storage (Internal)</SelectItem>
+                    <SelectItem value="google-drive">Google Drive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <Separator />
+              <FieldRow label="Client Upload Permissions" hint="Allow clients to upload files directly to Google Drive workspaces">
+                <Select value={storage.enableClientUpload ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, enableClientUpload: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Allowed</SelectItem>
+                    <SelectItem value="false">Restricted to Team Members Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Allow Folder Upload" hint="Enable uploading nested folder structures to Google Drive">
+                <Select value={storage.allowFolderUpload ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, allowFolderUpload: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Allowed</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Allow Large Files" hint="Support uploading files larger than 100MB directly to Google Drive">
+                <Select value={storage.allowLargeFiles ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, allowLargeFiles: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Allowed</SelectItem>
+                    <SelectItem value="false">Restricted (Max 100MB)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Auto Create Project Folder" hint="Automatically generate Drive folder structure when linking new projects">
+                <Select value={storage.autoCreateFolder ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, autoCreateFolder: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled (Generate default subfolders)</SelectItem>
+                    <SelectItem value="false">Disabled (Link empty folder)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Sync Collaborator Permissions" hint="Automatically synchronize project access roles to Google Drive permissions">
+                <Select value={storage.syncPermissions ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, syncPermissions: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Enable Preview inside ERP" hint="Attempt to preview PDFs, images, and Office documents inside the portal">
+                <Select value={storage.enablePreview ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, enablePreview: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Open in Google Drive Directly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label="Enable Google Activity Logging" hint="Log file views, renames, copies, and sharing inside ERP audit logs">
+                <Select value={storage.enableActivityLog ? 'true' : 'false'} onValueChange={(v) => setStorage({ ...storage, enableActivityLog: v === 'true' })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
               </FieldRow>
             </CardContent>
           </Card>
