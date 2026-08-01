@@ -174,20 +174,21 @@ export default function Homepage() {
             </div>
             <div>
               <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-transparent">
-                NETGAIN
+                NETGAIN PORTAL
               </span>
               <span className="text-[10px] block text-primary font-bold tracking-wider uppercase -mt-1">
-                OPERATING PORTAL
+                CLIENT & BUSINESS PLATFORM
               </span>
             </div>
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#overview" className="hover:text-foreground transition-colors">Overview</a>
+            <a href="#purpose" className="hover:text-foreground transition-colors">App Purpose</a>
             <a href="#features" className="hover:text-foreground transition-colors">Services & Vault</a>
-            <Link href="/client/login" className="hover:text-foreground transition-colors">Portal Access</Link>
-            <a href="#security" className="hover:text-foreground transition-colors">Security</a>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
           </nav>
 
           {/* Actions: Theme Toggle & Login CTA */}
@@ -239,6 +240,13 @@ export default function Homepage() {
                 Overview
               </a>
               <a 
+                href="#purpose" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1.5"
+              >
+                App Purpose
+              </a>
+              <a 
                 href="#features" 
                 onClick={() => setMobileMenuOpen(false)}
                 className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1.5"
@@ -246,19 +254,19 @@ export default function Homepage() {
                 Services & Vault
               </a>
               <Link 
-                href="/client/login" 
+                href="/privacy" 
                 onClick={() => setMobileMenuOpen(false)}
                 className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1.5"
               >
-                Portal Access
+                Privacy Policy
               </Link>
-              <a 
-                href="#security" 
+              <Link 
+                href="/terms" 
                 onClick={() => setMobileMenuOpen(false)}
                 className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1.5"
               >
-                Security
-              </a>
+                Terms of Service
+              </Link>
             </motion.div>
           )}
         </AnimatePresence>
@@ -461,6 +469,61 @@ export default function Homepage() {
           </div>
         </section>
 
+        {/* Application Purpose & OAuth Disclosure Section */}
+        <section id="purpose" className="py-16 bg-background border-t border-border/40 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="text-center max-w-3xl mx-auto mb-12 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold">
+              <Shield className="h-3.5 w-3.5" /> Application Purpose & Scope Declaration
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight">About Netgain Portal</h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Netgain Portal is an enterprise business operating workspace designed to connect Netgain Studio with our corporate clients and partners.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-6 rounded-2xl bg-card border border-border/70 space-y-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-lg">
+                1
+              </div>
+              <h3 className="font-bold text-lg">Client Workspace & Services</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Netgain Portal allows clients to access digital Statements of Work (SOW), project deliverables, task milestones, financial invoices, and encrypted document storage vaults in real time.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border/70 space-y-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-lg">
+                2
+              </div>
+              <h3 className="font-bold text-lg">Google Account Single Sign-On</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Users authenticate securely using Google Sign-In (OAuth 2.0). Google SSO enables authorized clients and internal staff to access their Netgain Portal dashboard seamlessly without maintaining redundant passwords.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border/70 space-y-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-lg">
+                3
+              </div>
+              <h3 className="font-bold text-lg">Google Workspace Integration</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Netgain Portal optionally integrates with Google Drive and Google Calendar to allow users to view project folder files, sync meeting schedules, and collaborate on deliverables within their organization.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 p-4 rounded-xl bg-muted/40 border border-border/60 text-center text-xs text-muted-foreground flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span>
+              Netgain Portal strictly adheres to Google API Services User Data Policy. Read our full data practices:
+            </span>
+            <div className="flex items-center gap-4">
+              <Link href="/privacy" className="text-primary hover:underline font-semibold">Privacy Policy</Link>
+              <Link href="/terms" className="text-primary hover:underline font-semibold">Terms of Service</Link>
+            </div>
+          </div>
+        </section>
+
         {/* Feature Showcase Grid */}
         <section id="features" className="py-16 bg-muted/20 border-y border-border/40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -530,7 +593,7 @@ export default function Homepage() {
               </div>
               <h3 className="text-2xl font-bold">Secure Single Sign-On for Authorized Partners</h3>
               <p className="text-sm text-muted-foreground">
-                Client accounts are provisioned directly by your dedicated Netgain Account Executive. If you require access credentials or have forgotten your password, reach out to support.
+                Client accounts are provisioned directly by your dedicated Netgain Account Executive. Sign in with Google SSO or your email credentials.
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -550,14 +613,16 @@ export default function Homepage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
             <img src="/logo.png" className="h-6 w-6 object-contain" alt="Netgain" />
-            <span className="font-bold text-foreground">NETGAIN STUDIO</span>
-            <span>&copy; {new Date().getFullYear()} Netgain Business OS. All rights reserved.</span>
+            <span className="font-bold text-foreground">NETGAIN PORTAL</span>
+            <span>&copy; {new Date().getFullYear()} Netgain Studio. All rights reserved.</span>
           </div>
 
           <div className="flex items-center gap-6">
             <a href="#overview" className="hover:text-foreground transition-colors">Overview</a>
+            <a href="#purpose" className="hover:text-foreground transition-colors">App Purpose</a>
             <a href="#features" className="hover:text-foreground transition-colors">Client Services</a>
-            <a href="#security" className="hover:text-foreground transition-colors">Privacy & Security</a>
+            <Link href="/privacy" className="hover:text-foreground transition-colors font-medium text-foreground">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-foreground transition-colors font-medium text-foreground">Terms of Service</Link>
             
             {/* DISCREET ADMIN PORTAL FOOTER LINK (Secret / Not highlighted) */}
             <a 
