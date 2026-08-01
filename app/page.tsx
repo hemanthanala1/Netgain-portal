@@ -266,7 +266,7 @@ export default function Homepage() {
 
       {/* Hero Section */}
       <main className="flex-1 relative z-10">
-        <section id="overview" className="pt-16 pb-12 md:pt-24 md:pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <section id="overview" className="pt-6 pb-12 md:pt-8 md:pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Hero Content */}
