@@ -61,9 +61,9 @@ export default function ClientLoginPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Brand logo */}
         <div className="flex flex-col items-center space-y-2">
-          <img src="/logo.png" className="h-12 w-12 rounded-lg shrink-0 object-contain shadow-sm" alt="Netgain Logo" />
-          <h1 className="text-2xl font-black text-foreground tracking-wide">NETGAIN CLIENT PORTAL</h1>
-          <p className="text-[10px] text-primary tracking-widest uppercase font-bold">Secure Document Center</p>
+          <img src="/logo.png" className="h-12 w-12 rounded-lg shrink-0 object-contain shadow-sm" alt="Netgain Portal Logo" />
+          <h1 className="text-2xl font-black text-foreground tracking-wide">Netgain Portal</h1>
+          <p className="text-[10px] text-primary tracking-widest uppercase font-bold">Client Portal</p>
         </div>
 
         {/* Card */}

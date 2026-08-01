@@ -291,7 +291,7 @@ export default function Homepage() {
               </h2>
 
               <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
-                Netgain Portal is the official client portal provided by Netgain Studio. Authorized corporate clients and partners use Netgain Portal to review Statements of Work (SOWs), monitor live project milestones, access encrypted document vaults, approve commercial agreements, and manage billing statements in real time.
+                Netgain Portal is an all-in-one business operating platform for managing clients, quotations, invoices, projects, CRM, marketing, automation, and business operations.
               </p>
 
               {/* Google OAuth Purpose Disclosure Box above the fold */}
@@ -315,16 +315,16 @@ export default function Homepage() {
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
                 <Link
                   href="/client/login"
-                  className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all hover:scale-[1.02]"
+                  className="h-12 px-7 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all hover:scale-[1.02]"
                 >
-                  <UserCheck className="h-4 w-4" /> Sign In to Netgain Portal <ArrowRight className="h-4 w-4" />
+                  <Sparkles className="h-4 w-4" /> Get Started <ArrowRight className="h-4 w-4" />
                 </Link>
-                <a
-                  href="#purpose"
+                <Link
+                  href="/client/login"
                   className="h-12 px-6 rounded-xl border border-border bg-card/50 hover:bg-muted/60 text-foreground font-semibold text-sm flex items-center gap-2 transition-all"
                 >
-                  <FileText className="h-4 w-4 text-muted-foreground" /> View Portal Capabilities
-                </a>
+                  <UserCheck className="h-4 w-4 text-muted-foreground" /> Sign In
+                </Link>
               </div>
 
               {/* Key Trust Signals */}
@@ -630,7 +630,7 @@ export default function Homepage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
             <img src="/logo.png" className="h-6 w-6 object-contain" alt="Netgain" />
-            <span className="font-bold text-foreground">NETGAIN PORTAL</span>
+            <span className="font-bold text-foreground">Netgain Portal</span>
             <span>&copy; {new Date().getFullYear()} Netgain Studio. All rights reserved.</span>
           </div>
 

@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
             </div>
             <div>
               <span className="font-extrabold text-base tracking-tight bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-transparent">
-                NETGAIN PORTAL
+                Netgain Portal
               </span>
             </div>
           </Link>

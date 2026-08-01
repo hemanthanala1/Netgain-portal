@@ -86,7 +86,7 @@ export default function LoginPage() {
               <img src="/logo.png" className="h-10 w-10 rounded-xl shrink-0 object-contain shadow-md" alt="Netgain Logo" />
             </div>
             <h1 className="text-xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to Netgain Business OS</p>
+            <p className="text-sm text-muted-foreground mt-1">Sign in to Netgain Portal</p>
           </CardHeader>
 
           <CardContent className="pb-8 pt-4">
