@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: 'Netgain Portal — Official Client & Business Operating Platform',
   description: 'Netgain Portal is an enterprise workspace for client collaboration, project milestone tracking, document vault, statements of work, and Google SSO authentication.',
   icons: { icon: '/favicon.ico' },
+  verification: {
+    google: 'D7qWDNT68YGOdIE0m9ENaThUbJunjeMfJobGGDhxC58',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
