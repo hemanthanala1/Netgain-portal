@@ -281,29 +281,47 @@ export default function Homepage() {
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>Next-Gen Enterprise Client Operating System</span>
+                <span>Official Netgain Portal — Enterprise Client Operating Workspace</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
-                Architecting Digital Excellence &{' '}
-                <span className="bg-gradient-to-r from-primary via-amber-400 to-gold bg-clip-text text-transparent">
-                  Seamless Client Collaboration
+                Netgain Portal
+                <span className="block text-2xl sm:text-3xl font-extrabold mt-2 bg-gradient-to-r from-primary via-amber-400 to-gold bg-clip-text text-transparent">
+                  Enterprise Client Collaboration & Business Operating Workspace
                 </span>
               </h1>
 
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
-                Welcome to Netgain’s centralized Operating Portal. View your live project milestones, review confidential statements of work, approve agreements, and monitor deliverables in real time.
+              <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
+                Netgain Portal is the official client portal provided by Netgain Studio. Authorized corporate clients and partners use Netgain Portal to review Statements of Work (SOWs), monitor live project milestones, access encrypted document vaults, approve commercial agreements, and manage billing statements in real time.
               </p>
+
+              {/* Google OAuth Purpose Disclosure Box above the fold */}
+              <div className="p-4 rounded-xl border border-primary/30 bg-card/80 backdrop-blur-sm text-xs space-y-1.5 shadow-sm text-left">
+                <div className="font-bold text-foreground flex items-center gap-2 text-sm">
+                  <Shield className="h-4 w-4 text-primary" /> Application Purpose & Google Sign-In Integration
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  Netgain Portal utilizes Google Sign-In (OAuth 2.0) to provide secure Single Sign-On (SSO) for authorized client accounts. Google OAuth integration allows users to log in securely, access project workspace dashboards, and optionally synchronize project deliverable folders with Google Drive and project deadlines with Google Calendar.
+                </p>
+                <div className="flex items-center gap-4 pt-1 text-[11px]">
+                  <Link href="/privacy" className="text-primary hover:underline font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Privacy Policy
+                  </Link>
+                  <Link href="/terms" className="text-primary hover:underline font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Terms of Service
+                  </Link>
+                </div>
+              </div>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
                 <Link
                   href="/client/login"
                   className="h-12 px-6 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all hover:scale-[1.02]"
                 >
-                  <UserCheck className="h-4 w-4" /> Sign In to Client Portal <ArrowRight className="h-4 w-4" />
+                  <UserCheck className="h-4 w-4" /> Sign In to Netgain Portal <ArrowRight className="h-4 w-4" />
                 </Link>
                 <a
-                  href="#features"
+                  href="#purpose"
                   className="h-12 px-6 rounded-xl border border-border bg-card/50 hover:bg-muted/60 text-foreground font-semibold text-sm flex items-center gap-2 transition-all"
                 >
                   <FileText className="h-4 w-4 text-muted-foreground" /> View Portal Capabilities
@@ -358,11 +376,11 @@ export default function Homepage() {
                     </div>
 
                     <CardTitle className="text-2xl font-bold tracking-tight pt-2">
-                      {loginMode === 'client' ? 'Sign In to Your Client Account' : 'Internal Staff Login'}
+                      {loginMode === 'client' ? 'Sign In to Netgain Portal' : 'Internal Staff Login'}
                     </CardTitle>
                     <CardDescription className="text-xs text-muted-foreground">
                       {loginMode === 'client'
-                        ? 'Access your statements of work, invoices, and documents.'
+                        ? 'Access your Netgain Portal client workspace, statements of work, invoices, and deliverables.'
                         : 'Enter internal administrator credentials to launch Netgain OS.'}
                     </CardDescription>
                   </CardHeader>
