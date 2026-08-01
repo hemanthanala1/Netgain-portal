@@ -573,6 +573,45 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
     }
   }
 
+  // Handle File Download (Both Google Drive & Internal Storage)
+  const handleDownloadFile = async (file: FileItem) => {
+    if (file.isFolder) return
+
+    if (file.provider === 'google-drive') {
+      try {
+        toast({ title: 'Downloading file...', description: `Fetching ${file.name} from Google Drive.` })
+        const { token } = await resolveSessionAndToken()
+        const downloadUrl = `/api/storage/google/drive?action=download&fileId=${file.id}&projectId=${projectId}&token=${encodeURIComponent(token)}`
+        
+        const response = await fetch(downloadUrl)
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}))
+          throw new Error(errJson.error || 'Failed to download file from Google Drive')
+        }
+
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = file.name
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast({ title: 'Download Complete', description: file.name })
+      } catch (err: any) {
+        toast({ title: 'Download Failed', description: err.message || 'Could not download file.', variant: 'destructive' })
+      }
+    } else {
+      // Internal file
+      if (file.webContentLink) {
+        window.open(file.webContentLink, '_blank')
+      } else {
+        toast({ title: 'File Link Missing', description: 'Internal file has no download URL.', variant: 'destructive' })
+      }
+    }
+  }
+
   // Get user role display name
   const userRoleName = (user: any) => {
     return user?.email?.includes('admin') ? 'Admin Team' : 'Team Member'
@@ -966,11 +1005,16 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
                                   </Button>
                                 </a>
                               )}
-                              <a href={`/api/storage/google/drive?action=download&fileId=${file.id}&projectId=${projectId}`} download>
-                                <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15" title="Download">
-                                  <Download className="h-3.5 w-3.5" />
-                                </Button>
-                              </a>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                aria-label="Download" 
+                                className="h-7 w-7 text-gold hover:bg-gold/15" 
+                                title="Download"
+                                onClick={() => handleDownloadFile(file)}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
 
                               {/* Drive contextual menu */}
                               <DropdownMenu>
@@ -978,6 +1022,9 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
                                   <Button variant="ghost" size="icon" className="h-7 w-7"><Settings className="h-3.5 w-3.5 text-muted-foreground" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="text-xs">
+                                  {!file.isFolder && (
+                                    <DropdownMenuItem onClick={() => handleDownloadFile(file)} className="gap-1.5"><Download className="h-3.5 w-3.5 text-gold" /> Download</DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => { setActiveItem(file); setRenameName(file.name); setRenameOpen(true); }} className="gap-1.5"><Edit2 className="h-3.5 w-3.5" /> Rename</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => { setActiveItem(file); setSelectedMoveDest('root'); setMoveOpen(true); }} className="gap-1.5"><Move className="h-3.5 w-3.5" /> Move</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => { setActiveItem(file); setShareEmail(''); setShareOpen(true); }} className="gap-1.5"><Share2 className="h-3.5 w-3.5" /> Share/Permissions</DropdownMenuItem>
@@ -988,11 +1035,16 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
                             </>
                           ) : (
                             /* Internal File actions */
-                            <a href={file.webContentLink} target="_blank" rel="noopener noreferrer" download>
-                              <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15" title="Download">
-                                <Download className="h-3.5 w-3.5" />
-                              </Button>
-                            </a>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              aria-label="Download" 
+                              className="h-7 w-7 text-gold hover:bg-gold/15" 
+                              title="Download"
+                              onClick={() => handleDownloadFile(file)}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -1017,6 +1069,9 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
                           <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"><Settings className="h-3.5 w-3.5" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="text-xs">
+                          {!file.isFolder && (
+                            <DropdownMenuItem onClick={() => handleDownloadFile(file)} className="gap-1.5"><Download className="h-3.5 w-3.5 text-gold" /> Download</DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => { setActiveItem(file); setRenameName(file.name); setRenameOpen(true); }} className="gap-1.5"><Edit2 className="h-3.5 w-3.5" /> Rename</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setActiveItem(file); setSelectedMoveDest('root'); setMoveOpen(true); }} className="gap-1.5"><Move className="h-3.5 w-3.5" /> Move</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setActiveItem(file); setShareEmail(''); setShareOpen(true); }} className="gap-1.5"><Share2 className="h-3.5 w-3.5" /> Share</DropdownMenuItem>
