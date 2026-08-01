@@ -285,11 +285,13 @@ export default function Homepage() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]">
-                Netgain Portal
-                <span className="block text-2xl sm:text-3xl font-extrabold mt-2 bg-gradient-to-r from-primary via-amber-400 to-gold bg-clip-text text-transparent">
-                  Enterprise Client Collaboration & Business Operating Workspace
+                <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+                  Netgain Portal
                 </span>
               </h1>
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary via-amber-400 to-gold bg-clip-text text-transparent">
+                Enterprise Client Collaboration & Operating Workspace
+              </h2>
 
               <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
                 Netgain Portal is the official client portal provided by Netgain Studio. Authorized corporate clients and partners use Netgain Portal to review Statements of Work (SOWs), monitor live project milestones, access encrypted document vaults, approve commercial agreements, and manage billing statements in real time.

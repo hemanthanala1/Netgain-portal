@@ -11,7 +11,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Netgain Portal — Official Client & Business Operating Platform',
+  title: 'Netgain Portal',
   description: 'Netgain Portal is an enterprise workspace for client collaboration, project milestone tracking, document vault, statements of work, and Google SSO authentication.',
   icons: { icon: '/favicon.ico' },
   verification: {
