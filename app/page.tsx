@@ -174,10 +174,7 @@ export default function Homepage() {
             </div>
             <div>
               <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-transparent">
-                NETGAIN PORTAL
-              </span>
-              <span className="text-[10px] block text-primary font-bold tracking-wider uppercase -mt-1">
-                CLIENT & BUSINESS PLATFORM
+                Netgain Portal
               </span>
             </div>
           </div>
@@ -493,11 +490,11 @@ export default function Homepage() {
         <section id="purpose" className="py-16 bg-background border-t border-border/40 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-12 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold">
-              <Shield className="h-3.5 w-3.5" /> Application Purpose & Scope Declaration
+              <Shield className="h-3.5 w-3.5" /> Application Purpose & Google API Scope Declaration
             </div>
-            <h2 className="text-3xl font-extrabold tracking-tight">About Netgain Portal</h2>
+            <h2 className="text-3xl font-extrabold tracking-tight">Purpose of Netgain Portal</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Netgain Portal is an enterprise business operating workspace designed to connect Netgain Studio with our corporate clients and partners.
+              Netgain Portal is an enterprise client operating workspace built by Netgain Studio. The application enables authorized corporate clients and partners to access project deliverables, review Statements of Work, manage billing, and use Google Sign-In (OAuth 2.0) for secure single sign-on and optional Google Drive / Google Calendar integration.
             </p>
           </div>
 
