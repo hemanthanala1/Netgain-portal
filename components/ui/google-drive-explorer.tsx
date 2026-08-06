@@ -35,7 +35,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
   const [actioning, setActioning] = useState(false)
   
   // Storage & Navigation State
-  const [workspace, setWorkspace] = useState<{ linked: boolean; folderId?: string; folderName?: string; verified?: boolean; error?: string } | null>(null)
+  const [workspace, setWorkspace] = useState<{ linked: boolean; folders?: any[]; folderId?: string; folderName?: string; verified?: boolean; error?: string } | null>(null)
   const [currentFolderId, setCurrentFolderId] = useState<string>('root')
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string; name: string }>>([])
   
@@ -774,7 +774,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
               <Button variant="outline" size="sm" onClick={() => setRelinkOpen(true)} className="border-gold/30 text-gold text-xs hover:bg-gold/10 gap-1">
                 <Link2 className="h-3.5 w-3.5" /> Relink Folder
               </Button>
-              <Button variant="outline" size="sm" onClick={handleUnlinkFolder} disabled={actioning} className="border-red-500/20 text-red-400 text-xs hover:bg-red-500/10">Unlink</Button>
+              <Button variant="outline" size="sm" onClick={() => handleUnlinkFolder()} disabled={actioning} className="border-red-500/20 text-red-400 text-xs hover:bg-red-500/10">Unlink</Button>
             </div>
           </div>
         </Card>
