@@ -226,7 +226,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <Tabs defaultValue="revenue" className="space-y-6">
-          <TabsList className="grid grid-cols-1 md:grid-cols-3 sm:grid-cols-5 md:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
+          <TabsList className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
             <TabsTrigger value="revenue" className="text-xs gap-1.5"><DollarSign className="h-3.5 w-3.5" />Revenue</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Sales</TabsTrigger>
             <TabsTrigger value="projects" className="text-xs gap-1.5"><Briefcase className="h-3.5 w-3.5" />Projects</TabsTrigger>

@@ -427,7 +427,7 @@ export default function BlueprintEnginePage() {
             </div>
           </DialogHeader>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-1 md:grid-cols-4 sm:grid-cols-7">
+            <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 h-auto p-1">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="requirements">Reqs</TabsTrigger>
               <TabsTrigger value="prompt">Prompt</TabsTrigger>

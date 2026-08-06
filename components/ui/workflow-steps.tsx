@@ -26,7 +26,7 @@ interface WorkflowStepsProps {
 
 export function WorkflowSteps({ steps, currentStep = 0, className }: WorkflowStepsProps) {
   return (
-    <div className={cn('flex items-center gap-1 overflow-x-auto pb-1', className)}>
+    <div className={cn('flex items-start justify-between w-full overflow-x-auto py-2 px-1', className)}>
       {steps.map((step, i) => {
         const Icon = STEP_ICONS[step.icon]
         const isCompleted = currentStep > step.step
@@ -34,36 +34,41 @@ export function WorkflowSteps({ steps, currentStep = 0, className }: WorkflowSte
         const isPending = currentStep < step.step
 
         return (
-          <div key={step.step} className="flex items-center shrink-0">
-            <div className="flex flex-col items-center gap-1">
+          <div key={step.step} className="flex items-start flex-1 last:flex-initial min-w-0">
+            <div className="flex flex-col items-center text-center w-full">
+              {/* Step Circle */}
               <div className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300',
-                isCompleted && 'border-emerald-500 bg-emerald-500/10',
-                isCurrent && 'border-gold bg-gold/10 shadow-sm shadow-gold/20',
-                isPending && 'border-border bg-muted/30'
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300',
+                isCompleted && 'border-emerald-500 bg-emerald-500/10 text-emerald-400',
+                isCurrent && 'border-gold bg-gold/20 text-gold shadow-md shadow-gold/20 scale-105',
+                isPending && 'border-border bg-muted/20 text-muted-foreground/40'
               )}>
                 {isCompleted ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
                 ) : (
-                  <Icon className={cn('h-3.5 w-3.5', isCurrent ? 'text-gold' : 'text-muted-foreground/50')} />
+                  <Icon className={cn('h-4 w-4', isCurrent ? 'text-gold' : 'text-muted-foreground/50')} />
                 )}
               </div>
+
+              {/* Step Label */}
               <span className={cn(
-                'text-[9px] font-medium text-center max-w-[60px] leading-tight',
+                'text-[10px] font-semibold text-center leading-tight mt-2 px-0.5 line-clamp-2 max-w-[76px]',
                 isCompleted && 'text-emerald-400',
-                isCurrent && 'text-gold',
-                isPending && 'text-muted-foreground/40'
+                isCurrent && 'text-gold font-bold',
+                isPending && 'text-muted-foreground/50'
               )}>
                 {step.label}
               </span>
             </div>
 
-            {/* Connector line */}
+            {/* Connector Line - Centered relative to h-9 step circle */}
             {i < steps.length - 1 && (
-              <div className={cn(
-                'h-px w-6 mx-1 mt-[-12px] transition-colors',
-                isCompleted ? 'bg-emerald-500/50' : 'bg-border'
-              )} />
+              <div className="flex-1 px-1 flex items-center h-9 shrink min-w-[16px]">
+                <div className={cn(
+                  'h-0.5 w-full transition-colors rounded-full',
+                  isCompleted ? 'bg-emerald-500/60' : 'bg-border'
+                )} />
+              </div>
             )}
           </div>
         )
@@ -71,3 +76,4 @@ export function WorkflowSteps({ steps, currentStep = 0, className }: WorkflowSte
     </div>
   )
 }
+
