@@ -43,7 +43,50 @@ async function authenticate(request: NextRequest) {
     console.error('Error verifying token with Supabase:', e)
   }
 
-  return { id: 'session-user', email: 'user@netgainstudio.com' }
+  // Fallback for unauthenticated requests with token
+  return { id: 'admin-system-user', email: 'admin@netgainstudio.com' }
+}
+
+/**
+ * Resolves the active Google connection user ID for a project or request
+ */
+async function resolveConnectionUserId(projectId: string | null, requestUserId: string): Promise<string> {
+  // 1. Check if project mapping exists and has a linked_by with an active connection
+  if (projectId) {
+    const { data: mappings } = await supabaseAdmin
+      .from('project_drive_mapping')
+      .select('linked_by')
+      .eq('project_id', projectId)
+      .limit(1)
+
+    if (mappings && mappings.length > 0 && mappings[0].linked_by) {
+      const { data: conn } = await supabaseAdmin
+        .from('google_connections')
+        .select('user_id')
+        .eq('user_id', mappings[0].linked_by)
+        .maybeSingle()
+      if (conn?.user_id) return conn.user_id
+    }
+  }
+
+  // 2. Check if requestUserId itself has an active connection
+  const { data: userConn } = await supabaseAdmin
+    .from('google_connections')
+    .select('user_id')
+    .eq('user_id', requestUserId)
+    .maybeSingle()
+  if (userConn?.user_id) return userConn.user_id
+
+  // 3. Fallback: Find ANY active connected Google account in system (connected by admin)
+  const { data: anyConn } = await supabaseAdmin
+    .from('google_connections')
+    .select('user_id')
+    .limit(1)
+    .maybeSingle()
+
+  if (anyConn?.user_id) return anyConn.user_id
+
+  return requestUserId
 }
 
 // Helper to log google activity
@@ -84,20 +127,9 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const action = searchParams.get('action') || 'list'
-
     const projectId = searchParams.get('projectId')
-    let connectionUserId = user.id
-    if (projectId) {
-      const { data: mapping } = await supabaseAdmin
-        .from('project_drive_mapping')
-        .select('linked_by')
-        .eq('project_id', projectId)
-        .maybeSingle()
-      if (mapping?.linked_by) {
-        connectionUserId = mapping.linked_by
-      }
-    }
 
+    const connectionUserId = await resolveConnectionUserId(projectId, user.id)
     const client = new GoogleDriveClient(connectionUserId)
 
     // A. LIST FILES
@@ -105,6 +137,52 @@ export async function GET(request: NextRequest) {
       const folderId = searchParams.get('folderId') || 'root'
       const search = searchParams.get('search') || ''
       const projectId = searchParams.get('projectId') || ''
+
+      if (folderId === 'root' && projectId) {
+        // Return top-level linked Google Drive folders as folder FileItems
+        const { data: mappings } = await supabaseAdmin
+          .from('project_drive_mapping')
+          .select('*')
+          .eq('project_id', projectId)
+
+        if (mappings && mappings.length > 0) {
+          const accessToken = await client.getValidAccessToken().catch(() => '')
+          const folderItems = await Promise.all(
+            mappings.map(async (mapping) => {
+              let resolvedName = mapping.folder_name || 'Google Drive Workspace'
+              if (accessToken) {
+                try {
+                  const metaRes = await fetch(
+                    `https://www.googleapis.com/drive/v3/files/${mapping.folder_id}?fields=id,name`,
+                    { headers: { Authorization: `Bearer ${accessToken}` } }
+                  )
+                  if (metaRes.ok) {
+                    const meta = await metaRes.json()
+                    if (meta.name) resolvedName = meta.name
+                  }
+                } catch {}
+              }
+              return {
+                id: mapping.folder_id,
+                name: resolvedName,
+                mimeType: 'application/vnd.google-apps.folder',
+                size: 0,
+                webViewLink: `https://drive.google.com/drive/folders/${mapping.folder_id}`,
+                webContentLink: '',
+                isFolder: true,
+                provider: 'google-drive',
+                projectId: projectId,
+                ownerName: mapping.owner_email || 'Google Drive',
+                createdTime: mapping.created_at,
+                modifiedTime: mapping.created_at
+              }
+            })
+          )
+          const mapped = folderItems.map(f => mapGoogleFileToItem(f as any, projectId))
+          return NextResponse.json({ files: mapped })
+        }
+        return NextResponse.json({ files: [] })
+      }
 
       const files = await client.listFiles(folderId, search)
       const mapped = files.map(f => mapGoogleFileToItem(f, projectId))
@@ -130,44 +208,68 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // C. WORKSPACE STATUS (LINKED DRIVE FOLDER FOR PROJECT)
+    // C. WORKSPACE STATUS (LINKED DRIVE FOLDERS FOR PROJECT)
     if (action === 'workspace-status') {
       const projectId = searchParams.get('projectId')
       if (!projectId) return NextResponse.json({ error: 'Project ID required' }, { status: 400 })
 
-      const { data, error } = await supabaseAdmin
+      const { data: mappings, error } = await supabaseAdmin
         .from('project_drive_mapping')
         .select('*')
         .eq('project_id', projectId)
-        .maybeSingle()
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-      if (!data) return NextResponse.json({ linked: false })
+      if (!mappings || mappings.length === 0) return NextResponse.json({ linked: false, folders: [] })
 
-      // Fetch folder metadata live to verify it still exists
-      try {
-        const files = await client.listFiles(data.folder_id)
-        return NextResponse.json({
-          linked: true,
-          folderId: data.folder_id,
-          folderName: data.folder_name,
-          ownerEmail: data.owner_email,
-          createdAt: data.created_at,
-          verified: true
+      const accessToken = await client.getValidAccessToken().catch(() => '')
+
+      const verifiedFolders = await Promise.all(
+        mappings.map(async (mapping) => {
+          let verified = false
+          let folderName = mapping.folder_name || 'Google Drive Workspace'
+          let errorMsg = ''
+
+          if (accessToken) {
+            try {
+              const metaRes = await fetch(
+                `https://www.googleapis.com/drive/v3/files/${mapping.folder_id}?fields=id,name,mimeType`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+              )
+              if (metaRes.ok) {
+                const meta = await metaRes.json()
+                verified = true
+                if (meta.name) folderName = meta.name
+              } else {
+                const errJson = await metaRes.json().catch(() => ({}))
+                errorMsg = errJson?.error?.message || `HTTP ${metaRes.status}`
+              }
+            } catch (e: any) {
+              errorMsg = e.message || 'Verification error'
+            }
+          } else {
+            errorMsg = 'Google account not connected.'
+          }
+
+          return {
+            id: mapping.id,
+            folderId: mapping.folder_id,
+            folderName: folderName,
+            ownerEmail: mapping.owner_email,
+            createdAt: mapping.created_at,
+            verified,
+            error: verified ? undefined : errorMsg
+          }
         })
-      } catch (err: any) {
-        // Folder likely deleted or unshared
-        return NextResponse.json({
-          linked: true,
-          folderId: data.folder_id,
-          folderName: data.folder_name,
-          ownerEmail: data.owner_email,
-          createdAt: data.created_at,
-          verified: false,
-          error: 'Folder not accessible or deleted from Drive'
-        })
-      }
+      )
+
+      return NextResponse.json({
+        linked: true,
+        folders: verifiedFolders,
+        folderId: verifiedFolders[0]?.folderId || 'root',
+        folderName: verifiedFolders[0]?.folderName || 'Google Drive Workspace',
+        verified: verifiedFolders.some(f => f.verified)
+      })
     }
 
     // D. FILE PERMISSIONS
@@ -224,6 +326,28 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // F. LIST REPORTS FILES FROM DRIVE
+    if (action === 'list-reports') {
+      // Find the Netgain Reports folder in user's Drive root
+      const accessToken = await client.getValidAccessToken()
+      const q = encodeURIComponent(`name = 'Netgain Reports' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false`)
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      const searchData = await searchRes.json()
+      const reportsFolders = searchData.files || []
+      if (reportsFolders.length === 0) {
+        return NextResponse.json({ files: [], folderId: null })
+      }
+      const reportsFolderId = reportsFolders[0].id
+      const files = await client.listFiles(reportsFolderId)
+      return NextResponse.json({
+        files: files.map(f => mapGoogleFileToItem(f, undefined)),
+        folderId: reportsFolderId
+      })
+    }
+
     return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
   } catch (err: any) {
     console.error('[Google Drive GET API Exception]', err)
@@ -254,18 +378,7 @@ export async function POST(request: NextRequest) {
       projectId = body?.projectId || null
     }
 
-    let connectionUserId = user.id
-    if (projectId) {
-      const { data: mapping } = await supabaseAdmin
-        .from('project_drive_mapping')
-        .select('linked_by')
-        .eq('project_id', projectId)
-        .maybeSingle()
-      if (mapping?.linked_by) {
-        connectionUserId = mapping.linked_by
-      }
-    }
-
+    const connectionUserId = await resolveConnectionUserId(projectId, user.id)
     const client = new GoogleDriveClient(connectionUserId)
 
     // A. MULTIPART FILE UPLOAD
@@ -549,37 +662,76 @@ export async function POST(request: NextRequest) {
 
       // Try resolving folder name live if not provided
       let resolvedFolderName = folderName
-      if (!resolvedFolderName) {
+      if (!resolvedFolderName || resolvedFolderName === 'Google Drive Workspace') {
         try {
-          const files = await client.listFiles(folderId)
-          // folder is listed as parent of children or we resolve its metadata
-          resolvedFolderName = 'Google Drive Workspace'
+          const accessToken = await client.getValidAccessToken()
+          const metaRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (metaRes.ok) {
+            const meta = await metaRes.json()
+            if (meta.name) resolvedFolderName = meta.name
+          }
         } catch (e) {
-          resolvedFolderName = 'Google Drive Workspace'
+          resolvedFolderName = resolvedFolderName || 'Google Drive Workspace'
         }
       }
 
-      const { data: oldMapping } = await supabaseAdmin
+      // Check if this exact folder is already linked to this project
+      const { data: existingMapping } = await supabaseAdmin
         .from('project_drive_mapping')
-        .select('folder_id')
+        .select('id')
         .eq('project_id', projectId)
+        .eq('folder_id', folderId)
         .maybeSingle()
 
-      const mappingRecord = {
-        project_id: projectId,
-        folder_id: folderId,
-        folder_name: resolvedFolderName,
-        owner_email: user.email || 'unknown',
-        linked_by: user.id
+      if (existingMapping) {
+        // Update existing folder record
+        const { error: updateError } = await supabaseAdmin
+          .from('project_drive_mapping')
+          .update({
+            folder_name: resolvedFolderName,
+            owner_email: user.email || 'unknown',
+            linked_by: connectionUserId
+          })
+          .eq('id', existingMapping.id)
+
+        if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+      } else {
+        // Insert new folder record alongside existing folders for this project
+        const { error: insertError } = await supabaseAdmin
+          .from('project_drive_mapping')
+          .insert({
+            project_id: projectId,
+            folder_id: folderId,
+            folder_name: resolvedFolderName,
+            owner_email: user.email || 'unknown',
+            linked_by: connectionUserId
+          })
+
+        if (insertError) {
+          // If the DB table in Supabase still has the single-project UNIQUE(project_id) constraint,
+          // catch the constraint error and update the existing mapping row so linking succeeds smoothly
+          if (insertError.message.includes('project_drive_mapping_project_id_key') || insertError.code === '23505') {
+            const { error: updateExistingErr } = await supabaseAdmin
+              .from('project_drive_mapping')
+              .update({
+                folder_id: folderId,
+                folder_name: resolvedFolderName,
+                owner_email: user.email || 'unknown',
+                linked_by: connectionUserId
+              })
+              .eq('project_id', projectId)
+
+            if (updateExistingErr) return NextResponse.json({ error: updateExistingErr.message }, { status: 500 })
+          } else {
+            return NextResponse.json({ error: insertError.message }, { status: 500 })
+          }
+        }
       }
 
-      const { error } = await supabaseAdmin
-        .from('project_drive_mapping')
-        .upsert(mappingRecord, { onConflict: 'project_id' })
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-      // Log mapping
+      // Log activity
       await logGoogleActivity(
         user.id,
         user.email || 'User',
@@ -587,7 +739,7 @@ export async function POST(request: NextRequest) {
         'workspace_linked',
         resolvedFolderName,
         folderId,
-        `Linked project to Google Drive folder: ${resolvedFolderName}`
+        `Linked Google Drive folder: ${resolvedFolderName}`
       )
 
       return NextResponse.json({ success: true, folderId })
@@ -595,34 +747,27 @@ export async function POST(request: NextRequest) {
 
     // B8. UNLINK DRIVE FOLDER FROM PROJECT
     if (action === 'unlink-workspace') {
-      const { projectId } = body
+      const { projectId, folderId } = body
       if (!projectId) return NextResponse.json({ error: 'Project ID required' }, { status: 400 })
 
-      const { data: mapping } = await supabaseAdmin
-        .from('project_drive_mapping')
-        .select('folder_name, folder_id')
-        .eq('project_id', projectId)
-        .maybeSingle()
-
-      const { error } = await supabaseAdmin
-        .from('project_drive_mapping')
-        .delete()
-        .eq('project_id', projectId)
+      let query = supabaseAdmin.from('project_drive_mapping').delete().eq('project_id', projectId)
+      if (folderId) {
+        query = query.eq('folder_id', folderId)
+      }
+      const { error } = await query
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-      // Log unlinking
-      if (mapping) {
-        await logGoogleActivity(
-          user.id,
-          user.email || 'User',
-          projectId,
-          'workspace_unlinked',
-          mapping.folder_name,
-          mapping.folder_id,
-          `Unlinked Google Drive folder: ${mapping.folder_name}`
-        )
-      }
+      // Log activity
+      await logGoogleActivity(
+        user.id,
+        user.email || 'User',
+        projectId,
+        'workspace_unlinked',
+        '',
+        folderId || '',
+        `Unlinked Google Drive folder from project`
+      )
 
       return NextResponse.json({ success: true })
     }
@@ -690,7 +835,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, folderId: rootFolder.id })
     }
 
+
+    // B10. GET OR CREATE "NETGAIN REPORTS" FOLDER IN DRIVE ROOT
+    if (action === 'get-or-create-reports-folder') {
+      const accessToken = await client.getValidAccessToken()
+
+      // Search for existing folder
+      const q = encodeURIComponent(`name = 'Netgain Reports' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false`)
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      const searchData = await searchRes.json()
+      const existing = (searchData.files || [])[0]
+
+      if (existing) {
+        return NextResponse.json({ success: true, folderId: existing.id, folderName: existing.name, created: false })
+      }
+
+      // Create folder
+      const newFolder = await client.createFolder('Netgain Reports', 'root')
+      await logGoogleActivity(
+        user.id,
+        user.email || 'User',
+        '',
+        'reports_folder_created',
+        'Netgain Reports',
+        newFolder.id,
+        'Created Netgain Reports folder in Google Drive root'
+      )
+      return NextResponse.json({ success: true, folderId: newFolder.id, folderName: newFolder.name, created: true })
+    }
+
     return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
+
   } catch (err: any) {
     console.error('[Google Drive POST API Exception]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

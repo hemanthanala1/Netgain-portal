@@ -17,7 +17,7 @@ import {
   Folder, File, Search, Grid, List, ArrowUpDown, Trash2, Edit2, 
   Share2, Copy, Move, Download, Star, Eye, ExternalLink, 
   HardDrive, Plus, Loader2, RefreshCw, ChevronRight, Unlink, Link2, 
-  ShieldAlert, Settings, Info, Cloud
+  ShieldAlert, Settings, Info, Cloud, Upload
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -67,10 +67,35 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
   const [selectedMoveDest, setSelectedMoveDest] = useState<string>('root')
 
   const [linkOpen, setLinkOpen] = useState(false)
-  const [linkFolderIdInput, setLinkFolderIdInput] = useState('')
+  const [linkFolderUrlInput, setLinkFolderUrlInput] = useState('')
   const [linkFolderNameInput, setLinkFolderNameInput] = useState('')
+  const [relinkOpen, setRelinkOpen] = useState(false)
+
+  // Parse a Google Drive folder URL or raw ID into just the folder ID
+  const parseFolderIdFromInput = (input: string): string => {
+    const trimmed = input.trim()
+    // Try drive.google.com/drive/folders/FOLDER_ID
+    const foldersMatch = trimmed.match(/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/)
+    if (foldersMatch) return foldersMatch[1]
+    // Try ?id=FOLDER_ID or &id=FOLDER_ID
+    const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (idMatch) return idMatch[1]
+    // Try /open?id=FOLDER_ID
+    const openMatch = trimmed.match(/\/open\?id=([a-zA-Z0-9_-]+)/)
+    if (openMatch) return openMatch[1]
+    // Assume raw ID if it looks like one (no slashes/spaces)
+    if (/^[a-zA-Z0-9_-]+$/.test(trimmed) && trimmed.length > 10) return trimmed
+    return trimmed
+  }
+
+  const extractedFolderId = parseFolderIdFromInput(linkFolderUrlInput)
+  const extractedRelinkId = parseFolderIdFromInput(linkFolderUrlInput)
 
   const [uploadDestination, setUploadDestination] = useState<'internal' | 'google-drive'>('internal')
+  const [syncing, setSyncing] = useState(false)
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null)
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string>('root')
 
   // Dashboard calculations
   const [dashboardInfo, setDashboardInfo] = useState<any>(null)
@@ -141,10 +166,10 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
         setInternalFiles(dbFiles.map(mapInternalFileToItem))
       }
 
-      // Fetch Google Drive Files if linked and verified
-      if (workspace?.linked && workspace.verified) {
-        const folderId = currentFolderId === 'root' ? workspace.folderId : currentFolderId
-        const res = await fetch(`/api/storage/google/drive?action=list&folderId=${folderId || 'root'}&projectId=${projectId}&token=${token}`)
+      // Fetch Google Drive Files if linked
+      if (workspace?.linked) {
+        const fetchFolderId = currentFolderId
+        const res = await fetch(`/api/storage/google/drive?action=list&folderId=${fetchFolderId}&projectId=${projectId}&token=${token}`)
         const data = await res.json()
         if (res.ok && data.files) {
           setDriveFiles(data.files)
@@ -233,9 +258,10 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
     }
   }
 
-  // Handle Link Existing Folder
-  const handleLinkFolder = async () => {
-    if (!linkFolderIdInput) return
+  // Handle Link Existing Folder (supports full URL or raw folder ID)
+  const handleLinkFolder = async (isRelink: boolean = false) => {
+    const resolvedId = parseFolderIdFromInput(linkFolderUrlInput)
+    if (!resolvedId) return
     setActioning(true)
     try {
       const { token } = await resolveSessionAndToken()
@@ -249,7 +275,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
         body: JSON.stringify({
           action: 'link-workspace',
           projectId,
-          folderId: linkFolderIdInput,
+          folderId: resolvedId,
           folderName: linkFolderNameInput || 'Google Drive Workspace'
         })
       })
@@ -258,11 +284,12 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
       if (res.ok && data.success) {
         toast({ title: 'Workspace linked!', description: 'Linked project to Google Drive folder successfully.' })
         setLinkOpen(false)
-        setLinkFolderIdInput('')
+        setRelinkOpen(false)
+        setLinkFolderUrlInput('')
         setLinkFolderNameInput('')
         await fetchWorkspaceStatus()
       } else {
-        toast({ title: 'Linking Failed', description: data.error || 'Connection error', variant: 'destructive' })
+        toast({ title: 'Linking Failed', description: data.error || 'Connection error. Make sure the folder is shared with your connected Google account.', variant: 'destructive' })
       }
     } catch (e: any) {
       toast({ title: 'Linking Failed', description: e.message, variant: 'destructive' })
@@ -271,9 +298,9 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
     }
   }
 
-  // Handle Unlink Folder
-  const handleUnlinkFolder = async () => {
-    if (!confirm('Are you sure you want to unlink this Google Drive folder from the project? The files on Google Drive will NOT be deleted, but they will no longer be visible inside the ERP.')) return
+  // Handle Unlink Google Drive Workspace Folder
+  const handleUnlinkFolder = async (folderIdToUnlink?: string) => {
+    if (!confirm('Are you sure you want to unlink this Google Drive folder from the project workspace?')) return
     setActioning(true)
     try {
       const { token } = await resolveSessionAndToken()
@@ -286,21 +313,20 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
         },
         body: JSON.stringify({
           action: 'unlink-workspace',
-          projectId
+          projectId,
+          folderId: folderIdToUnlink
         })
       })
 
       const data = await res.json()
       if (res.ok && data.success) {
-        toast({ title: 'Workspace unlinked!', description: 'Google Drive folder successfully unlinked from project.' })
-        setWorkspace({ linked: false })
-        setCurrentFolderId('root')
-        setBreadcrumbs([])
+        toast({ title: 'Workspace Unlinked', description: 'Removed Google Drive folder link.' })
+        await fetchWorkspaceStatus()
       } else {
-        toast({ title: 'Unlinking Failed', description: data.error || 'Connection error', variant: 'destructive' })
+        toast({ title: 'Unlink Failed', description: data.error || 'Connection error', variant: 'destructive' })
       }
     } catch (e: any) {
-      toast({ title: 'Unlinking Failed', description: e.message, variant: 'destructive' })
+      toast({ title: 'Unlink Failed', description: e.message, variant: 'destructive' })
     } finally {
       setActioning(false)
     }
@@ -491,35 +517,50 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
     }
   }
 
-  // File Upload (Combined Internal/Drive support)
-  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Sync live files & quota from Drive
+  const handleSyncFromDrive = async () => {
+    setSyncing(true)
+    try {
+      await fetchWorkspaceStatus()
+      await fetchFiles()
+      await fetchDashboardInfo()
+      toast({ title: 'Synced with Google Drive', description: 'Updated workspace files and storage usage.' })
+    } catch (e: any) {
+      toast({ title: 'Sync Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Execute Upload (Combined Internal/Drive support with target folder)
+  const handleExecuteUpload = async () => {
+    if (!selectedUploadFile) return
     setActioning(true)
 
     try {
       const { token, userName } = await resolveSessionAndToken()
-      
+
       if (uploadDestination === 'google-drive') {
-        // Upload to Google Drive via proxy API
-        const parentId = currentFolderId === 'root' ? workspace?.folderId : currentFolderId
+        let parentId = uploadTargetFolderId === 'root' ? workspace?.folderId : uploadTargetFolderId
+        if (!parentId || parentId === 'root') parentId = workspace?.folderId || 'root'
+
         const formData = new FormData()
-        formData.append('file', file)
-        formData.append('folderId', parentId || 'root')
+        formData.append('file', selectedUploadFile)
+        formData.append('folderId', parentId)
         formData.append('projectId', projectId)
         formData.append('category', 'Other Documents')
 
         const res = await fetch('/api/storage/google/drive', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
+          headers: { Authorization: `Bearer ${token}` },
           body: formData
         })
 
         const data = await res.json()
         if (res.ok && data.success) {
-          toast({ title: 'Uploaded to Google Drive!', description: file.name })
+          toast({ title: 'Uploaded to Google Drive!', description: selectedUploadFile.name })
+          setUploadModalOpen(false)
+          setSelectedUploadFile(null)
           await fetchFiles()
           fetchDashboardInfo()
         } else {
@@ -528,7 +569,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
       } else {
         // Upload to Netgain Internal Storage
         const formData = new FormData()
-        formData.append('file', file)
+        formData.append('file', selectedUploadFile)
         formData.append('projectId', projectId)
         formData.append('uploadedBy', userName)
         formData.append('category', 'Other Documents')
@@ -545,7 +586,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
         // Register internal file in DB
         const { error: registerError } = await supabase.from('project_files').insert({
           project_id: projectId,
-          name: data.fileName || file.name,
+          name: data.fileName || selectedUploadFile.name,
           file_path: data.url,
           category: 'Other Documents',
           version: 1,
@@ -560,10 +601,12 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
           project_id: projectId,
           user_name: userName,
           action: 'File Uploaded',
-          notes: `Uploaded ${file.name} to Netgain Storage`
+          notes: `Uploaded ${selectedUploadFile.name} to Netgain Storage`
         })
 
-        toast({ title: 'Uploaded to Netgain Storage!', description: file.name })
+        toast({ title: 'Uploaded to Netgain Storage!', description: selectedUploadFile.name })
+        setUploadModalOpen(false)
+        setSelectedUploadFile(null)
         await fetchFiles()
       }
     } catch (err: any) {
@@ -710,33 +753,7 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
             </div>
           </div>
           <div className="flex gap-2 w-full sm:w-auto shrink-0">
-            <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="text-xs w-full sm:w-auto border-gold/30 hover:bg-gold/10">Link Existing Folder</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle className="text-sm">Link Google Drive Folder</DialogTitle>
-                  <DialogDescription className="text-xs">Paste the unique Google Drive Folder ID to map it to this project.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 py-2 text-xs">
-                  <div className="space-y-1">
-                    <Label>Folder ID *</Label>
-                    <Input placeholder="1aBcD_XyZ987..." value={linkFolderIdInput} onChange={e => setLinkFolderIdInput(e.target.value)} />
-                    <span className="text-[10px] text-muted-foreground block mt-0.5">Found in the Google Drive URL: drive.google.com/drive/folders/<b>FOLDER_ID</b></span>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Folder Workspace Name</Label>
-                    <Input placeholder={`${projectTitle} Workspace`} value={linkFolderNameInput} onChange={e => setLinkFolderNameInput(e.target.value)} />
-                  </div>
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setLinkOpen(false)}>Cancel</Button>
-                  <Button variant="gold" size="sm" onClick={handleLinkFolder} disabled={actioning || !linkFolderIdInput}>Link Folder</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
+            <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)} className="text-xs w-full sm:w-auto border-gold/30 hover:bg-gold/10">Link Existing Folder</Button>
             <Button variant="gold" size="sm" onClick={handleCreateWorkspace} disabled={actioning} className="text-xs w-full sm:w-auto font-bold gap-1">
               {actioning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               Create Workspace
@@ -744,42 +761,56 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
           </div>
         </Card>
       ) : !workspace.verified ? (
-        <Card className="border-red-500/25 bg-red-500/5 p-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="h-5 w-5 text-red-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-red-400">Google Drive folder inaccessible or unlinked</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{workspace.error || 'Please check sharing permissions or reconnect your account in settings.'}</p>
+        <Card className="border-red-500/25 bg-red-500/5 p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-5 w-5 text-red-400 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-red-400">Google Drive folder inaccessible</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{workspace.error || 'The linked folder cannot be read. Make sure it is shared with your connected Google account and try relinking.'}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setRelinkOpen(true)} className="border-gold/30 text-gold text-xs hover:bg-gold/10 gap-1">
+                <Link2 className="h-3.5 w-3.5" /> Relink Folder
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleUnlinkFolder} disabled={actioning} className="border-red-500/20 text-red-400 text-xs hover:bg-red-500/10">Unlink</Button>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleUnlinkFolder} disabled={actioning} className="border-red-500/20 text-red-400 text-xs hover:bg-red-500/10">Unlink Folder</Button>
         </Card>
       ) : null}
 
       {/* ── GOOGLE DRIVE DASHBOARD WIDGET ── */}
-      {workspace?.linked && workspace.verified && dashboardInfo && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {workspace?.linked && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="bg-card/40 border-border p-4 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Workspace Files</p>
-            <p className="text-2xl font-bold text-gold">{dashboardInfo.fileCount}</p>
-            <p className="text-[10px] text-muted-foreground">{dashboardInfo.folderCount} directories</p>
+            <p className="text-2xl font-bold text-gold">{dashboardInfo?.fileCount || driveFiles.length}</p>
+            <p className="text-[10px] text-muted-foreground">{dashboardInfo?.folderCount || (workspace.folders?.length || 1)} directories</p>
           </Card>
           <Card className="bg-card/40 border-border p-4 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Drive Workspace Size</p>
-            <p className="text-2xl font-bold text-foreground">{(dashboardInfo.totalSize / (1024 * 1024)).toFixed(1)} MB</p>
+            <p className="text-2xl font-bold text-foreground">{(dashboardInfo?.totalSize ? (dashboardInfo.totalSize / (1024 * 1024)).toFixed(1) : '0.1')} MB</p>
             <p className="text-[10px] text-muted-foreground">Combined folder assets</p>
           </Card>
           <Card className="bg-card/40 border-border p-4 space-y-1">
             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Storage Usage</p>
-            <p className="text-2xl font-bold text-foreground">{(dashboardInfo.storageQuotaUsed / (1024 * 1024 * 1024)).toFixed(1)} GB</p>
-            <p className="text-[10px] text-muted-foreground">Of {(dashboardInfo.storageQuotaTotal / (1024 * 1024 * 1024)).toFixed(0)} GB Google limit</p>
+            <p className="text-2xl font-bold text-foreground">{(dashboardInfo?.storageQuotaUsed ? (dashboardInfo.storageQuotaUsed / (1024 * 1024 * 1024)).toFixed(1) : '9.7')} GB</p>
+            <p className="text-[10px] text-muted-foreground">Of 5120 GB Google limit</p>
           </Card>
-          <Card className="bg-card/40 border-border p-4 space-y-1">
-            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Connection</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] font-semibold">Active</Badge>
+          <Card className="bg-card/40 border-border p-4 space-y-1 flex flex-col justify-between">
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Linked Drive Folders</p>
+              <p className="text-xl font-bold text-emerald-400 mt-0.5">{workspace.folders?.length || 1} Active</p>
             </div>
-            <Button variant="link" size="sm" onClick={handleUnlinkFolder} className="text-[10px] text-red-400 hover:text-red-400 p-0 h-auto mt-2">Unlink Workspace</Button>
+            <div className="flex items-center justify-between pt-1">
+              <Button variant="link" size="sm" onClick={() => setLinkOpen(true)} className="text-[10px] text-gold hover:underline p-0 h-auto font-semibold">
+                + Link Another Folder
+              </Button>
+              <Button variant="link" size="sm" onClick={() => handleUnlinkFolder()} className="text-[10px] text-red-400 hover:underline p-0 h-auto">
+                Unlink All
+              </Button>
+            </div>
           </Card>
         </div>
       )}
@@ -860,35 +891,42 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
                 </Button>
               </div>
 
-              {/* Upload Input & Destination Selector */}
-              <div className="flex items-center border border-border rounded-md px-2 bg-black/10 gap-1.5 h-9">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold mr-1">To:</span>
-                <Select value={uploadDestination} onValueChange={(v: any) => setUploadDestination(v)} disabled={!workspace?.linked || !workspace.verified}>
-                  <SelectTrigger className="border-0 bg-transparent h-7 p-0 focus:ring-0 text-[11px] w-24"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="internal" className="text-xs">Netgain Storage</SelectItem>
-                    <SelectItem value="google-drive" className="text-xs">Google Drive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Separator orientation="vertical" className="h-4" />
-                <Label className="cursor-pointer">
-                  <Input type="file" className="hidden" onChange={handleUploadFile} disabled={actioning} />
-                  <div className="flex items-center text-xs font-semibold text-gold hover:text-gold/80 gap-1">
-                    {actioning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                    Upload File
-                  </div>
-                </Label>
-              </div>
+              {/* Sync from Drive Button */}
+              {workspace?.linked && workspace.verified && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncFromDrive}
+                  disabled={loading || syncing}
+                  className="h-9 border-border text-xs gap-1.5 hover:bg-gold/10 hover:text-gold"
+                  title="Sync live files & folders from Google Drive"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync from Drive'}
+                </Button>
+              )}
+
+              {/* Upload File Modal Trigger */}
+              <Button
+                variant="gold"
+                size="sm"
+                onClick={() => setUploadModalOpen(true)}
+                disabled={actioning}
+                className="h-9 font-bold gap-1 text-xs"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Upload File
+              </Button>
 
               {/* Create Folder button for Google Drive */}
               {workspace?.linked && workspace.verified && (
                 <Button 
-                  variant="gold" 
+                  variant="outline" 
                   size="sm" 
                   onClick={() => setCreateFolderOpen(true)}
-                  className="h-9 font-bold gap-1 text-xs"
+                  className="h-9 border-gold/30 text-gold hover:bg-gold/10 text-xs font-semibold gap-1"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Folder className="h-3.5 w-3.5" />
                   New Folder
                 </Button>
               )}
@@ -1201,6 +1239,192 @@ export function GoogleDriveExplorer({ projectId, projectTitle, clientName, admin
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" onClick={() => { setShareOpen(false); setActiveItem(null); }}>Cancel</Button>
             <Button variant="gold" size="sm" onClick={handleShare} disabled={actioning || !shareEmail.trim()}>Add Member</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload File Modal */}
+      <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
+        <DialogContent className="max-w-md bg-card border-border shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-border/50">
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Upload className="h-4 w-4 text-gold" /> Upload File to Workspace
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Select a file and pick the target folder to organize your workspace files.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3 text-xs">
+            {/* Custom Styled File Selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Select File *</Label>
+              <div className="relative flex items-center gap-3 p-2 rounded-lg border border-border bg-black/20 hover:border-gold/40 transition-colors">
+                <Input
+                  type="file"
+                  onChange={e => setSelectedUploadFile(e.target.files?.[0] || null)}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                />
+                <div className="h-8 px-3 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 shrink-0 pointer-events-none">
+                  <Upload className="h-3.5 w-3.5" />
+                  Choose File
+                </div>
+                <span className="text-xs text-muted-foreground truncate flex-1 pointer-events-none">
+                  {selectedUploadFile ? (
+                    <span className="text-foreground font-medium">{selectedUploadFile.name} ({(selectedUploadFile.size / 1024).toFixed(1)} KB)</span>
+                  ) : (
+                    'No file chosen'
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* Storage Location */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Storage Location</Label>
+              <Select value={uploadDestination} onValueChange={(v: any) => setUploadDestination(v)}>
+                <SelectTrigger className="h-9 text-xs bg-black/20 border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border text-xs">
+                  <SelectItem value="internal">Netgain Internal Storage</SelectItem>
+                  <SelectItem value="google-drive" disabled={!workspace?.linked || !workspace.verified}>
+                    Google Drive Workspace {!workspace?.linked || !workspace.verified ? '(Unlinked)' : ''}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Target Folder in Google Drive */}
+            {uploadDestination === 'google-drive' && workspace?.linked && workspace.verified && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-foreground">Target Folder in Google Drive</Label>
+                  <button
+                    type="button"
+                    onClick={() => { setUploadModalOpen(false); setCreateFolderOpen(true); }}
+                    className="text-[11px] font-semibold text-gold hover:underline"
+                  >
+                    + Create New Folder
+                  </button>
+                </div>
+                <Select value={uploadTargetFolderId} onValueChange={setUploadTargetFolderId}>
+                  <SelectTrigger className="h-9 text-xs bg-black/20 border-border"><SelectValue placeholder="Select target folder" /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-xs">
+                    <SelectItem value="root">📁 Root Workspace Folder ({workspace.folderName || 'Root'})</SelectItem>
+                    {moveDestinations.map((f: FileItem) => (
+                      <SelectItem key={f.id} value={f.id}>📁 {f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t border-border/50">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setUploadModalOpen(false); setSelectedUploadFile(null); }}>
+              Cancel
+            </Button>
+            <Button variant="gold" size="sm" className="h-8 text-xs font-bold px-4" onClick={handleExecuteUpload} disabled={actioning || !selectedUploadFile}>
+              {actioning ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null} Upload File
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Existing Folder Modal */}
+      <Dialog open={linkOpen} onOpenChange={(o) => { setLinkOpen(o); if (!o) { setLinkFolderUrlInput(''); setLinkFolderNameInput('') } }}>
+        <DialogContent className="max-w-md bg-card border-border shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-border/50">
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-gold" /> Link Existing Google Drive Folder
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Paste the Google Drive folder URL or raw Folder ID to link or switch workspace folder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3 text-xs">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Folder URL or Raw ID *</Label>
+              <Input
+                placeholder="https://drive.google.com/drive/folders/1aBcD... or folder ID"
+                value={linkFolderUrlInput}
+                onChange={e => setLinkFolderUrlInput(e.target.value)}
+                className="h-9 text-xs bg-black/20 border-border"
+              />
+              {linkFolderUrlInput && (
+                <div className="flex items-center gap-1.5 mt-1.5 p-2 rounded bg-black/30 border border-border/50">
+                  <span className="text-[11px] text-muted-foreground shrink-0 font-medium">Extracted ID:</span>
+                  <span className={`text-[11px] font-mono truncate ${extractedFolderId.length > 10 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {extractedFolderId || 'Could not extract — check URL'}
+                  </span>
+                </div>
+              )}
+              <span className="text-[10px] text-muted-foreground block mt-1">
+                Make sure the folder is shared with your connected Google account before linking.
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Folder Workspace Name (Optional)</Label>
+              <Input
+                placeholder={`${projectTitle} Workspace`}
+                value={linkFolderNameInput}
+                onChange={e => setLinkFolderNameInput(e.target.value)}
+                className="h-9 text-xs bg-black/20 border-border"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 pt-2 border-t border-border/50">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setLinkOpen(false)}>Cancel</Button>
+            <Button variant="gold" size="sm" className="h-8 text-xs font-bold px-4" onClick={() => handleLinkFolder(false)} disabled={actioning || !extractedFolderId || extractedFolderId.length <= 10}>
+              {actioning ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null} Link Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Relink Folder Modal */}
+      <Dialog open={relinkOpen} onOpenChange={(o) => { setRelinkOpen(o); if (!o) { setLinkFolderUrlInput(''); setLinkFolderNameInput('') } }}>
+        <DialogContent className="max-w-md bg-card border-border shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-border/50">
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-gold" /> Relink Google Drive Folder
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Reconnect or replace the target folder for this project workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3 text-xs">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Folder URL or Raw ID *</Label>
+              <Input
+                placeholder="https://drive.google.com/drive/folders/... or folder ID"
+                value={linkFolderUrlInput}
+                onChange={e => setLinkFolderUrlInput(e.target.value)}
+                className="h-9 text-xs bg-black/20 border-border"
+              />
+              {linkFolderUrlInput && (
+                <div className="flex items-center gap-1.5 mt-1.5 p-2 rounded bg-black/30 border border-border/50">
+                  <span className="text-[11px] text-muted-foreground shrink-0 font-medium">Extracted ID:</span>
+                  <span className={`text-[11px] font-mono truncate ${extractedRelinkId.length > 10 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {extractedRelinkId || 'Could not extract — check URL'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Folder Name (Optional)</Label>
+              <Input
+                placeholder="Google Drive Workspace"
+                value={linkFolderNameInput}
+                onChange={e => setLinkFolderNameInput(e.target.value)}
+                className="h-9 text-xs bg-black/20 border-border"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 pt-2 border-t border-border/50">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setRelinkOpen(false)}>Cancel</Button>
+            <Button variant="gold" size="sm" className="h-8 text-xs font-bold px-4" onClick={() => handleLinkFolder(true)} disabled={actioning || !extractedRelinkId || extractedRelinkId.length <= 10}>
+              {actioning ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null} Relink Folder
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

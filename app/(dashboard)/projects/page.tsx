@@ -312,6 +312,13 @@ function CampaignStrategyPageContent() {
   const [reportVersion, setReportVersion] = useState('1')
   const [reportVisibility, setReportVisibility] = useState('Published to Client')
   const [uploadingReportState, setUploadingReportState] = useState(false)
+  const [reportDestination, setReportDestination] = useState<'internal' | 'google-drive'>('internal')
+
+  // Import from Drive Dialog States
+  const [importDriveOpen, setImportDriveOpen] = useState(false)
+  const [driveFilesForImport, setDriveFilesForImport] = useState<any[]>([])
+  const [loadingDriveFilesForImport, setLoadingDriveFilesForImport] = useState(false)
+  const [selectedDriveFile, setSelectedDriveFile] = useState<any | null>(null)
 
   // Approvals Form States
   const [approvalTitle, setApprovalTitle] = useState('')
@@ -578,41 +585,114 @@ function CampaignStrategyPageContent() {
     if (!uploadReportFile || !reportTitle.trim()) return
     setUploadingReportState(true)
     try {
-      const formData = new FormData()
-      formData.append('file', uploadReportFile)
-      formData.append('projectId', projectId)
-      formData.append('category', 'Reports')
-      formData.append('uploadedBy', 'Admin Team')
+      let finalFilePath = ''
 
-      const res = await fetch('/api/project-files/upload', {
-        method: 'POST',
-        body: formData
-      })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+      if (reportDestination === 'google-drive') {
+        // Upload directly to project's Google Drive workspace
+        const formData = new FormData()
+        formData.append('file', uploadReportFile)
+        formData.append('projectId', projectId)
+        formData.append('category', 'Reports')
+        formData.append('uploadedBy', 'Admin Team')
+
+        const res = await fetch('/api/storage/google/drive', {
+          method: 'POST',
+          body: formData
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) throw new Error(data.error || 'Google Drive upload failed')
+
+        finalFilePath = data.file?.webViewLink || data.file?.webContentLink || data.url
+      } else {
+        // Netgain Storage upload
+        const formData = new FormData()
+        formData.append('file', uploadReportFile)
+        formData.append('projectId', projectId)
+        formData.append('category', 'Reports')
+        formData.append('uploadedBy', 'Admin Team')
+
+        const res = await fetch('/api/project-files/upload', {
+          method: 'POST',
+          body: formData
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) throw new Error(data.error || 'Upload failed')
+
+        finalFilePath = data.url
+      }
 
       await supabase.from('project_reports').insert({
         project_id: projectId,
         title: reportTitle,
         report_type: reportType,
-        file_path: data.url,
+        file_path: finalFilePath,
         version: parseInt(reportVersion) || 1,
         visibility: reportVisibility,
         uploaded_by: 'Admin Team'
       })
 
-      toast({ title: 'Report uploaded successfully', description: reportTitle })
+      toast({
+        title: reportDestination === 'google-drive' ? '✅ Report uploaded to Google Drive!' : 'Report uploaded successfully',
+        description: `${reportTitle} (${reportType})`
+      })
       setUploadReportFile(null)
       setReportTitle('')
 
       fetchProjectWorkspaceData(projectId)
-      await logWorkspaceActivity(projectId, 'Report Published', `Published report: ${reportTitle} (${reportType}) - Visibility: ${reportVisibility}`)
+      await logWorkspaceActivity(projectId, 'Report Published', `Published report: ${reportTitle} (${reportType}) to ${reportDestination === 'google-drive' ? 'Google Drive' : 'Netgain Storage'}`)
 
       if (reportVisibility === 'Published to Client') {
         await notifyClient(clientName, 'New Project Report Available', `A new report has been published to your workspace: ${reportTitle}`)
       }
     } catch (e: any) {
       toast({ title: 'Upload Failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setUploadingReportState(false)
+    }
+  }
+
+  const handleOpenImportDriveDialog = async (projectId: string) => {
+    setImportDriveOpen(true)
+    setLoadingDriveFilesForImport(true)
+    setSelectedDriveFile(null)
+    try {
+      const res = await fetch(`/api/storage/google/drive?action=list&projectId=${projectId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDriveFilesForImport((data.files || []).filter((f: any) => !f.isFolder))
+      }
+    } catch (e) {
+      console.error('Error fetching drive files for report import:', e)
+    } finally {
+      setLoadingDriveFilesForImport(false)
+    }
+  }
+
+  const handleImportDriveReport = async (projectId: string, clientName: string) => {
+    if (!selectedDriveFile || !reportTitle.trim()) return
+    setUploadingReportState(true)
+    try {
+      const finalFilePath = selectedDriveFile.webViewLink || selectedDriveFile.webContentLink
+
+      await supabase.from('project_reports').insert({
+        project_id: projectId,
+        title: reportTitle,
+        report_type: reportType,
+        file_path: finalFilePath,
+        version: parseInt(reportVersion) || 1,
+        visibility: reportVisibility,
+        uploaded_by: 'Admin Team'
+      })
+
+      toast({ title: '✅ Google Drive file published as Report!', description: reportTitle })
+      setImportDriveOpen(false)
+      setSelectedDriveFile(null)
+      setReportTitle('')
+
+      fetchProjectWorkspaceData(projectId)
+      await logWorkspaceActivity(projectId, 'Drive Report Imported', `Imported report from Google Drive: ${reportTitle}`)
+    } catch (e: any) {
+      toast({ title: 'Import Failed', description: e.message, variant: 'destructive' })
     } finally {
       setUploadingReportState(false)
     }
@@ -1196,8 +1276,10 @@ function CampaignStrategyPageContent() {
               {detailProject?.title}
             </DialogTitle>
             <div className="flex items-center gap-2 mt-1">
-              <ApprovalBadge status={detailProject?.approvalStatus || 'draft'} />
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColors[detailProject?.status || 'planned']}`}>{detailProject?.status}</span>
+              {detailProject?.approvalStatus && detailProject.approvalStatus !== 'draft' && (
+                <ApprovalBadge status={detailProject.approvalStatus} />
+              )}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[detailProject?.status || 'planned']}`}>{detailProject?.status}</span>
             </div>
           </DialogHeader>
 
@@ -1647,8 +1729,19 @@ function CampaignStrategyPageContent() {
                 <div className="space-y-4">
                   {/* Upload Reports form */}
                   <Card className="bg-card border-border p-4 space-y-3">
-                    <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[11px] border-gold/30 text-gold hover:bg-gold/10 gap-1.5"
+                        onClick={() => handleOpenImportDriveDialog(detailProject.id)}
+                      >
+                        <ExternalLink className="h-3 w-3" /> Import from Google Drive
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                       <div className="space-y-1">
                         <Label>Report Title *</Label>
                         <Input placeholder="e.g. SEO Report - June 2026" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
@@ -1673,6 +1766,16 @@ function CampaignStrategyPageContent() {
                         />
                       </div>
                       <div className="space-y-1">
+                        <Label>Storage Destination</Label>
+                        <Select value={reportDestination} onValueChange={(v: any) => setReportDestination(v)}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="internal">Netgain Portal Storage</SelectItem>
+                            <SelectItem value="google-drive">Google Drive Workspace</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
                         <Label>Version</Label>
                         <Input type="number" value={reportVersion} onChange={e => setReportVersion(e.target.value)} className="h-8" />
                       </div>
@@ -1687,7 +1790,7 @@ function CampaignStrategyPageContent() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="flex items-end">
+                      <div className="flex items-end sm:col-span-2">
                         <Button 
                           variant="gold" 
                           className="w-full h-8 text-xs font-bold" 
@@ -1715,29 +1818,46 @@ function CampaignStrategyPageContent() {
                           </tr>
                         </thead>
                         <tbody>
-                          {workspaceReports.map((rep: any) => (
-                            <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
-                              <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[180px]" title={rep.title}>{rep.title}</td>
-                              <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
-                              <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
-                              <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
-                              <td className="py-2 px-3">
-                                <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
-                                  <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
-                                    <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
-                                    <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download>
-                                  <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
-                                </a>
-                              </td>
-                            </tr>
-                          ))}
+                          {workspaceReports.map((rep: any) => {
+                            const isDrive = rep.file_path?.includes('drive.google.com') || rep.file_path?.includes('googleapis.com')
+                            return (
+                              <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
+                                <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[220px]" title={rep.title}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate">{rep.title}</span>
+                                    {isDrive && (
+                                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] px-1 py-0 shrink-0 font-medium">Drive</Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
+                                <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
+                                <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
+                                <td className="py-2 px-3">
+                                  <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
+                                    <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
+                                      <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
+                                      <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="py-2 px-3 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {isDrive && (
+                                      <a href={rep.file_path} target="_blank" rel="noopener noreferrer" title="Open in Google Drive">
+                                        <Button variant="ghost" size="icon" aria-label="Open in Google Drive" className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/15"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                      </a>
+                                    )}
+                                    <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download title="Download file">
+                                      <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                    </a>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                           {workspaceReports.length === 0 && (
                             <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No reports generated yet.</td></tr>
                           )}
@@ -1745,6 +1865,75 @@ function CampaignStrategyPageContent() {
                       </table>
                     </div>
                   </div>
+
+                  {/* Import from Google Drive Dialog */}
+                  <Dialog open={importDriveOpen} onOpenChange={setImportDriveOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm">Import Report from Google Drive</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 py-2 text-xs">
+                        <div className="space-y-1">
+                          <Label>Select File from Google Drive *</Label>
+                          {loadingDriveFilesForImport ? (
+                            <div className="p-4 flex items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading Drive files...</div>
+                          ) : driveFilesForImport.length === 0 ? (
+                            <div className="p-4 text-center text-muted-foreground border border-dashed border-border rounded-lg">No files found in Google Drive workspace. Make sure Google Drive workspace is linked.</div>
+                          ) : (
+                            <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                              {driveFilesForImport.map((f: any) => (
+                                <div
+                                  key={f.id}
+                                  onClick={() => { setSelectedDriveFile(f); if (!reportTitle) setReportTitle(f.name) }}
+                                  className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors ${selectedDriveFile?.id === f.id ? 'bg-gold/15 border-gold/40' : 'hover:bg-muted/10'}`}
+                                >
+                                  <div className="truncate pr-2">
+                                    <p className="font-medium text-foreground truncate">{f.name}</p>
+                                    <p className="text-[10px] text-muted-foreground">{f.mimeType}</p>
+                                  </div>
+                                  {selectedDriveFile?.id === f.id && <Badge className="bg-gold text-black text-[9px]">Selected</Badge>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Report Title *</Label>
+                          <Input placeholder="Report Title" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label>Type</Label>
+                            <Select value={reportType} onValueChange={setReportType}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {['Marketing Report', 'SEO Report', 'Google Ads Report', 'Meta Ads Report', 'Analytics Report', 'Performance Report', 'Custom Report'].map(t => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Visibility</Label>
+                            <Select value={reportVisibility} onValueChange={setReportVisibility}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Internal Only">Internal Only</SelectItem>
+                                <SelectItem value="Published to Client">Published to Client</SelectItem>
+                                <SelectItem value="Hidden">Hidden</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter className="gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setImportDriveOpen(false)}>Cancel</Button>
+                        <Button variant="gold" size="sm" onClick={() => handleImportDriveReport(detailProject.id, detailProject.client)} disabled={!selectedDriveFile || !reportTitle.trim() || uploadingReportState}>
+                          {uploadingReportState ? 'Publishing...' : 'Publish Selected Drive Report'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               )}
             </TabsContent>

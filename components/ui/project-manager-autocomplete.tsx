@@ -28,7 +28,7 @@ export function ProjectManagerAutocomplete({
   value,
   onChange,
   onSelect,
-  placeholder = 'Search project managers...',
+  placeholder = 'Search team members & managers...',
   className
 }: ProjectManagerAutocompleteProps) {
   const [managers, setManagers] = useState<ProjectManagerOption[]>([])
@@ -52,8 +52,7 @@ export function ProjectManagerAutocomplete({
 
           if (profilesData) {
             profilesData.forEach((profile: any) => {
-              const role = profile.role || 'Employee'
-              if (role !== 'Project Manager') return
+              const role = profile.role || 'Team Member'
 
               seen.add(profile.id)
               merged.push({
@@ -69,8 +68,7 @@ export function ProjectManagerAutocomplete({
 
           if (teamData) {
             teamData.forEach((member: any) => {
-              const role = member.role || 'Employee'
-              if (role !== 'Project Manager') return
+              const role = member.role || 'Team Member'
               if (seen.has(member.id) || merged.some(item => item.email === member.email)) return
 
               merged.push({
@@ -96,13 +94,23 @@ export function ProjectManagerAutocomplete({
   }, [])
 
   const filteredManagers = useMemo(() => {
-    if (!value.trim()) return managers
+    const trimmed = value.trim()
+    if (!trimmed) return managers
 
-    const query = value.toLowerCase()
+    const query = trimmed.toLowerCase()
+
+    // If current value is an exact match for one of the managers (pre-filled name), return all managers so user can select any team member
+    const exactMatch = managers.some(
+      m => m.name.toLowerCase() === query || m.email.toLowerCase() === query
+    )
+
+    if (exactMatch) return managers
+
     return managers.filter((manager) => {
       return (
         manager.name.toLowerCase().includes(query) ||
-        manager.email.toLowerCase().includes(query)
+        manager.email.toLowerCase().includes(query) ||
+        manager.role.toLowerCase().includes(query)
       )
     })
   }, [managers, value])
@@ -193,7 +201,7 @@ export function ProjectManagerAutocomplete({
           ) : (
             <div className="py-1">
               <div className="px-3 py-1.5 text-[10px] font-semibold text-gold uppercase tracking-wider border-b border-border/50 mb-1">
-                Project Manager Suggestions
+                Team Member & PM Suggestions
               </div>
               {filteredManagers.map((manager, index) => {
                 const isHighlighted = index === highlightedIndex

@@ -37,8 +37,7 @@ CREATE TABLE IF NOT EXISTS public.project_drive_mapping (
     folder_name TEXT,
     owner_email TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
-    linked_by TEXT,
-    UNIQUE(project_id)
+    UNIQUE(project_id, folder_id)
 );
 
 -- 3. Google Files Metadata cache (no file contents stored)
