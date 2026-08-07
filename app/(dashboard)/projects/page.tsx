@@ -38,6 +38,21 @@ import { DataTable } from '@/components/ui/data-table'
 import { TableSkeleton } from '@/components/ui/skeletons'
 import { logSystemActivity } from '@/lib/activity-helper'
 import { useUser } from '@/components/user-provider'
+import {
+  EmployeeDashboardView,
+  WorkLogSubmissionDrawer,
+  ManagerApprovalsQueue,
+  MilestonesTaskTree,
+  ProjectAnalyticsDashboard,
+  EmployeeProductivityCard,
+  ProjectActivityTimeline,
+  ClientPortalView,
+  FutureIntegrationsPanel
+} from '@/components/projects/ProjectExecutionSystem'
+import {
+  Milestone, TaskItem, WorkLog, ActivityTimelineItem, ProjectAnnouncement,
+  calculateProjectAnalytics, calculateProjectProgress, TaskStatus
+} from '@/lib/project-execution-types'
 
 type Project = {
   id: string; title: string; client: string; type: string; budget: number; spent: number; timeline: string; status: string; progress: number; milestones: string[]; startDate: string; pm: string; history: { date: string; action: string; canDownload?: boolean }[];
@@ -69,6 +84,370 @@ function CampaignStrategyPageContent() {
   const { user } = useUser()
   const [adminStorageSettings, setAdminStorageSettings] = useState<any>(null)
   
+  // ── PROJECT EXECUTION & PRODUCTIVITY TRACKING SYSTEM STATES ──
+  const [viewRoleMode, setViewRoleMode] = useState<'admin' | 'employee' | 'client'>('admin')
+  const [currentEmployee, setCurrentEmployee] = useState<string>(user?.name || '')
+  const [executionMilestones, setExecutionMilestones] = useState<Milestone[]>([])
+  const [executionTasks, setExecutionTasks] = useState<TaskItem[]>([])
+  const [executionWorkLogs, setExecutionWorkLogs] = useState<WorkLog[]>([])
+  const [executionTimeline, setExecutionTimeline] = useState<ActivityTimelineItem[]>([])
+  const [executionAnnouncements, setExecutionAnnouncements] = useState<ProjectAnnouncement[]>([])
+  const [workLogTaskToSubmit, setWorkLogTaskToSubmit] = useState<TaskItem | null>(null)
+
+  // Sync currentEmployee with the logged-in user's name once auth loads
+  useEffect(() => {
+    if (user?.name && !currentEmployee) {
+      setCurrentEmployee(user.name)
+    }
+  }, [user?.name])
+
+  // Handlers for Work Log Approvals & Progress recalculation
+  const handleApproveWorkLog = async (logId: string) => {
+    const log = executionWorkLogs.find(w => w.id === logId)
+    if (!log) return
+
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+
+    const updatedLogs = executionWorkLogs.map(w => w.id === logId ? {
+      ...w,
+      status: 'Approved' as const,
+      reviewed_by: 'Admin Manager',
+      reviewed_at: now.toISOString()
+    } : w)
+    setExecutionWorkLogs(updatedLogs)
+
+    const updatedTasks = executionTasks.map(t => {
+      if (t.id === log.task_id) {
+        const newProgress = log.progress_after
+        const newStatus: TaskStatus = newProgress >= 100 ? 'Completed' : 'In Progress'
+        return {
+          ...t,
+          progress: newProgress,
+          logged_hours: (t.logged_hours || 0) + log.hours_spent,
+          status: newStatus,
+          updated_at: now.toISOString()
+        }
+      }
+      return t
+    })
+    setExecutionTasks(updatedTasks)
+
+    const newProjectProgress = calculateProjectProgress(updatedTasks, executionMilestones)
+
+    if (detailProject) {
+      const updatedProj = {
+        ...detailProject,
+        progress: newProjectProgress,
+        spent: (detailProject.spent || 0) + (log.calculated_cost || (log.hours_spent * 500))
+      }
+      setDetailProject(updatedProj)
+      setProjects(prev => prev.map(p => p.id === detailProject.id ? updatedProj : p))
+    }
+
+    const newActivity: ActivityTimelineItem = {
+      id: `act-${Date.now()}`,
+      project_id: log.project_id || detailProject?.id || '1',
+      task_id: log.task_id,
+      task_title: log.task_title,
+      user_name: 'Admin Manager',
+      action: 'Admin Approved Work Log',
+      notes: `Approved ${log.employee_name}'s work log (${log.hours_spent} hrs, progress ${log.progress_before}% → ${log.progress_after}%). Cost ${formatCurrency(log.calculated_cost)} added.`,
+      timestamp_text: timeStr,
+      created_at: now.toISOString()
+    }
+    setExecutionTimeline(prev => [newActivity, ...prev])
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('project_work_logs').update({
+          status: 'Approved',
+          reviewed_by: 'Admin Manager',
+          reviewed_at: now.toISOString()
+        }).eq('id', logId)
+
+        const taskToUpdate = updatedTasks.find(t => t.id === log.task_id)
+        if (taskToUpdate) {
+          await supabase.from('project_tasks').update({
+            progress: taskToUpdate.progress,
+            logged_hours: taskToUpdate.logged_hours,
+            status: taskToUpdate.status,
+            updated_at: now.toISOString()
+          }).eq('id', log.task_id)
+        }
+
+        if (detailProject?.id) {
+          await supabase.from('projects').update({
+            progress: newProjectProgress,
+            spent: (detailProject.spent || 0) + (log.calculated_cost || (log.hours_spent * 500))
+          }).eq('id', detailProject.id)
+        }
+
+        await supabase.from('project_activity_timeline').insert({
+          project_id: detailProject?.id || log.project_id,
+          task_id: log.task_id,
+          user_name: 'Admin Manager',
+          action: 'Admin Approved Work Log',
+          notes: newActivity.notes,
+          timestamp_text: timeStr
+        })
+      } catch (e) {
+        console.error('Error persisting approval to DB:', e)
+      }
+    }
+  }
+
+  const handleRequestChangesWorkLog = async (logId: string, feedback: string) => {
+    setExecutionWorkLogs(prev => prev.map(w => w.id === logId ? {
+      ...w,
+      status: 'Changes Requested' as const,
+      reviewer_feedback: feedback,
+      reviewed_by: 'Admin Manager',
+      reviewed_at: new Date().toISOString()
+    } : w))
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('project_work_logs').update({
+          status: 'Changes Requested',
+          reviewer_feedback: feedback,
+          reviewed_by: 'Admin Manager',
+          reviewed_at: new Date().toISOString()
+        }).eq('id', logId)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  const handleRejectWorkLog = async (logId: string) => {
+    setExecutionWorkLogs(prev => prev.map(w => w.id === logId ? {
+      ...w,
+      status: 'Rejected' as const,
+      reviewed_by: 'Admin Manager',
+      reviewed_at: new Date().toISOString()
+    } : w))
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('project_work_logs').update({
+          status: 'Rejected',
+          reviewed_by: 'Admin Manager',
+          reviewed_at: new Date().toISOString()
+        }).eq('id', logId)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  const handleSubmitWorkLog = async (logData: Partial<WorkLog>) => {
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+
+    const newLog: WorkLog = {
+      id: `wl-${Date.now()}`,
+      project_id: detailProject?.id || logData.project_id || '1',
+      project_title: detailProject?.title || 'Netgain Business OS ERP',
+      task_id: logData.task_id!,
+      task_title: logData.task_title || 'Task',
+      milestone_id: logData.milestone_id,
+      milestone_title: logData.milestone_title || 'Frontend Development',
+      employee_name: logData.employee_name || currentEmployee,
+      work_completed: logData.work_completed || '',
+      progress_before: logData.progress_before || 0,
+      progress_after: logData.progress_after || 50,
+      hours_spent: logData.hours_spent || 4,
+      hourly_rate: logData.hourly_rate || 500,
+      calculated_cost: logData.calculated_cost || (logData.hours_spent || 4) * 500,
+      files_modified: logData.files_modified || [],
+      blockers: logData.blockers,
+      attachments: logData.attachments || [],
+      status: 'Pending',
+      created_at: now.toISOString()
+    }
+
+    setExecutionWorkLogs(prev => [newLog, ...prev])
+
+    const newActivity: ActivityTimelineItem = {
+      id: `act-${Date.now()}`,
+      project_id: detailProject?.id || '1',
+      task_id: logData.task_id,
+      task_title: logData.task_title,
+      user_name: logData.employee_name || currentEmployee,
+      action: 'Work Log Submitted',
+      notes: `Submitted work log for ${logData.task_title} (${logData.hours_spent} hrs logged, progress ${logData.progress_before}% → ${logData.progress_after}%)`,
+      timestamp_text: timeStr,
+      created_at: now.toISOString()
+    }
+    setExecutionTimeline(prev => [newActivity, ...prev])
+    toast({ title: 'Work log submitted!', description: 'Awaiting manager approval.' })
+
+    if (isSupabaseConfigured() && detailProject?.id) {
+      try {
+        await supabase.from('project_work_logs').insert({
+          project_id: detailProject.id,
+          task_id: logData.task_id,
+          milestone_id: logData.milestone_id,
+          employee_name: logData.employee_name || currentEmployee,
+          work_completed: logData.work_completed,
+          progress_before: logData.progress_before || 0,
+          progress_after: logData.progress_after || 50,
+          hours_spent: logData.hours_spent || 4,
+          hourly_rate: logData.hourly_rate || 500,
+          calculated_cost: logData.calculated_cost || (logData.hours_spent || 4) * 500,
+          files_modified: logData.files_modified || [],
+          blockers: logData.blockers,
+          attachments: logData.attachments || [],
+          status: 'Pending'
+        })
+
+        await supabase.from('project_activity_timeline').insert({
+          project_id: detailProject.id,
+          task_id: logData.task_id,
+          user_name: logData.employee_name || currentEmployee,
+          action: 'Work Log Submitted',
+          notes: newActivity.notes,
+          timestamp_text: timeStr
+        })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  const handleAddTask = async (newTask: Partial<TaskItem>) => {
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+
+    const createdTask: TaskItem = {
+      id: `t-${Date.now()}`,
+      project_id: detailProject?.id || newTask.project_id || '1',
+      milestone_id: newTask.milestone_id,
+      milestone_title: newTask.milestone_title || 'Frontend Development',
+      title: newTask.title || 'New Task',
+      description: newTask.description || '',
+      assigned_to: newTask.assigned_to || (teamMembersList[0]?.name || 'Unassigned'),
+      due_date: newTask.due_date || '2026-07-20',
+      priority: newTask.priority || 'High',
+      estimated_hours: newTask.estimated_hours || 16,
+      logged_hours: 0,
+      status: 'Pending',
+      progress: 0,
+      created_at: now.toISOString()
+    }
+
+    setExecutionTasks(prev => [...prev, createdTask])
+
+    const newActivity: ActivityTimelineItem = {
+      id: `act-${Date.now()}`,
+      project_id: detailProject?.id || '1',
+      task_id: createdTask.id,
+      task_title: createdTask.title,
+      user_name: 'Admin Manager',
+      action: 'Task Assigned',
+      notes: `Assigned task "${createdTask.title}" to ${createdTask.assigned_to} with ${createdTask.priority} Priority (${createdTask.estimated_hours} hrs est.)`,
+      timestamp_text: timeStr,
+      created_at: now.toISOString()
+    }
+    setExecutionTimeline(prev => [newActivity, ...prev])
+    toast({ title: 'Task Created & Assigned', description: `Assigned to ${createdTask.assigned_to}` })
+
+    if (isSupabaseConfigured() && detailProject?.id) {
+      try {
+        await supabase.from('project_tasks').insert({
+          project_id: detailProject.id,
+          milestone_id: newTask.milestone_id,
+          title: createdTask.title,
+          description: createdTask.description,
+          assigned_to: createdTask.assigned_to,
+          due_date: createdTask.due_date,
+          priority: createdTask.priority,
+          estimated_hours: createdTask.estimated_hours,
+          status: 'Pending',
+          progress: 0
+        })
+
+        await supabase.from('project_activity_timeline').insert({
+          project_id: detailProject.id,
+          user_name: 'Admin Manager',
+          action: 'Task Assigned',
+          notes: newActivity.notes,
+          timestamp_text: timeStr
+        })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus, newProgress: number) => {
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+
+    const updatedTasks = executionTasks.map(t => t.id === taskId ? {
+      ...t,
+      status: newStatus,
+      progress: newProgress,
+      updated_at: now.toISOString()
+    } : t)
+
+    setExecutionTasks(updatedTasks)
+
+    const updatedProgress = calculateProjectProgress(updatedTasks, executionMilestones)
+    if (detailProject) {
+      const updatedProj = { ...detailProject, progress: updatedProgress }
+      setDetailProject(updatedProj)
+      setProjects(prev => prev.map(p => p.id === detailProject.id ? updatedProj : p))
+    }
+
+    const taskObj = executionTasks.find(t => t.id === taskId)
+    const newActivity: ActivityTimelineItem = {
+      id: `act-${Date.now()}`,
+      project_id: detailProject?.id || '1',
+      task_id: taskId,
+      task_title: taskObj?.title,
+      user_name: 'Admin Manager',
+      action: 'Status Updated',
+      notes: `Updated task "${taskObj?.title}" status to ${newStatus} (${newProgress}%)`,
+      timestamp_text: timeStr,
+      created_at: now.toISOString()
+    }
+    setExecutionTimeline(prev => [newActivity, ...prev])
+    toast({ title: 'Task Status Updated', description: `Set to ${newStatus} (${newProgress}%)` })
+
+    if (isSupabaseConfigured() && detailProject?.id) {
+      try {
+        await supabase.from('project_tasks').update({
+          status: newStatus,
+          progress: newProgress,
+          updated_at: now.toISOString()
+        }).eq('id', taskId)
+
+        await supabase.from('projects').update({
+          progress: updatedProgress
+        }).eq('id', detailProject.id)
+
+        await supabase.from('project_activity_timeline').insert({
+          project_id: detailProject.id,
+          task_id: taskId,
+          user_name: 'Admin Manager',
+          action: 'Status Updated',
+          notes: newActivity.notes,
+          timestamp_text: timeStr
+        })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  const projectAnalytics = useMemo(() => {
+    const budget = detailProject?.budget ?? 0
+    const approvedLogs = executionWorkLogs.filter(w => w.status === 'Approved')
+    return calculateProjectAnalytics(budget, executionTasks, executionMilestones, approvedLogs)
+  }, [detailProject, executionTasks, executionMilestones, executionWorkLogs])
+
   const [teamMembersList, setTeamMembersList] = useState<any[]>([])
   const [newRiskAssignee, setNewRiskAssignee] = useState('')
   const [newDepAssignee, setNewDepAssignee] = useState('')
@@ -347,13 +726,20 @@ function CampaignStrategyPageContent() {
     if (!isSupabaseConfigured()) return
     setLoadingWorkspace(true)
     try {
-      const [reqs, files, links, reps, timeline, approvalsRes] = await Promise.all([
+      const [
+        reqs, files, links, reps, timeline, approvalsRes,
+        milestonesRes, tasksRes, workLogsRes, announcementsRes
+      ] = await Promise.all([
         supabase.from('project_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
         supabase.from('project_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
         supabase.from('project_links').select('*').eq('project_id', projectId).order('published_at', { ascending: false }),
         supabase.from('project_reports').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false }),
         supabase.from('project_activity_timeline').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-        supabase.from('project_approvals').select('*').eq('project_id', projectId).order('requested_at', { ascending: false })
+        supabase.from('project_approvals').select('*').eq('project_id', projectId).order('requested_at', { ascending: false }),
+        supabase.from('project_milestones').select('*').eq('project_id', projectId).order('order_index', { ascending: true }),
+        supabase.from('project_tasks').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_work_logs').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        supabase.from('project_announcements').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
       ])
 
       const reqList = reqs.data || []
@@ -371,12 +757,48 @@ function CampaignStrategyPageContent() {
       } else {
         setWorkspaceSubmissions([])
       }
+
+      // Populate Realtime Execution Data from Database
+      setExecutionMilestones(milestonesRes.data || [])
+      setExecutionTasks(tasksRes.data || [])
+      setExecutionWorkLogs(workLogsRes.data || [])
+      setExecutionTimeline(timeline.data || [])
+      setExecutionAnnouncements(announcementsRes.data || [])
+
     } catch (e) {
       console.error('Error fetching workspace data:', e)
     } finally {
       setLoadingWorkspace(false)
     }
   }
+
+  // ─── REALTIME SUPABASE WORKSPACE SUBSCRIPTION ───
+  useEffect(() => {
+    if (!detailProject?.id || !isSupabaseConfigured()) return
+
+    const channel = supabase
+      .channel(`project-realtime-${detailProject.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_tasks', filter: `project_id=eq.${detailProject.id}` }, () => {
+        fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_work_logs', filter: `project_id=eq.${detailProject.id}` }, () => {
+        fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_activity_timeline', filter: `project_id=eq.${detailProject.id}` }, () => {
+        fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_milestones', filter: `project_id=eq.${detailProject.id}` }, () => {
+        fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_announcements', filter: `project_id=eq.${detailProject.id}` }, () => {
+        fetchProjectWorkspaceData(detailProject.id)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [detailProject?.id])
 
   const logWorkspaceActivity = async (projectId: string, action: string, notes: string = '') => {
     if (!isSupabaseConfigured()) return
@@ -839,9 +1261,30 @@ function CampaignStrategyPageContent() {
             setAdminStorageSettings(settings.storage)
           }
 
-          // Fetch team members globally
-          const { data: teamMembers } = await supabase.from('team_members').select('id, name, role').order('name')
-          if (teamMembers) setTeamMembersList(teamMembers)
+          // Fetch team members globally — mirror team page merge logic exactly (profiles first, then team_members not in profiles)
+          const { data: profilesForTeam } = await supabase.from('profiles').select('id, full_name, email, role, settings').order('full_name')
+          const { data: teamMembersData } = await supabase.from('team_members').select('id, name, email, role, hourly_rate, phone').order('name')
+          const seenIds = new Set<string>()
+          const combined: any[] = []
+          // Add profiles first (auth-linked users with hourly_rate from team_members)
+          if (profilesForTeam) {
+            profilesForTeam.forEach((p: any) => {
+              seenIds.add(p.id)
+              const matchingMember = teamMembersData
+                ? teamMembersData.find((m: any) => m.id === p.id || m.email === p.email)
+                : null
+              combined.push({ id: p.id, name: p.full_name || p.email?.split('@')[0] || 'Unknown', email: p.email || '', role: p.role || 'Team Member', hourly_rate: Number(matchingMember?.hourly_rate || p.settings?.hourly_rate) || 0, phone: matchingMember?.phone || '' })
+            })
+          }
+          // Add team_members not already in profiles
+          if (teamMembersData) {
+            teamMembersData.forEach((m: any) => {
+              if (!seenIds.has(m.id)) {
+                combined.push({ id: m.id, name: m.name, email: m.email || '', role: m.role || 'Team Member', hourly_rate: Number(m.hourly_rate) || 0, phone: m.phone || '' })
+              }
+            })
+          }
+          setTeamMembersList(combined.sort((a, b) => a.name.localeCompare(b.name)))
 
         } catch (err: any) { toast({ title: 'Database Error', description: err.message, variant: 'destructive' }) }
       }
@@ -1104,7 +1547,21 @@ function CampaignStrategyPageContent() {
     setDetailProject(p)
     if (p.businessDetails) setForm(p.businessDetails)
     setGeneratedPrompt(p.prompt || '')
-    setActiveTab('overview')
+    
+    if (viewRoleMode === 'client') {
+      setActiveTab('workspace-client-portal')
+    } else if (viewRoleMode === 'employee') {
+      setActiveTab('workspace-employee')
+    } else {
+      setActiveTab('overview')
+    }
+
+    // Clear prior project execution states
+    setExecutionMilestones([])
+    setExecutionTasks([])
+    setExecutionWorkLogs([])
+    setExecutionTimeline([])
+    setExecutionAnnouncements([])
 
     // Initialize workspace editing states
     setEditedPm(p.pm || '')
@@ -1269,7 +1726,7 @@ function CampaignStrategyPageContent() {
 
       {/* ── DETAIL DIALOG ──────────────────────────────────────────────── */}
       <Dialog open={!!detailProject} onOpenChange={open => { if (!open) { setDetailProject(null); setGeneratedPrompt('') } }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl w-full max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-gold" />
@@ -1279,23 +1736,77 @@ function CampaignStrategyPageContent() {
               {detailProject?.approvalStatus && detailProject.approvalStatus !== 'draft' && (
                 <ApprovalBadge status={detailProject.approvalStatus} />
               )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 border-t border-border">
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-border">
+                <span className="text-[10px] text-muted-foreground uppercase px-2 font-bold font-mono">Role View:</span>
+                <button
+                  type="button"
+                  onClick={() => { setViewRoleMode('admin'); setActiveTab('overview') }}
+                  className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${viewRoleMode === 'admin' ? 'bg-gold text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Admin / PM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewRoleMode('employee'); setActiveTab('workspace-employee') }}
+                  className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${viewRoleMode === 'employee' ? 'bg-gold text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Employee View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewRoleMode('client'); setActiveTab('workspace-client-portal') }}
+                  className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${viewRoleMode === 'client' ? 'bg-gold text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Client Portal
+                </button>
+              </div>
+
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[detailProject?.status || 'planned']}`}>{detailProject?.status}</span>
             </div>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-[#11241c]/40 border border-border p-1 rounded-lg">
-              <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
-              <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Tasks</TabsTrigger>
-              <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
-              <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
-              <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
-              <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
-              <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Timeline</TabsTrigger>
-              <TabsTrigger value="workspace-risks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Risks</TabsTrigger>
-              <TabsTrigger value="workspace-dependencies" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Dependencies</TabsTrigger>
-              <TabsTrigger value="workspace-notes" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Notes</TabsTrigger>
-              <TabsTrigger value="workspace-approvals" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Approvals</TabsTrigger>
+              {viewRoleMode === 'client' ? (
+                <>
+                  <TabsTrigger value="workspace-client-portal" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Client Portal Summary</TabsTrigger>
+                  <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
+                  <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
+                  <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
+                  <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
+                </>
+              ) : viewRoleMode === 'employee' ? (
+                <>
+                  <TabsTrigger value="workspace-employee" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">My Workspace & Daily Log</TabsTrigger>
+                  <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">All Tasks</TabsTrigger>
+                  <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files</TabsTrigger>
+                  <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Timeline</TabsTrigger>
+                </>
+              ) : (
+                <>
+                  <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Overview</TabsTrigger>
+                  <TabsTrigger value="workspace-tasks" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Milestones & Tasks</TabsTrigger>
+                  <TabsTrigger value="workspace-approvals" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black relative">
+                    Approvals Queue
+                    {executionWorkLogs.filter(w => w.status === 'Pending').length > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-black font-bold text-[9px]">
+                        {executionWorkLogs.filter(w => w.status === 'Pending').length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="workspace-analytics" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Analytics & Costing</TabsTrigger>
+                  <TabsTrigger value="workspace-productivity" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Employee Productivity</TabsTrigger>
+                  <TabsTrigger value="workspace-client-portal" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Client View Preview</TabsTrigger>
+                  <TabsTrigger value="workspace-timeline" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Activity Timeline</TabsTrigger>
+                  <TabsTrigger value="workspace-reqs" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Requirements</TabsTrigger>
+                  <TabsTrigger value="workspace-files" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Files & Docs</TabsTrigger>
+                  <TabsTrigger value="workspace-reports" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Reports</TabsTrigger>
+                  <TabsTrigger value="workspace-links" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Links</TabsTrigger>
+                  <TabsTrigger value="workspace-future" className="text-xs px-3 py-1.5 data-[state=active]:bg-gold data-[state=active]:text-black">Future Integrations</TabsTrigger>
+                </>
+              )}
             </TabsList>
 
             {/* ── OVERVIEW TAB ── */}
@@ -1419,113 +1930,104 @@ function CampaignStrategyPageContent() {
                   </div>
 
                   {/* Time Tracking Panel */}
-                  <div className="mt-6 border-t border-border pt-5">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Time Tracking & Timesheets</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="bg-card border-border">
-                        <CardContent className="p-3.5 space-y-1">
-                          <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
-                          <p className="text-xl font-bold text-foreground">142.5 hrs</p>
-                          <p className="text-[9px] text-muted-foreground">Estimated: 200 hrs</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-card border-border">
-                        <CardContent className="p-3.5 space-y-1">
-                          <p className="text-[10px] text-muted-foreground uppercase">Burn Rate</p>
-                          <p className="text-xl font-bold text-amber-400">71%</p>
-                          <p className="text-[9px] text-muted-foreground">Budget utilisation</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-card border-border">
-                        <CardContent className="p-3.5 space-y-1">
-                          <p className="text-[10px] text-muted-foreground uppercase">Billable Amount</p>
-                          <p className="text-xl font-bold text-emerald-400">₹1,78,250</p>
-                          <p className="text-[9px] text-muted-foreground">Based on employee rates</p>
-                        </CardContent>
-                      </Card>
-                    </div>
+                  {(() => {
+                    const approvedLogs = executionWorkLogs.filter(w => w.status === 'Approved')
+                    const totalLoggedHrs = approvedLogs.reduce((sum, l) => sum + (l.hours_spent || 0), 0)
+                    const totalEstHrs = executionTasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0)
+                    const totalBillableCost = approvedLogs.reduce((sum, l) => sum + (l.calculated_cost || (l.hours_spent * l.hourly_rate)), 0)
+                    const projBudget = detailProject?.budget ?? 0
+                    const burnRatePct = projBudget > 0 
+                      ? Math.round((totalBillableCost / projBudget) * 100)
+                      : (totalEstHrs > 0 ? Math.round((totalLoggedHrs / totalEstHrs) * 100) : 0)
 
-                    
-                  </div>
+                    return (
+                      <div className="mt-6 border-t border-border pt-5">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-gold mb-3">Time Tracking & Timesheets</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Card className="bg-card border-border">
+                            <CardContent className="p-3.5 space-y-1">
+                              <p className="text-[10px] text-muted-foreground uppercase">Logged Hours</p>
+                              <p className="text-xl font-bold text-foreground">{totalLoggedHrs} hrs</p>
+                              <p className="text-[9px] text-muted-foreground">Estimated: {totalEstHrs} hrs</p>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-card border-border">
+                            <CardContent className="p-3.5 space-y-1">
+                              <p className="text-[10px] text-muted-foreground uppercase">Burn Rate</p>
+                              <p className="text-xl font-bold text-amber-400">{burnRatePct}%</p>
+                              <p className="text-[9px] text-muted-foreground">Budget utilisation</p>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-card border-border">
+                            <CardContent className="p-3.5 space-y-1">
+                              <p className="text-[10px] text-muted-foreground uppercase">Billable Amount</p>
+                              <p className="text-xl font-bold text-emerald-400">{formatCurrency(totalBillableCost)}</p>
+                              <p className="text-[9px] text-muted-foreground">Based on employee rates</p>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </>
               )}
             </TabsContent>
 
-            {/* ── TASKS TAB ── */}
+            {/* ── TASKS TAB (Milestones & Deliverables Breakdown) ── */}
             <TabsContent value="workspace-tasks" className="mt-4 space-y-4">
-              {detailProject && (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center border-b border-border pb-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Project Tasks & Milestones</h4>
-                    <span className="text-[10px] text-muted-foreground">{detailProject.milestones.length} tasks</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {detailProject.milestones.map((m, idx) => {
-                      const isDone = m.endsWith(' ✅')
-                      const cleanLabel = m.replace(' ✅', '').replace(' ⏳', '')
-                      return (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded bg-muted/30 border border-border hover:border-gold/30">
-                          <div className="flex items-center gap-3">
-                            <input 
-                              type="checkbox" 
-                              checked={isDone}
-                              onChange={() => handleToggleMilestone(detailProject, idx)}
-                              className="h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold accent-gold shrink-0 cursor-pointer"
-                            />
-                            <span className={`text-sm ${isDone ? 'line-through text-muted-foreground' : 'text-foreground font-semibold'}`}>{cleanLabel}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" aria-label="Action" 
-                              className="h-7 w-7 text-muted-foreground hover:text-gold hover:bg-gold/10"
-                              onClick={() => {
-                                const newLabel = window.prompt("Edit task description:", cleanLabel);
-                                if (newLabel && newLabel.trim() !== "") {
-                                  const updatedMilestones = [...detailProject.milestones];
-                                  updatedMilestones[idx] = `${newLabel.trim()} ${isDone ? '✅' : '⏳'}`;
-                                  saveProjectDetails({ ...detailProject, milestones: updatedMilestones });
-                                }
-                              }}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" aria-label="Action" 
-                              className="h-7 w-7 text-red-400 hover:text-red-400 hover:bg-red-500/10"
-                              onClick={() => handleDeleteMilestone(detailProject, idx)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {detailProject.milestones.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-6">No tasks created yet.</p>
-                    )}
-                  </div>
+              <MilestonesTaskTree
+                milestones={executionMilestones}
+                tasks={executionTasks}
+                teamMembers={teamMembersList}
+                onAddTask={handleAddTask}
+                onUpdateTaskStatus={handleUpdateTaskStatus}
+              />
+            </TabsContent>
 
-                  {/* Add Milestone Inline Form */}
-                  <div className="flex gap-2 pt-2">
-                    <Input 
-                      placeholder="Add new task (e.g. Figma Review)" 
-                      value={newMilestoneText}
-                      onChange={e => setNewMilestoneText(e.target.value)}
-                      className="h-10 text-sm bg-card border-border"
-                    />
-                    <Button 
-                      variant="gold" 
-                      className="h-10 px-5 font-bold"
-                      onClick={() => handleAddMilestone(detailProject)}
-                    >
-                      Add Task
-                    </Button>
-                  </div>
-                </div>
-              )}
+            {/* ── MANAGER APPROVALS QUEUE TAB ── */}
+            <TabsContent value="workspace-approvals" className="mt-4 space-y-4">
+              <ManagerApprovalsQueue
+                workLogs={executionWorkLogs}
+                onApprove={handleApproveWorkLog}
+                onRequestChanges={handleRequestChangesWorkLog}
+                onReject={handleRejectWorkLog}
+              />
+            </TabsContent>
+
+            {/* ── EMPLOYEE WORKSPACE TAB ── */}
+            <TabsContent value="workspace-employee" className="mt-4 space-y-4">
+              <EmployeeDashboardView
+                currentEmployee={currentEmployee}
+                tasks={executionTasks}
+                milestones={executionMilestones}
+                workLogs={executionWorkLogs}
+                onSubmitWorkLog={(task) => setWorkLogTaskToSubmit(task)}
+              />
+            </TabsContent>
+
+            {/* ── PROJECT ANALYTICS & COSTING TAB ── */}
+            <TabsContent value="workspace-analytics" className="mt-4 space-y-4">
+              <ProjectAnalyticsDashboard analytics={projectAnalytics} />
+            </TabsContent>
+
+            {/* ── EMPLOYEE PRODUCTIVITY TAB ── */}
+            <TabsContent value="workspace-productivity" className="mt-4 space-y-4">
+              <EmployeeProductivityCard workLogs={executionWorkLogs} tasks={executionTasks} teamMembers={teamMembersList} />
+            </TabsContent>
+
+            {/* ── CLIENT PORTAL VIEW TAB ── */}
+            <TabsContent value="workspace-client-portal" className="mt-4 space-y-4">
+              <ClientPortalView
+                projectProgress={projectAnalytics.overall_completion_pct}
+                milestones={executionMilestones}
+                tasks={executionTasks}
+                announcements={executionAnnouncements}
+              />
+            </TabsContent>
+
+            {/* ── FUTURE INTEGRATIONS TAB ── */}
+            <TabsContent value="workspace-future" className="mt-4 space-y-4">
+              <FutureIntegrationsPanel />
             </TabsContent>
 
             {/* ── REQUIREMENTS REQUEST TAB ── */}
@@ -2485,6 +2987,14 @@ function CampaignStrategyPageContent() {
           </Tabs>
         </DialogContent>
       </Dialog>
+
+      {/* Work Log Submission Drawer for Employee Workspace */}
+      <WorkLogSubmissionDrawer
+        task={workLogTaskToSubmit}
+        isOpen={!!workLogTaskToSubmit}
+        onClose={() => setWorkLogTaskToSubmit(null)}
+        onSubmit={handleSubmitWorkLog}
+      />
 
       {/* Edit Project Drawer */}
       <Drawer

@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized: Missing session token' }, { status: 401 })
     }
 
-    const { name, email, phone, role, password } = await request.json()
+    const { name, email, phone, role, password, hourly_rate } = await request.json()
 
     if (!name || !email) {
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
       email,
       phone: phone || '',
       role: role || 'Employee',
+      hourly_rate: Number(hourly_rate) || 500,
       status: 'active',
       joined: new Date().toISOString().slice(0, 10),
       projects: 0

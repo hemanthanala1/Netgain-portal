@@ -69,6 +69,7 @@ interface Project {
   status: string
   created: string
   history: { date: string; action: string }[]
+  type?: string
   progress?: number
   milestones?: string[]
   budget?: number
@@ -121,7 +122,11 @@ function ClientDashboardContent() {
   const [workspaceTimeline, setWorkspaceTimeline] = useState<any[]>([])
   const [workspaceApprovals, setWorkspaceApprovals] = useState<any[]>([])
   const [workspaceMeetings, setWorkspaceMeetings] = useState<any[]>([])
+  const [workspaceMilestones, setWorkspaceMilestones] = useState<any[]>([])
+  const [workspaceTasks, setWorkspaceTasks] = useState<any[]>([])
+  const [workspaceAnnouncements, setWorkspaceAnnouncements] = useState<any[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [clientProjectTab, setClientProjectTab] = useState<'overview' | 'milestones' | 'tasks' | 'files' | 'timeline'>('overview')
 
   // Client Submissions Form States
   const [activeSubmittingReq, setActiveSubmittingReq] = useState<any | null>(null)
@@ -725,11 +730,8 @@ function ClientDashboardContent() {
         })
       })
 
-      const matchedProjects: Project[] = (projRes.data || []).filter(p => {
-        const docClient = (p.client || '').toLowerCase().trim()
-        return docClient === clientCompany || docClient === (session.name || '').toLowerCase().trim()
-      }).map((p: any) => {
-        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Devon S.', currentStage: '', sprintGoal: '' }
+      const matchedProjects: Project[] = (projRes.data || []).filter(matchDoc).map((p: any) => {
+        let extra: any = { type: 'Web Development', budget: 0, spent: 0, timeline: '', progress: 0, milestones: [] as string[], pm: 'Netgain Team', currentStage: '', sprintGoal: '' }
         if (p.stack) { try { extra = { ...extra, ...JSON.parse(p.stack) } } catch { extra.pm = p.stack } }
         return {
           id: p.id,
@@ -787,6 +789,22 @@ function ClientDashboardContent() {
         }
       }
 
+      // Fetch milestones, tasks and announcements for client workspace
+      let milestonesList: any[] = []
+      let tasksList: any[] = []
+      let announcementsList: any[] = []
+      if (matchedProjects.length > 0) {
+        const projIds = matchedProjects.map(p => p.id)
+        const [milRes, taskRes, annRes] = await Promise.all([
+          supabase.from('project_milestones').select('*').in('project_id', projIds).order('order_index'),
+          supabase.from('project_tasks').select('*').in('project_id', projIds).order('created_at'),
+          supabase.from('project_announcements').select('*').in('project_id', projIds).eq('is_published', true).order('created_at', { ascending: false })
+        ])
+        milestonesList = milRes.data || []
+        tasksList = taskRes.data || []
+        announcementsList = annRes.data || []
+      }
+
       // Fetch client meetings
       const { data: meets } = await supabase.from('meetings').select('*').or(`client_email.eq."${clientEmail}",client_name.eq."${session.company}"`).order('meeting_date', { ascending: false })
       
@@ -803,6 +821,9 @@ function ClientDashboardContent() {
         pApprovalsList,
         subsList,
         meetsList: meets || [],
+        milestonesList,
+        tasksList,
+        announcementsList,
         notifications: notifRes.data || []
       }
     } catch (err) {
@@ -830,6 +851,9 @@ function ClientDashboardContent() {
       setWorkspaceApprovals(swrData.pApprovalsList)
       setWorkspaceSubmissions(swrData.subsList)
       setWorkspaceMeetings(swrData.meetsList)
+      setWorkspaceMilestones(swrData.milestonesList || [])
+      setWorkspaceTasks(swrData.tasksList || [])
+      setWorkspaceAnnouncements(swrData.announcementsList || [])
       setNotifications(swrData.notifications)
       
       if (swrData.projects.length > 0 && !selectedProjectId) {
@@ -2154,9 +2178,15 @@ function ClientDashboardContent() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {projects.slice(0, 4).map(proj => {
-                    const pct = proj.progress || 0
-                    const completed = (proj.milestones || []).filter(m => m.endsWith(' ✅')).length
-                    const total = (proj.milestones || []).length
+                    const pMils = workspaceMilestones.filter(m => m.project_id === proj.id)
+                    const pTs = workspaceTasks.filter(t => t.project_id === proj.id)
+                    const completedTs = pTs.filter(t => t.status === 'Completed' || t.progress >= 100).length
+                    const pct = pTs.length > 0 ? Math.round((completedTs / pTs.length) * 100) : proj.progress || 0
+                    
+                    const completed = pMils.length > 0 
+                      ? pMils.filter(m => m.status === 'Completed').length 
+                      : (proj.milestones || []).filter(m => m.endsWith(' ✅')).length
+                    const total = pMils.length > 0 ? pMils.length : (proj.milestones || []).length
                     const healthColor = pct >= 80 ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' : pct >= 50 ? 'text-amber-400 border-amber-500/20 bg-amber-500/5' : 'text-red-400 border-red-500/20 bg-red-500/5'
                     const healthLabel = pct >= 80 ? 'On Track' : pct >= 50 ? 'In Progress' : 'Needs Attention'
                     
@@ -2392,94 +2422,313 @@ function ClientDashboardContent() {
         {/* Projects View */}
         {activeTab === 'projects' && !selectedDoc && (
           <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
+            {/* Header */}
+            <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h1 className="text-xl font-bold text-foreground">Project Workspaces</h1>
                 <p className="text-xs text-muted-foreground mt-1">Track sprint milestones, progress, and managers assigned to your executions.</p>
               </div>
               {projects.length > 1 && (
-                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
-                  <SelectContent>
-                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
-                  </SelectContent>
+                <Select value={selectedProjectId || ''} onValueChange={id => { setSelectedProjectId(id); setClientProjectTab('overview') }}>
+                  <SelectTrigger className="h-8 w-48 bg-card border-border text-xs"><SelectValue placeholder="Select Project" /></SelectTrigger>
+                  <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent>
                 </Select>
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {projects.filter(p => selectedProjectId ? p.id === selectedProjectId : true).map(proj => {
-                const stage = proj.currentStage || (proj.status === 'active' ? 'Development & Integration' : 'Deployment')
-                const progressVal = proj.progress || 0
-                return (
-                  <Card key={proj.id} className="bg-card border-border/80 text-foreground relative overflow-hidden">
-                    <CardHeader className="border-b border-border/50 pb-3 flex flex-row items-center justify-between">
+            {projects.length === 0 ? (
+              <div className="text-center py-20 border border-dashed border-border bg-card/10 rounded-2xl">
+                <Briefcase className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm font-semibold text-muted-foreground">No active projects linked</p>
+                <p className="text-xs text-muted-foreground mt-1">Once project kick-off commences, checklists and sprints will display here.</p>
+              </div>
+            ) : (() => {
+              const proj = projects.find(p => p.id === selectedProjectId) || projects[0]
+              if (!proj) return null
+              const projMilestones = workspaceMilestones.filter(m => m.project_id === proj.id)
+              const projTasks = workspaceTasks.filter(t => t.project_id === proj.id)
+              const projTimeline = workspaceTimeline.filter(t => t.project_id === proj.id)
+              const projFiles = [...workspaceFiles.filter(f => f.project_id === proj.id), ...workspaceLinks.filter(l => l.project_id === proj.id)]
+              const projAnnouncements = workspaceAnnouncements.filter(a => a.project_id === proj.id)
+              const completedTasks = projTasks.filter(t => t.status === 'Completed' || t.progress >= 100).length
+              const overallProgress = proj.progress || (projTasks.length > 0 ? Math.round((completedTasks / projTasks.length) * 100) : 0)
+
+              return (
+                <div className="space-y-5">
+                  {/* Project Header Card */}
+                  <div className="bg-gradient-to-r from-[#0f1f17] via-[#162b1f] to-[#0f1f17] border border-border rounded-xl p-5 flex flex-wrap justify-between items-center gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="bg-gold/10 text-gold border-gold/30 text-[9px] uppercase tracking-wider">{proj.type || 'Project'}</Badge>
+                        <Badge className={`text-[10px] capitalize ${proj.status === 'active' || proj.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : proj.status === 'completed' || proj.status === 'Completed' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>{proj.status}</Badge>
+                      </div>
+                      <h2 className="text-lg font-bold text-foreground">{proj.title}</h2>
+                      <p className="text-[10px] text-muted-foreground font-mono">Project ID: {proj.docId}</p>
+                    </div>
+                    <div className="flex items-center gap-6 text-right">
                       <div>
-                        <Badge className="bg-[#D4AF37]/15 text-primary border border-[#D4AF37]/25 text-[9px] uppercase tracking-wider mb-1.5">{proj.stack?.includes('{') ? 'Strategy Engine' : proj.stack}</Badge>
-                        <CardTitle className="text-base font-bold text-foreground">{proj.title}</CardTitle>
-                        <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Project ID: {proj.docId}</p>
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider">Account Executive</p>
+                        <p className="text-sm font-bold text-gold mt-0.5">{proj.pm || 'Netgain Team'}</p>
                       </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 capitalize">{proj.status}</Badge>
-                    </CardHeader>
-                    <CardContent className="p-5 space-y-5">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-muted-foreground">Current Stage</span>
-                          <span className="text-primary">{stage}</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground leading-snug">Sprint goal: {proj.sprintGoal || 'Final API integrations and validation checks.'}</p>
+                      <div className="text-center">
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider mb-1">Overall Progress</p>
+                        <span className="text-3xl font-black text-gold">{overallProgress}%</span>
                       </div>
+                    </div>
+                  </div>
 
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
-                          <span>Delivery Checklist Progress</span>
-                          <span>{progressVal}%</span>
-                        </div>
-                        <Progress value={progressVal} className="h-1.5 bg-muted/30" />
-                      </div>
+                  {/* Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Delivery Checklist Progress</span>
+                      <span className="text-gold font-bold">{overallProgress}%</span>
+                    </div>
+                    <Progress value={overallProgress} className="h-2 bg-black/40" />
+                  </div>
 
-                      <div className="border-t border-border/50 pt-4 flex items-center justify-between text-xs">
-                        <div>
-                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Date Initiated</p>
-                          <p className="font-semibold text-foreground/90 mt-0.5">{formatDate(proj.created)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Account Executive</p>
-                          <p className="font-semibold text-primary mt-0.5">{proj.pm || 'Netgain Team'}</p>
-                        </div>
+                  {/* Sprint/Stage Info */}
+                  {(proj.currentStage || proj.sprintGoal) && (
+                    <div className="bg-card border border-border rounded-xl p-4 flex flex-wrap justify-between gap-4 text-xs">
+                      <div>
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider">Current Stage</p>
+                        <p className="font-bold text-foreground mt-0.5">{proj.currentStage || '—'}</p>
                       </div>
+                      <div className="max-w-sm">
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider">Sprint Goal</p>
+                        <p className="font-medium text-foreground/90 mt-0.5">{proj.sprintGoal || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider">Date Initiated</p>
+                        <p className="font-bold text-foreground mt-0.5">{formatDate(proj.created)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase text-muted-foreground tracking-wider">Timeline</p>
+                        <p className="font-bold text-foreground mt-0.5">{proj.timeline || '—'}</p>
+                      </div>
+                    </div>
+                  )}
 
-                      {/* Project updates timeline */}
-                      {workspaceTimeline.filter(t => t.project_id === proj.id).length > 0 && (
-                        <div className="border-t border-border/40 pt-4 space-y-3.5">
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Latest Project Check-ins</p>
-                          <div className="space-y-2.5">
-                            {workspaceTimeline.filter(t => t.project_id === proj.id).slice(0, 3).map((hist, i) => (
-                              <div key={i} className="flex gap-2.5 items-start text-[11px]">
-                                <span className="text-primary font-bold shrink-0 mt-0.5">▪</span>
-                                <div>
-                                  <p className="text-foreground/90 leading-snug">{hist.action}</p>
-                                  {hist.notes && <p className="text-[9px] text-muted-foreground mt-0.5">"{hist.notes}"</p>}
+                  {/* Inner Tabs */}
+                  <div className="flex flex-wrap gap-1.5 border-b border-border pb-2">
+                    {(['overview', 'milestones', 'tasks', 'files', 'timeline'] as const).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setClientProjectTab(tab)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${clientProjectTab === tab ? 'bg-gold text-black font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        {tab === 'overview' ? 'Overview' : tab === 'milestones' ? `Milestones (${projMilestones.length})` : tab === 'tasks' ? `Tasks (${projTasks.length})` : tab === 'files' ? `Files (${projFiles.length})` : 'Timeline'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Overview Tab */}
+                  {clientProjectTab === 'overview' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Milestones Quick View */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Milestones Status</h4>
+                        {projMilestones.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No milestones added yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {projMilestones.map((m: any) => {
+                              const mTasks = projTasks.filter(t => t.milestone_id === m.id)
+                              const done = mTasks.filter(t => t.status === 'Completed' || t.progress >= 100).length
+                              const pct = mTasks.length > 0 ? Math.round((done / mTasks.length) * 100) : m.status === 'Completed' ? 100 : 0
+                              return (
+                                <div key={m.id} className="bg-card border border-border rounded-xl p-3.5 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle2 className={`h-4 w-4 ${m.status === 'Completed' ? 'text-emerald-400' : 'text-muted-foreground'}`} />
+                                      <span className={`text-xs font-bold ${m.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{m.title}</span>
+                                    </div>
+                                    <span className="text-xs font-mono font-bold text-gold">{pct}%</span>
+                                  </div>
+                                  <Progress value={pct} className="h-1.5 bg-black/30" />
+                                  {m.description && <p className="text-[10px] text-muted-foreground">{m.description}</p>}
                                 </div>
-                              </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Announcements + Latest Timeline */}
+                      <div className="space-y-3">
+                        {projAnnouncements.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Announcements</h4>
+                            {projAnnouncements.slice(0, 3).map((a: any) => (
+                              <Card key={a.id} className="bg-card border-border p-3.5 space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <h5 className="text-xs font-bold text-foreground">{a.title}</h5>
+                                  <span className="text-[10px] text-muted-foreground">{new Date(a.created_at).toLocaleDateString('en-IN')}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{a.content || a.message}</p>
+                              </Card>
                             ))}
                           </div>
+                        )}
+                        {projTimeline.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-gold">Latest Check-ins</h4>
+                            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                              {projTimeline.slice(0, 4).map((item: any, i: number) => (
+                                <div key={i} className="flex gap-3 items-start text-xs">
+                                  <span className="text-gold font-bold shrink-0 mt-0.5">▪</span>
+                                  <div>
+                                    <p className="text-foreground/90 leading-snug">{item.action || item.event_type}</p>
+                                    {item.notes && <p className="text-[10px] text-muted-foreground mt-0.5">"{item.notes}"</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Milestones Tab */}
+                  {clientProjectTab === 'milestones' && (
+                    <div className="space-y-3">
+                      {projMilestones.length === 0 ? (
+                        <div className="text-center py-10 border border-dashed border-border rounded-xl">
+                          <CheckCircle2 className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">No milestones defined yet.</p>
+                        </div>
+                      ) : projMilestones.map((m: any) => {
+                        const mTasks = projTasks.filter(t => t.milestone_id === m.id)
+                        const done = mTasks.filter(t => t.status === 'Completed' || t.progress >= 100).length
+                        const pct = mTasks.length > 0 ? Math.round((done / mTasks.length) * 100) : m.status === 'Completed' ? 100 : 0
+                        const statusColor = m.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : m.status === 'In Progress' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : m.status === 'Blocked' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-slate-400 bg-slate-500/10 border-slate-500/20'
+                        return (
+                          <div key={m.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                            <div className="flex flex-wrap justify-between items-start gap-2">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className={`h-4 w-4 ${m.status === 'Completed' ? 'text-emerald-400' : 'text-muted-foreground'}`} />
+                                <span className="text-sm font-bold text-foreground">{m.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusColor}`}>{m.status}</span>
+                                <span className="text-sm font-black text-gold font-mono">{pct}%</span>
+                              </div>
+                            </div>
+                            {m.description && <p className="text-xs text-muted-foreground">{m.description}</p>}
+                            <Progress value={pct} className="h-2 bg-black/40" />
+                            <div className="flex gap-4 text-[10px] text-muted-foreground">
+                              <span>{mTasks.length} tasks</span>
+                              <span>{done} completed</span>
+                              <span>{mTasks.length - done} remaining</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Tasks Tab */}
+                  {clientProjectTab === 'tasks' && (
+                    <div className="space-y-3">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-border text-muted-foreground uppercase text-[10px] bg-black/20">
+                                <th className="text-left py-2.5 px-3">Deliverable</th>
+                                <th className="text-left py-2.5 px-3">Milestone</th>
+                                <th className="text-left py-2.5 px-3">Status</th>
+                                <th className="text-left py-2.5 px-3">Progress</th>
+                                <th className="text-left py-2.5 px-3">Due Date</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {projTasks.length === 0 ? (
+                                <tr><td colSpan={5} className="py-8 text-center text-muted-foreground italic">No tasks defined yet.</td></tr>
+                              ) : projTasks.map((t: any) => {
+                                const statusColor = t.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10' : t.status === 'In Progress' ? 'text-blue-400 bg-blue-500/10' : t.status === 'Review' ? 'text-purple-400 bg-purple-500/10' : t.status === 'Blocked' ? 'text-red-400 bg-red-500/10' : 'text-slate-400 bg-slate-500/10'
+                                return (
+                                  <tr key={t.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                                    <td className="py-2.5 px-3 font-semibold text-foreground">{t.title}</td>
+                                    <td className="py-2.5 px-3 text-muted-foreground">{t.milestone_title || projMilestones.find((m: any) => m.id === t.milestone_id)?.title || '—'}</td>
+                                    <td className="py-2.5 px-3">
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor}`}>{t.status}</span>
+                                    </td>
+                                    <td className="py-2.5 px-3">
+                                      <div className="flex items-center gap-2">
+                                        <Progress value={t.progress || 0} className="h-1.5 w-20 bg-black/40" />
+                                        <span className="font-mono text-gold font-bold">{t.progress || 0}%</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-muted-foreground">{t.due_date ? formatDate(t.due_date) : '—'}</td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Files Tab */}
+                  {clientProjectTab === 'files' && (
+                    <div className="space-y-3">
+                      {projFiles.length === 0 ? (
+                        <div className="text-center py-10 border border-dashed border-border rounded-xl">
+                          <FolderOpen className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">No files published yet.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {projFiles.map((f: any, i: number) => (
+                            <a key={i} href={f.file_url || f.url} target="_blank" rel="noopener noreferrer" className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 hover:border-gold/30 transition-colors group">
+                              <div className="h-9 w-9 bg-gold/10 border border-gold/20 rounded-lg flex items-center justify-center shrink-0">
+                                {f.url ? <ExternalLink className="h-4 w-4 text-gold" /> : <FileText className="h-4 w-4 text-gold" />}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-foreground truncate group-hover:text-gold transition-colors">{f.name || f.title || 'File'}</p>
+                                <p className="text-[10px] text-muted-foreground">{f.category || f.label || (f.url ? 'Link' : 'File')}</p>
+                              </div>
+                            </a>
+                          ))}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
-                )
-              })}
-              {projects.length === 0 && (
-                <div className="col-span-2 text-center py-16 border border-dashed border-border bg-card/10 rounded-2xl">
-                  <Briefcase className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm font-semibold text-muted-foreground">No active projects linked</p>
-                  <p className="text-xs text-muted-foreground mt-1">Once project kick-off commences, checklists and sprints will display here.</p>
+                    </div>
+                  )}
+
+                  {/* Timeline Tab */}
+                  {clientProjectTab === 'timeline' && (
+                    <div className="space-y-3">
+                      {projTimeline.length === 0 ? (
+                        <div className="text-center py-10 border border-dashed border-border rounded-xl">
+                          <Clock className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">No activity logged yet.</p>
+                        </div>
+                      ) : (
+                        <div className="bg-card border border-border rounded-xl divide-y divide-border overflow-hidden">
+                          {projTimeline.map((item: any, i: number) => (
+                            <div key={i} className="flex gap-4 items-start p-4 text-xs">
+                              <div className="h-7 w-7 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0 mt-0.5">
+                                <TrendingUp className="h-3.5 w-3.5 text-gold" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-foreground">{item.action || item.event_type}</p>
+                                {item.notes && <p className="text-muted-foreground mt-0.5 text-[11px]">"{item.notes}"</p>}
+                                <p className="text-[10px] text-muted-foreground mt-1">{item.created_at ? new Date(item.created_at).toLocaleString('en-IN') : ''}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              )
+            })()}
           </div>
         )}
+
 
         {/* Workspace: Requirements Tab */}
         {activeTab === 'workspace-reqs' && !selectedDoc && (
@@ -2629,11 +2878,16 @@ function ClientDashboardContent() {
             </div>
 
             {(() => {
-              const currentProj = projects.find(p => p.id === selectedProjectId)
+              const currentProj = projects.find(p => p.id === selectedProjectId) || projects[0]
               if (!currentProj) {
                 return <div className="text-center py-8 text-muted-foreground text-xs">No active project workspace selected.</div>
               }
+              const projMilestones = workspaceMilestones.filter(m => m.project_id === currentProj.id)
+              const projTasks = workspaceTasks.filter(t => t.project_id === currentProj.id)
+              const completedTasks = projTasks.filter(t => t.status === 'Completed' || t.progress >= 100).length
+              const calculatedProgress = projTasks.length > 0 ? Math.round((completedTasks / projTasks.length) * 100) : currentProj.progress || 0
               const stage = currentProj.currentStage || (currentProj.status === 'active' ? 'Development & Sprints' : currentProj.status === 'completed' ? 'Completed & Deployed' : 'Planned / Backlog')
+
               return (
                 <div className="space-y-6 max-w-4xl">
                   <Card className="bg-card border-border/80 p-5 space-y-4">
@@ -2648,38 +2902,98 @@ function ClientDashboardContent() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Workspace Checklist Progress</span>
-                        <span className="font-semibold text-primary">{currentProj.progress || 0}%</span>
+                        <span className="font-semibold text-gold font-bold">{calculatedProgress}%</span>
                       </div>
-                      <Progress value={currentProj.progress || 0} className="h-2 bg-muted/30" />
+                      <Progress value={calculatedProgress} className="h-2 bg-muted/30" />
                     </div>
                   </Card>
 
-                  {/* Tasks / Milestones List */}
+                  {/* Real-time Project Milestones */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Project Milestones</h3>
                     <div className="grid grid-cols-1 gap-3">
-                      {(currentProj as any).milestones && (currentProj as any).milestones.length > 0 ? (
-                        (currentProj as any).milestones.map((m: string, i: number) => {
-                          const isDone = m.endsWith(' ✅')
-                          const cleanText = m.replace(' ✅', '').replace(' ⏳', '')
+                      {projMilestones.length > 0 ? (
+                        projMilestones.map((m: any) => {
+                          const mTasks = projTasks.filter(t => t.milestone_id === m.id)
+                          const mDone = mTasks.filter(t => t.status === 'Completed' || t.progress >= 100).length
+                          const mPct = mTasks.length > 0 ? Math.round((mDone / mTasks.length) * 100) : m.status === 'Completed' ? 100 : 0
+                          const isCompleted = m.status === 'Completed' || mPct === 100
+
                           return (
-                            <Card key={i} className="bg-card border-border/60 p-4 flex items-center justify-between text-xs hover:border-gold/30 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <span className={`flex h-4 w-4 items-center justify-center rounded border ${isDone ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-500/50 bg-slate-500/10 text-muted-foreground'}`} aria-hidden="true">
-                                  <Check className="h-3 w-3" />
-                                </span>
-                                <span className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : 'text-foreground/90'}`}>{cleanText}</span>
+                            <Card key={m.id} className="bg-card border-border/60 p-4 space-y-3 hover:border-gold/30 transition-colors">
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-3">
+                                  <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${isCompleted ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-slate-500/50 bg-slate-500/10 text-muted-foreground'}`}>
+                                    <Check className="h-3 w-3" />
+                                  </span>
+                                  <div>
+                                    <p className={`font-bold ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{m.title}</p>
+                                    {m.description && <p className="text-[10px] text-muted-foreground mt-0.5">{m.description}</p>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono text-xs font-bold text-gold">{mPct}%</span>
+                                  <Badge className={`text-[9px] ${isCompleted ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : m.status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-500/10 text-muted-foreground border border-slate-500/20'}`}>{m.status || (isCompleted ? 'Completed' : 'Awaiting')}</Badge>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={`text-[9px] ${isDone ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-muted-foreground border border-slate-500/20'}`}>{isDone ? 'Completed' : 'Awaiting'}</Badge>
-                              </div>
+                              <Progress value={mPct} className="h-1.5 bg-black/30" />
+                              {mTasks.length > 0 && (
+                                <div className="text-[10px] text-muted-foreground font-mono pt-1 flex gap-4">
+                                  <span>{mTasks.length} total tasks</span>
+                                  <span className="text-emerald-400">{mDone} completed</span>
+                                  <span>{mTasks.length - mDone} remaining</span>
+                                </div>
+                              )}
                             </Card>
                           )
                         })
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground italic">No milestones defined for this project yet.</div>
+                        <div className="text-center py-8 text-muted-foreground italic border border-dashed border-border rounded-xl">No milestones defined for this project yet.</div>
                       )}
                     </div>
+
+                    {/* Tasks & Deliverables Breakdown Table */}
+                    {projTasks.length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <h3 className="text-sm font-bold text-foreground tracking-wide uppercase text-primary">Tasks & Deliverables Breakdown</h3>
+                        <div className="bg-card border border-border rounded-xl overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border text-muted-foreground uppercase text-[10px] bg-black/20">
+                                  <th className="text-left py-2.5 px-3">Deliverable</th>
+                                  <th className="text-left py-2.5 px-3">Milestone</th>
+                                  <th className="text-left py-2.5 px-3">Status</th>
+                                  <th className="text-left py-2.5 px-3">Progress</th>
+                                  <th className="text-left py-2.5 px-3">Due Date</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {projTasks.map((t: any) => {
+                                  const statusColor = t.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10' : t.status === 'In Progress' ? 'text-blue-400 bg-blue-500/10' : t.status === 'Review' ? 'text-purple-400 bg-purple-500/10' : t.status === 'Blocked' ? 'text-red-400 bg-red-500/10' : 'text-slate-400 bg-slate-500/10'
+                                  return (
+                                    <tr key={t.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                                      <td className="py-2.5 px-3 font-semibold text-foreground">{t.title}</td>
+                                      <td className="py-2.5 px-3 text-muted-foreground">{t.milestone_title || projMilestones.find((m: any) => m.id === t.milestone_id)?.title || '—'}</td>
+                                      <td className="py-2.5 px-3">
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor}`}>{t.status}</span>
+                                      </td>
+                                      <td className="py-2.5 px-3">
+                                        <div className="flex items-center gap-2">
+                                          <Progress value={t.progress || 0} className="h-1.5 w-20 bg-black/40" />
+                                          <span className="font-mono text-gold font-bold">{t.progress || 0}%</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-muted-foreground">{t.due_date ? formatDate(t.due_date) : '—'}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

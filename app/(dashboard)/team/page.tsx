@@ -105,7 +105,7 @@ export default function TeamPage() {
   const [deleteRole, setDeleteRole] = useState<Role | null>(null)
   const [matrixRoleId, setMatrixRoleId] = useState<string>('')
   const { toast } = useToast()
-  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'Employee', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'Employee', password: '', hourly_rate: 500 })
 
   useEffect(() => {
     async function loadTeamData() {
@@ -156,6 +156,7 @@ export default function TeamPage() {
                 email: profile.email,
                 phone: matchingMember?.phone || profile.settings?.phone || '',
                 role: profile.role || 'Employee',
+                hourly_rate: Number(matchingMember?.hourly_rate || profile.settings?.hourly_rate) || 500,
                 status: matchingMember?.status || 'active',
                 joined: matchingMember?.joined || profile.updated_at?.split('T')[0] || new Date().toISOString().slice(0, 10),
                 projects: matchingMember?.projects || 0,
@@ -169,7 +170,10 @@ export default function TeamPage() {
           if (dbTeam) {
             dbTeam.forEach((member: any) => {
               if (!seenIds.has(member.id)) {
-                mergedTeam.push(member)
+                mergedTeam.push({
+                  ...member,
+                  hourly_rate: Number(member.hourly_rate) || 500
+                })
               }
             })
           }
@@ -249,7 +253,8 @@ export default function TeamPage() {
             name: form.name,
             email: form.email,
             phone: form.phone,
-            role: form.role
+            role: form.role,
+            hourly_rate: Number(form.hourly_rate) || 500
           }).eq('id', editId)
           if (error) {
             toast({ title: 'Error updating member', description: error.message, variant: 'destructive' })
@@ -262,7 +267,7 @@ export default function TeamPage() {
           return
         }
       }
-      setTeam(team.map(t => t.id === editId ? { ...t, name: form.name, email: form.email, phone: form.phone, role: form.role } : t))
+      setTeam(team.map(t => t.id === editId ? { ...t, name: form.name, email: form.email, phone: form.phone, role: form.role, hourly_rate: Number(form.hourly_rate) || 500 } : t))
       toast({ title: 'Employee Updated!', description: `${form.name}'s details have been updated.` })
     } else {
       if (isSupabaseConfigured()) {
@@ -279,6 +284,7 @@ export default function TeamPage() {
               email: form.email,
               phone: form.phone,
               role: form.role,
+              hourly_rate: Number(form.hourly_rate) || 500,
               password: form.password
             })
           })
@@ -302,6 +308,7 @@ export default function TeamPage() {
           email: form.email,
           phone: form.phone,
           role: form.role,
+          hourly_rate: Number(form.hourly_rate) || 500,
           status: 'active',
           joined: new Date().toISOString().slice(0, 10),
           projects: 0
@@ -313,7 +320,7 @@ export default function TeamPage() {
     
     setShowAdd(false)
     setEditId(null)
-    setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' })
+    setForm({ name: '', email: '', phone: '', role: 'Employee', password: '', hourly_rate: 500 })
     setSubmitting(false)
   }
 
@@ -365,7 +372,7 @@ export default function TeamPage() {
 
   const openEdit = (member: any) => {
     setEditId(member.id)
-    setForm({ name: member.name, email: member.email, phone: member.phone || '', role: member.role, password: '' })
+    setForm({ name: member.name, email: member.email, phone: member.phone || '', role: member.role, password: '', hourly_rate: member.hourly_rate || 500 })
     setShowAdd(true)
   }
 
@@ -428,7 +435,7 @@ export default function TeamPage() {
         ]}
         primaryAction={{
           label: 'Add Employee',
-          onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) },
+          onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '', hourly_rate: 500 }); setShowAdd(true) },
           icon: Plus,
           variant: 'gold'
         }}
@@ -454,7 +461,7 @@ export default function TeamPage() {
               icon={UserCog}
               title="No team members found"
               description="Add your first team member to get started."
-              action={{ label: 'Add Employee', onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '' }); setShowAdd(true) }, icon: Plus }}
+              action={{ label: 'Add Employee', onClick: () => { setEditId(null); setForm({ name: '', email: '', phone: '', role: 'Employee', password: '', hourly_rate: 500 }); setShowAdd(true) }, icon: Plus }}
             />
           )}
           {team.map(member => (
@@ -469,6 +476,7 @@ export default function TeamPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-sm">{member.name}</p>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${roleColors[member.role] || 'bg-muted text-muted-foreground border-border'}`}>{member.role}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold/10 text-gold border border-gold/30">₹{member.hourly_rate || 500}/hr</span>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{member.email}</span>
@@ -685,6 +693,7 @@ export default function TeamPage() {
           <FormInput label="Email" type="email" required placeholder="employee@netgain.studio" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
           <FormInput label="Phone" placeholder="Mobile number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
           <FormSelect label="Role" value={form.role} onChange={e => setForm({...form, role: e.target.value})} options={ROLES.filter(r => r !== 'Founder').map(r => ({ label: r, value: r }))} />
+          <FormInput label="Hourly Cost / Rate (₹/hr)" type="number" placeholder="500" value={String(form.hourly_rate)} onChange={e => setForm({...form, hourly_rate: Number(e.target.value) || 0})} />
           {!editId && <FormInput label="Temporary Password" type="password" placeholder="Must be changed on first login" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />}
         </div>
       </Drawer>

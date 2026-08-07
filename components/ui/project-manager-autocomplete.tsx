@@ -34,59 +34,75 @@ export function ProjectManagerAutocomplete({
   const [managers, setManagers] = useState<ProjectManagerOption[]>([])
   const [loading, setLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function loadManagers() {
       setLoading(true)
+      const result: ProjectManagerOption[] = []
+
       if (isSupabaseConfigured()) {
         try {
-          const [{ data: profilesData }, { data: teamData }] = await Promise.all([
-            supabase.from('profiles').select('id, full_name, email, role, settings, updated_at').order('updated_at', { ascending: false }),
-            supabase.from('team_members').select('id, name, email, phone, role, status, joined, projects, avatar_url').order('created_at', { ascending: true })
-          ])
+          // Mirror exactly what the team page does
+          const { data: profilesData, error: profilesErr } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, role, settings, updated_at')
+            .order('updated_at', { ascending: false })
 
-          const merged: ProjectManagerOption[] = []
-          const seen = new Set<string>()
+          const { data: dbTeam, error: teamErr } = await supabase
+            .from('team_members')
+            .select('id, name, email, phone, role, hourly_rate, status')
+            .order('name', { ascending: true })
 
+          if (profilesErr) console.error('[PM Autocomplete] profiles error:', profilesErr)
+          if (teamErr) console.error('[PM Autocomplete] team_members error:', teamErr)
+
+          const seenIds = new Set<string>()
+
+          // Add profiles first (auth-linked users)
           if (profilesData) {
             profilesData.forEach((profile: any) => {
-              const role = profile.role || 'Team Member'
-
-              seen.add(profile.id)
-              merged.push({
+              seenIds.add(profile.id)
+              // Find matching team_member for hourly_rate
+              const matchingMember = dbTeam
+                ? dbTeam.find((m: any) => m.id === profile.id || m.email === profile.email)
+                : null
+              result.push({
                 id: profile.id,
                 name: profile.full_name || profile.email?.split('@')[0] || 'Unknown',
                 email: profile.email || '',
-                role,
-                phone: profile.settings?.phone || '',
+                role: profile.role || 'Employee',
+                phone: matchingMember?.phone || profile.settings?.phone || '',
                 source: 'profiles'
               })
             })
           }
 
-          if (teamData) {
-            teamData.forEach((member: any) => {
-              const role = member.role || 'Team Member'
-              if (seen.has(member.id) || merged.some(item => item.email === member.email)) return
-
-              merged.push({
-                id: member.id,
-                name: member.name || member.email?.split('@')[0] || 'Unknown',
-                email: member.email || '',
-                role,
-                phone: member.phone || '',
-                source: 'team_members'
-              })
+          // Add team_members not already in profiles
+          if (dbTeam) {
+            dbTeam.forEach((member: any) => {
+              if (!seenIds.has(member.id)) {
+                result.push({
+                  id: member.id,
+                  name: member.name || member.email?.split('@')[0] || 'Unknown',
+                  email: member.email || '',
+                  role: member.role || 'Employee',
+                  phone: member.phone || '',
+                  source: 'team_members'
+                })
+              }
             })
           }
 
-          setManagers(merged.sort((a, b) => a.name.localeCompare(b.name)))
-        } catch (error) {
-          console.error('Error loading project managers:', error)
+          console.log('[PM Autocomplete] loaded', result.length, 'members:', result.map(m => m.name))
+        } catch (err) {
+          console.error('[PM Autocomplete] fetch error:', err)
         }
       }
+
+      setManagers(result.sort((a, b) => a.name.localeCompare(b.name)))
       setLoading(false)
     }
 
@@ -94,26 +110,27 @@ export function ProjectManagerAutocomplete({
   }, [])
 
   const filteredManagers = useMemo(() => {
-    const trimmed = value.trim()
+    const trimmed = value.trim().toLowerCase()
     if (!trimmed) return managers
 
-    const query = trimmed.toLowerCase()
-
-    // If current value is an exact match for one of the managers (pre-filled name), return all managers so user can select any team member
-    const exactMatch = managers.some(
-      m => m.name.toLowerCase() === query || m.email.toLowerCase() === query
+    const isExistingManagerName = managers.some(
+      m => m.name.toLowerCase() === trimmed || m.email.toLowerCase() === trimmed
     )
 
-    if (exactMatch) return managers
+    if (isExistingManagerName && !isTyping) {
+      return managers
+    }
 
-    return managers.filter((manager) => {
+    const matches = managers.filter((manager) => {
       return (
-        manager.name.toLowerCase().includes(query) ||
-        manager.email.toLowerCase().includes(query) ||
-        manager.role.toLowerCase().includes(query)
+        manager.name.toLowerCase().includes(trimmed) ||
+        manager.email.toLowerCase().includes(trimmed) ||
+        manager.role.toLowerCase().includes(trimmed)
       )
     })
-  }, [managers, value])
+
+    return matches.length > 0 ? matches : managers
+  }, [managers, value, isTyping])
 
   useEffect(() => {
     setHighlightedIndex(0)
@@ -123,6 +140,7 @@ export function ProjectManagerAutocomplete({
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false)
+        setIsTyping(false)
       }
     }
 
@@ -133,6 +151,7 @@ export function ProjectManagerAutocomplete({
   const handleSelectManager = (manager: ProjectManagerOption) => {
     onSelect(manager)
     setIsOpen(false)
+    setIsTyping(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -161,9 +180,11 @@ export function ProjectManagerAutocomplete({
       case 'Escape':
         e.preventDefault()
         setIsOpen(false)
+        setIsTyping(false)
         break
       case 'Tab':
         setIsOpen(false)
+        setIsTyping(false)
         break
     }
   }
@@ -177,9 +198,13 @@ export function ProjectManagerAutocomplete({
           value={value}
           onChange={(e) => {
             onChange(e.target.value)
+            setIsTyping(true)
             if (!isOpen) setIsOpen(true)
           }}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setIsTyping(false)
+            setIsOpen(true)
+          }}
           onKeyDown={handleKeyDown}
           className="pr-8"
         />
