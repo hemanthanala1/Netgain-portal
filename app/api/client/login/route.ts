@@ -55,7 +55,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Associated client profile not found' }, { status: 404 })
     }
 
-    return NextResponse.json({
+    // 4. Generate cryptographically signed client session token
+    let sessionToken = ''
+    try {
+      const { signClientSession } = await import('@/lib/ads/session-token')
+      sessionToken = signClientSession({
+        clientAccountId: account.id,
+        clientId: account.client_id,
+        email: account.email,
+        name: client.name,
+        company: client.business || client.name
+      })
+    } catch (tokenErr) {
+      console.warn('[CLIENT LOGIN] Could not sign ads session token:', tokenErr)
+    }
+
+    const response = NextResponse.json({
       success: true,
       session: {
         id: account.id,
@@ -66,9 +81,22 @@ export async function POST(request: NextRequest) {
         phone: client.phone || '',
         website: client.website || '',
         address: client.address || '',
-        gst: client.gst || ''
+        gst: client.gst || '',
+        token: sessionToken
       }
     })
+
+    if (sessionToken) {
+      response.cookies.set('nbos_client_token', sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 3600
+      })
+    }
+
+    return response
   } catch (err: any) {
     console.error('[CLIENT LOGIN API]', err)
     return NextResponse.json(

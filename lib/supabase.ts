@@ -1,11 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 
-let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key'
-
-if (supabaseUrl && !supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
-  supabaseUrl = `https://${supabaseUrl}.supabase.co`
+function formatSupabaseUrl(url?: string): string {
+  if (!url) return 'https://placeholder-url.supabase.co'
+  let clean = url.trim()
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+    clean = `https://${clean}.supabase.co`
+  }
+  return clean.replace(/\/rest\/v1\/?$/, '').replace(/\/auth\/v1\/?$/, '').replace(/\/+$/, '')
 }
+
+let supabaseUrl = formatSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

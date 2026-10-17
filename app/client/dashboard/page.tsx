@@ -21,8 +21,10 @@ import {
   LayoutDashboard, Briefcase, Bell, HelpCircle, Send, Printer, ArrowLeft,
   Shield, History, Globe, UserCheck, Eye, X, Check, ChevronRight, ChevronLeft, Scale,
   Coins, TrendingUp, Menu, PenTool, Type, Calendar, Link2, ExternalLink,
-  Sun, Moon, BellRing, Cloud, HardDrive, Unlink, Bug, Palette, Laptop, Inbox, Archive
+  Sun, Moon, BellRing, Cloud, HardDrive, Unlink, Bug, Palette, Laptop, Inbox, Archive,
+  BarChart3
 } from 'lucide-react'
+import { AdsDashboard } from '@/components/ads/ads-dashboard'
 import useSWR from 'swr'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -127,6 +129,12 @@ function ClientDashboardContent() {
   const [workspaceAnnouncements, setWorkspaceAnnouncements] = useState<any[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [clientProjectTab, setClientProjectTab] = useState<'overview' | 'milestones' | 'tasks' | 'files' | 'timeline'>('overview')
+
+  // ─── PERFORMANCE REPORT SHOWCASE STATES ───
+  const [adsReports, setAdsReports] = useState<any[]>([])
+  const [selectedAdsReport, setSelectedAdsReport] = useState<any | null>(null)
+  const [loadingAdsReport, setLoadingAdsReport] = useState<boolean>(false)
+  const [clientReportsTab, setClientReportsTab] = useState<'performance' | 'audits'>('performance')
 
   // Client Submissions Form States
   const [activeSubmittingReq, setActiveSubmittingReq] = useState<any | null>(null)
@@ -808,7 +816,7 @@ function ClientDashboardContent() {
       // Fetch client meetings
       const { data: meets } = await supabase.from('meetings').select('*').or(`client_email.eq."${clientEmail}",client_name.eq."${session.company}"`).order('meeting_date', { ascending: false })
       
-      return {
+      const returnData = {
         compSettings,
         clDetails,
         docs: combined,
@@ -824,8 +832,24 @@ function ClientDashboardContent() {
         milestonesList,
         tasksList,
         announcementsList,
-        notifications: notifRes.data || []
+        notifications: notifRes.data || [],
+        adsReportsList: []
       }
+
+      // Fetch performance showcase reports published to this client
+      try {
+        const adsRes = await fetch('/api/ads/client/reports', {
+          headers: session.token ? { Authorization: `Bearer ${session.token}` } : {}
+        })
+        if (adsRes.ok) {
+          const adsJson = await adsRes.json()
+          returnData.adsReportsList = adsJson.reports || []
+        }
+      } catch (err) {
+        console.warn('[Client Ads] Could not fetch published reports:', err)
+      }
+
+      return returnData
     } catch (err) {
       console.error(err)
       return null
@@ -855,6 +879,7 @@ function ClientDashboardContent() {
       setWorkspaceTasks(swrData.tasksList || [])
       setWorkspaceAnnouncements(swrData.announcementsList || [])
       setNotifications(swrData.notifications)
+      if (swrData.adsReportsList) setAdsReports(swrData.adsReportsList)
       
       if (swrData.projects.length > 0 && !selectedProjectId) {
         setSelectedProjectId(swrData.projects[0].id)
@@ -862,6 +887,25 @@ function ClientDashboardContent() {
       setLoading(false)
     }
   }, [swrData])
+
+  const handleViewAdsReport = async (reportId: string) => {
+    setLoadingAdsReport(true)
+    try {
+      const res = await fetch(`/api/ads/client/reports/${reportId}`, {
+        headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {}
+      })
+      const data = await res.json()
+      if (res.ok && data.report) {
+        setSelectedAdsReport(data.report)
+      } else {
+        toast({ title: 'Unable to Load Report', description: data.error || 'Could not load report dashboard.', variant: 'destructive' })
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+    } finally {
+      setLoadingAdsReport(false)
+    }
+  }
 
   const fetchClientData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -1867,7 +1911,12 @@ function ClientDashboardContent() {
     { id: 'workspace-reqs', label: 'Requirements', icon: FileSignature, badge: workspaceRequirements.filter(r => r.status === 'pending' || r.status === 'needs revision').length },
     { id: 'workspace-tasks', label: 'Tasks & Progress', icon: CheckCircle2 },
     { id: 'workspace-files', label: 'Files & Documents', icon: FolderOpen },
-    { id: 'workspace-reports', label: 'Reports', icon: TrendingUp },
+    { 
+      id: 'workspace-reports', 
+      label: 'Reports', 
+      icon: TrendingUp, 
+      badge: ((workspaceReports?.filter(rep => rep.visibility === 'Published to Client')?.length || 0) + (adsReports?.length || 0)) || undefined 
+    },
     { id: 'workspace-approvals', label: 'Approvals', icon: UserCheck, badge: workspaceApprovals.filter(a => a.status === 'Pending').length > 0 ? workspaceApprovals.filter(a => a.status === 'Pending').length : undefined },
     { id: 'quotations', label: 'Quotations', icon: FileText, badge: docs.filter(d => d.type === 'Quotation').length },
     { id: 'sow', label: 'Scope of Work', icon: Briefcase, badge: docs.filter(d => d.type === 'SOW').length },
@@ -1997,7 +2046,7 @@ function ClientDashboardContent() {
             return (
               <button
                 key={item.id}
-                onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setMobileMenuOpen(false) }}
+                onClick={() => { setActiveTab(item.id); setSearch(''); setSelectedDoc(null); setSelectedAdsReport(null); setMobileMenuOpen(false) }}
                 className={cn(
                   'sidebar-item w-full',
                   active ? 'active' : 'text-muted-foreground hover:text-foreground',
@@ -3032,34 +3081,172 @@ function ClientDashboardContent() {
           </div>
         )}
 
-        {/* Workspace: Reports Tab */}
+        {/* Workspace: Reports & Performance Showcase Tab */}
         {activeTab === 'workspace-reports' && !selectedDoc && (
           <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-xl font-bold text-foreground">Performance Reports</h1>
-                <p className="text-xs text-muted-foreground mt-1">Download and review performance audits, SEO checkups, and marketing reports generated for your campaigns.</p>
+            {selectedAdsReport ? (
+              <div className="space-y-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedAdsReport(null)}
+                  className="text-xs h-8 gap-1.5"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Reports
+                </Button>
+                <AdsDashboard
+                  reportData={selectedAdsReport.parsed_data}
+                  reportTitle={selectedAdsReport.report_name}
+                  clientName={session?.name}
+                  downloadUrl={`/api/ads/reports/${selectedAdsReport.id}/download`}
+                />
               </div>
-              {projects.length > 1 && (
-                <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
-                  <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="Select Project" /></SelectTrigger>
-                  <SelectContent>
-                    {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {selectedProjectId ? (
-              <DataTable
-                data={workspaceReports.filter(rep => rep.project_id === selectedProjectId && rep.visibility === 'Published to Client')}
-                columns={reportsColumns}
-                searchPlaceholder="Search reports by title..."
-                searchKeys={['title', 'report_type']}
-                exportFileName="performance_reports"
-              />
             ) : (
-              <div className="text-center py-8 text-muted-foreground">No active project workspace selected.</div>
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary" /> Reports & Performance Showcase
+                    </h1>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Interactive campaign performance analytics, conversion funnels, and audit documentation.
+                    </p>
+                  </div>
+
+                  {/* Sub-tabs toggle */}
+                  <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setClientReportsTab('performance')}
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                        clientReportsTab === 'performance'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      Performance Showcase
+                      {adsReports.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+                          {adsReports.length}
+                        </Badge>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClientReportsTab('audits')}
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                        clientReportsTab === 'audits'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      Audit & Project Reports
+                      {workspaceReports.filter((rep) => rep.visibility === 'Published to Client').length > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+                          {workspaceReports.filter((rep) => rep.visibility === 'Published to Client').length}
+                        </Badge>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {clientReportsTab === 'performance' ? (
+                  <div className="space-y-6">
+                    {adsReports.length === 0 ? (
+                      <Card className="border-border bg-card p-12 text-center">
+                        <BarChart3 className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+                        <h3 className="text-base font-bold text-foreground">No Published Reports Yet</h3>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                          When your account manager publishes a campaign performance report, it will appear here with full interactive analytics.
+                        </p>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {adsReports.map((r) => {
+                          const m = r.summary_metrics || {}
+                          return (
+                            <Card key={r.id} className="border-border bg-card hover:border-primary/40 transition-all shadow-sm">
+                              <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-semibold">
+                                    Performance Report
+                                  </Badge>
+                                  <span className="text-[11px] text-muted-foreground font-mono">
+                                    {r.period_start && r.period_end ? `${r.period_start} to ${r.period_end}` : 'Recent'}
+                                  </span>
+                                </div>
+                                <CardTitle className="text-base font-bold text-foreground mt-1 truncate">
+                                  {r.report_name}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-muted/40 font-mono text-xs">
+                                  <div>
+                                    <span className="text-[10px] text-muted-foreground block font-sans">Spend</span>
+                                    <span className="font-bold text-foreground">{r.currency || '₹'}{Math.round(m.spend || 0).toLocaleString()}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-muted-foreground block font-sans">Clicks</span>
+                                    <span className="font-bold text-foreground">{(m.clicks || 0).toLocaleString()}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-muted-foreground block font-sans">{m.leads ? 'Leads' : 'Results'}</span>
+                                    <span className="font-bold text-foreground">{(m.leads || m.results || 0).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleViewAdsReport(r.id)}
+                                    disabled={loadingAdsReport}
+                                    className="text-xs font-semibold gap-1.5 flex-1"
+                                  >
+                                    {loadingAdsReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                                    Open Performance Showcase
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(`/api/ads/reports/${r.id}/download`, '_blank')}
+                                    className="text-xs h-9 px-3 text-muted-foreground hover:text-foreground"
+                                    title="Download Raw File"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {projects.length > 1 && (
+                      <div className="flex items-center justify-end">
+                        <Select value={selectedProjectId || 'all'} onValueChange={(v) => setSelectedProjectId(v === 'all' ? null : v)}>
+                          <SelectTrigger className="h-8 w-44 bg-card border-border text-xs text-foreground"><SelectValue placeholder="All Projects" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Projects</SelectItem>
+                            {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <DataTable
+                      data={workspaceReports.filter((rep) => (!selectedProjectId || rep.project_id === selectedProjectId) && rep.visibility === 'Published to Client')}
+                      columns={reportsColumns}
+                      searchPlaceholder="Search reports by title..."
+                      searchKeys={['title', 'report_type']}
+                      exportFileName="project_reports"
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

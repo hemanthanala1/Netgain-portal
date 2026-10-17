@@ -7,8 +7,12 @@ const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || ''
 const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@netgainstudio.com'
 
-if (vapidPublicKey && vapidPrivateKey) {
-  webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey)
+if (vapidPublicKey && vapidPrivateKey && !vapidPublicKey.includes('your-vapid')) {
+  try {
+    webpush.setVapidDetails(vapidEmail, vapidPublicKey, vapidPrivateKey)
+  } catch (err) {
+    console.warn('[push/send] Invalid VAPID details in environment:', err)
+  }
 }
 
 // Use service role to read all subscriptions

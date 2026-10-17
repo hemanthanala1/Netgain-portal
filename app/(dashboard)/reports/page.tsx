@@ -1,23 +1,38 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { KPICard } from '@/components/ui/kpi-card'
 import { TableSkeleton } from '@/components/ui/skeletons'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { usePermissions } from '@/hooks/use-permissions'
+import { useCRMClients } from '@/hooks/use-crm-clients'
+
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 import {
   Download, TrendingUp, DollarSign, Briefcase, Users, LifeBuoy,
-  FileText, BarChart2, Printer, RefreshCw, Calendar, ArrowUpRight, ArrowDownRight, Target
+  FileText, BarChart2, Printer, RefreshCw, Calendar, ArrowUpRight, ArrowDownRight, Target,
+  Upload, Sparkles, Eye, CheckCircle2, XCircle, FileSpreadsheet, Loader2, Trash2, ArrowLeft, ExternalLink, BarChart3, Search, Filter
 } from 'lucide-react'
 
 const CHART_COLORS = ['#D4AF37', '#34d399', '#60a5fa', '#f87171', '#a78bfa', '#f472b6', '#fb923c']
@@ -42,13 +57,22 @@ function exportCSV(filename: string, headers: string[], rows: any[][]) {
 // Print current section
 function handlePrint() { window.print() }
 
-export default function ReportsPage() {
+function ReportsPageContent() {
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'revenue')
   const [dateRange, setDateRange] = useState('90')
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>({
     clients: [], projects: [], invoices: [], expenses: [], salaries: [], meetings: [], tickets: [], team: [], services: []
   })
   const { toast } = useToast()
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
 
   useEffect(() => { loadAll() }, [])
 
@@ -195,7 +219,7 @@ export default function ReportsPage() {
     <div className="space-y-6 print:space-y-4">
       <PageHeader
         title="Enterprise Reports"
-        description="Business intelligence and performance reports across all departments."
+        description="Business intelligence, revenue trends, and financial analytics across all departments."
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Reports' }]}
         secondaryActions={
           <div className="flex items-center gap-2">
@@ -210,14 +234,18 @@ export default function ReportsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" className="h-9 text-xs" onClick={loadAll} aria-label="Refresh reports">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 text-xs"
+              onClick={() => loadAll()}
+              aria-label="Refresh reports"
+            >
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
         }
       />
-
-
 
       {loading ? (
         <div className="space-y-4">
@@ -225,8 +253,8 @@ export default function ReportsPage() {
           <TableSkeleton rows={5} cols={4} />
         </div>
       ) : (
-        <Tabs defaultValue="revenue" className="space-y-6">
-          <TabsList className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 h-auto gap-1 bg-muted/20 p-1 rounded-xl">
             <TabsTrigger value="revenue" className="text-xs gap-1.5"><DollarSign className="h-3.5 w-3.5" />Revenue</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Sales</TabsTrigger>
             <TabsTrigger value="projects" className="text-xs gap-1.5"><Briefcase className="h-3.5 w-3.5" />Projects</TabsTrigger>
@@ -836,6 +864,15 @@ export default function ReportsPage() {
           </TabsContent>
         </Tabs>
       )}
+
     </div>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 space-y-4"><TableSkeleton rows={3} cols={4} /><TableSkeleton rows={5} cols={4} /></div>}>
+      <ReportsPageContent />
+    </Suspense>
   )
 }

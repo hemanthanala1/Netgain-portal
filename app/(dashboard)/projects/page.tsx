@@ -24,9 +24,17 @@ import { ProjectManagerAutocomplete } from '@/components/ui/project-manager-auto
 import { GoogleDriveExplorer } from '@/components/ui/google-drive-explorer'
 import {
   Search, Plus, Zap, Calendar, DollarSign, Users, Download, Edit, Trash2,
-  History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye,
-  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2, Briefcase, Settings
+  History, Loader2, Sparkles, Copy, ExternalLink, Upload, Eye, EyeOff, Lock,
+  TrendingUp, Target, Globe, Phone, Mail, MapPin, Building2, FileText, X, Link2, Briefcase, Settings,
+  BarChart3, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, RefreshCw
 } from 'lucide-react'
+import { usePermissions } from '@/hooks/use-permissions'
+import { useCRMClients } from '@/hooks/use-crm-clients'
+import { UploadReportModal } from '@/components/ads/upload-report-modal'
+import { AdsDashboard } from '@/components/ads/ads-dashboard'
+import { generateSampleAdsData, ingestAdsReport } from '@/lib/ads/parser'
+import { formatters } from '@/lib/ads/aggregator'
+import type { AdsReportRecord, ParsedAdsReportData } from '@/lib/ads/types'
 import { formatCurrency, formatDate, generateDocId } from '@/lib/utils'
 import { generateCampaignPrompt, copyToClipboard, downloadAsTextFile } from '@/lib/ai-utils'
 import type { CampaignStrategyForm } from '@/lib/ai-types'
@@ -523,6 +531,19 @@ function CampaignStrategyPageContent() {
       className: 'text-right',
       cell: (project: Project) => (
         <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Project Reports"
+            className="h-7 w-7 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+            onClick={() => {
+              openDetail(project)
+              setActiveTab('workspace-reports')
+            }}
+            title="Reports (Performance Showcase & Audit Reports)"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+          </Button>
           <Button variant="ghost" size="icon" aria-label="View Details" className="h-7 w-7 hover:text-gold" onClick={() => openDetail(project)} title="View Details">
             <Eye className="h-3.5 w-3.5" />
           </Button>
@@ -693,6 +714,33 @@ function CampaignStrategyPageContent() {
   const [uploadingReportState, setUploadingReportState] = useState(false)
   const [reportDestination, setReportDestination] = useState<'internal' | 'google-drive'>('internal')
 
+  // Permissions & CRM Clients
+  const { clients: crmClients } = useCRMClients()
+  const { hasPermission } = usePermissions()
+  const canReadPerformance = hasPermission('ads', 'read')
+  const canCreatePerformance = hasPermission('ads', 'create')
+
+  // Reports Tab Mode State ('performance' | 'manual')
+  const [projectReportsTab, setProjectReportsTab] = useState<'performance' | 'manual'>('performance')
+
+  // Performance Reports in Project Workspace
+  const [perfReports, setPerfReports] = useState<AdsReportRecord[]>([])
+  const [loadingPerfReports, setLoadingPerfReports] = useState(false)
+  const [selectedPerfReport, setSelectedPerfReport] = useState<AdsReportRecord | null>(null)
+  const [showUploadPerfModal, setShowUploadPerfModal] = useState(false)
+  const [replacePerfTarget, setReplacePerfTarget] = useState<{ id: string; name: string; clientId: string } | null>(null)
+  const [deletePerfTarget, setDeletePerfTarget] = useState<AdsReportRecord | null>(null)
+  const [deletingPerfReport, setDeletingPerfReport] = useState(false)
+  const [perfReportScope, setPerfReportScope] = useState<'all' | 'client'>('all')
+
+  // Demo sample mode
+  const [showSampleMode, setShowSampleMode] = useState(false)
+  const [sampleReportData, setSampleReportData] = useState<ParsedAdsReportData | null>(null)
+
+  // Delete manual report state
+  const [deleteManualReportTarget, setDeleteManualReportTarget] = useState<any | null>(null)
+  const [deletingManualReport, setDeletingManualReport] = useState(false)
+
   // Import from Drive Dialog States
   const [importDriveOpen, setImportDriveOpen] = useState(false)
   const [driveFilesForImport, setDriveFilesForImport] = useState<any[]>([])
@@ -749,6 +797,8 @@ function CampaignStrategyPageContent() {
       setWorkspaceReports(reps.data || [])
       setWorkspaceTimeline(timeline.data || [])
       setWorkspaceApprovals(approvalsRes.data || [])
+      fetchPerfReports()
+      setSelectedPerfReport(null)
 
       if (reqList.length > 0) {
         const reqIds = reqList.map((r: any) => r.id)
@@ -772,6 +822,17 @@ function CampaignStrategyPageContent() {
     }
   }
 
+  // ─── PERFORMANCE SHOWCASE REPORTS SYNC ───
+  useEffect(() => {
+    fetchPerfReports()
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'workspace-reports') {
+      fetchPerfReports()
+    }
+  }, [activeTab])
+
   // ─── REALTIME SUPABASE WORKSPACE SUBSCRIPTION ───
   useEffect(() => {
     if (!detailProject?.id || !isSupabaseConfigured()) return
@@ -792,6 +853,9 @@ function CampaignStrategyPageContent() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_announcements', filter: `project_id=eq.${detailProject.id}` }, () => {
         fetchProjectWorkspaceData(detailProject.id)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ads_reports' }, () => {
+        fetchPerfReports()
       })
       .subscribe()
 
@@ -1117,6 +1181,175 @@ function CampaignStrategyPageContent() {
       toast({ title: 'Import Failed', description: e.message, variant: 'destructive' })
     } finally {
       setUploadingReportState(false)
+    }
+  }
+
+  // Matched CRM Client for Performance Reports in Project Workspace
+  const matchedClient = useMemo(() => {
+    if (!detailProject?.client) return null
+    const cName = detailProject.client.trim().toLowerCase()
+    return crmClients.find(c =>
+      c.id === detailProject.client ||
+      c.name?.toLowerCase() === cName ||
+      (c.business && c.business.toLowerCase() === cName)
+    ) || null
+  }, [detailProject?.client, crmClients])
+
+  // Filtered performance reports for the current workspace project's CRM client
+  const clientMatchedReports = useMemo(() => {
+    if (!perfReports || perfReports.length === 0) return []
+    if (!detailProject) return perfReports
+    const clientId = matchedClient?.id
+    const clientName = (detailProject.client || '').trim().toLowerCase()
+    return perfReports.filter(r => {
+      if (clientId && r.client_id === clientId) return true
+      if (r.client?.name && r.client.name.toLowerCase() === clientName) return true
+      if (r.client?.business && r.client.business.toLowerCase() === clientName) return true
+      return false
+    })
+  }, [perfReports, detailProject, matchedClient])
+
+  // Active performance reports list displayed in Project Workspace based on selected scope
+  const projectPerfReports = useMemo(() => {
+    if (perfReportScope === 'client' && clientMatchedReports.length > 0) {
+      return clientMatchedReports
+    }
+    return perfReports
+  }, [perfReports, clientMatchedReports, perfReportScope])
+
+  const fetchPerfReports = async () => {
+    setLoadingPerfReports(true)
+    try {
+      const session = (await supabase.auth.getSession()).data.session
+      const headers: Record<string, string> = {}
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      const res = await fetch('/api/ads/reports', {
+        headers,
+        credentials: 'include'
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPerfReports(data.reports || [])
+      } else {
+        const errJson = await res.json().catch(() => ({}))
+        console.error('Failed to fetch performance reports:', res.status, errJson)
+      }
+    } catch (e) {
+      console.error('Failed to fetch performance reports:', e)
+    } finally {
+      setLoadingPerfReports(false)
+    }
+  }
+
+  const handleTogglePublishPerf = async (reportId: string, currentPublished: boolean, reportName: string) => {
+    try {
+      const nextPublished = !currentPublished
+      const session = (await supabase.auth.getSession()).data.session
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      const res = await fetch(`/api/ads/reports/${reportId}`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ published: nextPublished })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update publication status')
+
+      toast({
+        title: nextPublished ? '🚀 Published to Client' : '🔒 Unpublished from Client',
+        description: `"${reportName}" visibility updated.`
+      })
+
+      setPerfReports(prev => prev.map(r => r.id === reportId ? { ...r, published_to_client: nextPublished } : r))
+      if (selectedPerfReport && selectedPerfReport.id === reportId) {
+        setSelectedPerfReport(prev => prev ? { ...prev, published_to_client: nextPublished } : null)
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Update Failed',
+        description: err.message,
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleDeletePerfConfirm = async () => {
+    if (!deletePerfTarget) return
+    setDeletingPerfReport(true)
+    try {
+      const session = (await supabase.auth.getSession()).data.session
+      const headers: Record<string, string> = {}
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      const res = await fetch(`/api/ads/reports/${deletePerfTarget.id}`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include'
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete report')
+
+      toast({
+        title: '🗑️ Report Deleted',
+        description: `Successfully deleted ${deletePerfTarget.report_name}`
+      })
+
+      setPerfReports(prev => prev.filter(r => r.id !== deletePerfTarget.id))
+      if (selectedPerfReport?.id === deletePerfTarget.id) {
+        setSelectedPerfReport(null)
+      }
+      setDeletePerfTarget(null)
+    } catch (err: any) {
+      toast({
+        title: 'Delete Failed',
+        description: err.message,
+        variant: 'destructive'
+      })
+    } finally {
+      setDeletingPerfReport(false)
+    }
+  }
+
+  const handleDeleteManualReport = async (reportId: string, title: string) => {
+    setDeletingManualReport(true)
+    try {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase.from('project_reports').delete().eq('id', reportId)
+        if (error) throw error
+      }
+      setWorkspaceReports(prev => prev.filter(r => r.id !== reportId))
+      toast({
+        title: '🗑️ Report Deleted',
+        description: `Successfully removed "${title}"`
+      })
+      setDeleteManualReportTarget(null)
+    } catch (err: any) {
+      toast({
+        title: 'Delete Failed',
+        description: err.message,
+        variant: 'destructive'
+      })
+    } finally {
+      setDeletingManualReport(false)
+    }
+  }
+
+  const handleOpenSampleMode = () => {
+    const sample = generateSampleAdsData()
+    const parsed = ingestAdsReport(sample.header, sample.rows, {
+      source: 'sample',
+      name: 'Sample Campaign Performance Export'
+    })
+    if (parsed.data) {
+      setSampleReportData(parsed.data)
+      setShowSampleMode(true)
+      setSelectedPerfReport(null)
     }
   }
 
@@ -2225,187 +2458,517 @@ function CampaignStrategyPageContent() {
               )}
             </TabsContent>
 
-            {/* ── REPORTS TAB ── */}
+            {/* ── REPORTS TAB (Dual Mode: Performance Showcase & Audit / Manual Reports) ── */}
             <TabsContent value="workspace-reports" className="mt-4 space-y-4">
               {detailProject && (
                 <div className="space-y-4">
-                  {/* Upload Reports form */}
-                  <Card className="bg-card border-border p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-gold uppercase">Upload Analytics / Performance Report</h4>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-[11px] border-gold/30 text-gold hover:bg-gold/10 gap-1.5"
-                        onClick={() => handleOpenImportDriveDialog(detailProject.id)}
+                  {/* Top Sub-Navigation Pill Toggle */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
+                    <div className="inline-flex items-center gap-1.5 p-1 rounded-full bg-[#0d1829]/90 border border-border/60 shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProjectReportsTab('performance')
+                          setShowSampleMode(false)
+                        }}
+                        className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          projectReportsTab === 'performance'
+                            ? 'bg-[#15233b] text-foreground shadow-sm border border-cyan-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/10'
+                        }`}
                       >
-                        <ExternalLink className="h-3 w-3" /> Import from Google Drive
-                      </Button>
+                        <BarChart3 className="h-3.5 w-3.5 text-cyan-400" />
+                        <span>Performance Showcase</span>
+                        {projectPerfReports.length > 0 && (
+                          <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            {projectPerfReports.length}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProjectReportsTab('manual')
+                          setSelectedPerfReport(null)
+                          setShowSampleMode(false)
+                        }}
+                        className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          projectReportsTab === 'manual'
+                            ? 'bg-[#15233b] text-foreground shadow-sm border border-gold/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/10'
+                        }`}
+                      >
+                        <TrendingUp className="h-3.5 w-3.5 text-gold" />
+                        <span>Audit & Project Reports</span>
+                        {workspaceReports.length > 0 && (
+                          <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-gold/20 text-gold border border-gold/30">
+                            {workspaceReports.length}
+                          </span>
+                        )}
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                      <div className="space-y-1">
-                        <Label>Report Title *</Label>
-                        <Input placeholder="e.g. SEO Report - June 2026" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Report Type</Label>
-                        <Select value={reportType} onValueChange={setReportType}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {['Marketing Report', 'SEO Report', 'Google Ads Report', 'Meta Ads Report', 'Analytics Report', 'Performance Report', 'Custom Report'].map(t => (
-                              <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Select PDF / Excel File *</Label>
-                        <Input 
-                          type="file" 
-                          onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
-                          className="h-8 p-0 flex items-center text-xs text-muted-foreground cursor-pointer bg-transparent border-input file:h-full file:bg-primary file:text-primary-foreground file:border-none file:px-3 file:mr-2 file:text-xs file:font-semibold file:cursor-pointer"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Storage Destination</Label>
-                        <Select value={reportDestination} onValueChange={(v: any) => setReportDestination(v)}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="internal">Netgain Portal Storage</SelectItem>
-                            <SelectItem value="google-drive">Google Drive Workspace</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Version</Label>
-                        <Input type="number" value={reportVersion} onChange={e => setReportVersion(e.target.value)} className="h-8" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Visibility</Label>
-                        <Select value={reportVisibility} onValueChange={setReportVisibility}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Internal Only">Internal Only</SelectItem>
-                            <SelectItem value="Published to Client">Published to Client</SelectItem>
-                            <SelectItem value="Hidden">Hidden</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-end sm:col-span-2">
-                        <Button 
-                          variant="gold" 
-                          className="w-full h-8 text-xs font-bold" 
-                          onClick={() => handleUploadReport(detailProject.id, detailProject.client)}
-                          disabled={uploadingReportState || !uploadReportFile || !reportTitle.trim()}
+                    {projectReportsTab === 'performance' && !selectedPerfReport && !showSampleMode && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOpenSampleMode}
+                          className="h-8 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 gap-1.5"
                         >
-                          {uploadingReportState ? 'Uploading...' : 'Publish Report'}
+                          <Sparkles className="h-3.5 w-3.5" /> Explore Sample Demo
+                        </Button>
+                        <Button
+                          variant="gold"
+                          size="sm"
+                          onClick={() => {
+                            setReplacePerfTarget(null)
+                            setShowUploadPerfModal(true)
+                          }}
+                          className="h-8 text-xs font-bold gap-1.5"
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Upload Performance Report
                         </Button>
                       </div>
-                    </div>
-                  </Card>
-
-                  {/* Reports List */}
-                  <div className="border border-border rounded-xl overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs min-w-[700px]">
-                        <thead>
-                          <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
-                            <th className="text-left py-2 px-3 font-semibold">Report Title</th>
-                            <th className="text-left py-2 px-3 font-semibold">Type</th>
-                            <th className="text-left py-2 px-3 font-semibold">Version</th>
-                            <th className="text-left py-2 px-3 font-semibold">Date Uploaded</th>
-                            <th className="text-left py-2 px-3 font-semibold">Visibility</th>
-                            <th className="text-right py-2 px-3 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workspaceReports.map((rep: any) => {
-                            const isDrive = rep.file_path?.includes('drive.google.com') || rep.file_path?.includes('googleapis.com')
-                            return (
-                              <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
-                                <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[220px]" title={rep.title}>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="truncate">{rep.title}</span>
-                                    {isDrive && (
-                                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] px-1 py-0 shrink-0 font-medium">Drive</Badge>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
-                                <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
-                                <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
-                                <td className="py-2 px-3">
-                                  <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
-                                    <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
-                                      <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
-                                      <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="py-2 px-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    {isDrive && (
-                                      <a href={rep.file_path} target="_blank" rel="noopener noreferrer" title="Open in Google Drive">
-                                        <Button variant="ghost" size="icon" aria-label="Open in Google Drive" className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/15"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                                      </a>
-                                    )}
-                                    <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download title="Download file">
-                                      <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
-                                    </a>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                          {workspaceReports.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No reports generated yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Import from Google Drive Dialog */}
-                  <Dialog open={importDriveOpen} onOpenChange={setImportDriveOpen}>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="text-sm">Import Report from Google Drive</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-3 py-2 text-xs">
-                        <div className="space-y-1">
-                          <Label>Select File from Google Drive *</Label>
-                          {loadingDriveFilesForImport ? (
-                            <div className="p-4 flex items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading Drive files...</div>
-                          ) : driveFilesForImport.length === 0 ? (
-                            <div className="p-4 text-center text-muted-foreground border border-dashed border-border rounded-lg">No files found in Google Drive workspace. Make sure Google Drive workspace is linked.</div>
-                          ) : (
-                            <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                              {driveFilesForImport.map((f: any) => (
-                                <div
-                                  key={f.id}
-                                  onClick={() => { setSelectedDriveFile(f); if (!reportTitle) setReportTitle(f.name) }}
-                                  className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors ${selectedDriveFile?.id === f.id ? 'bg-gold/15 border-gold/40' : 'hover:bg-muted/10'}`}
-                                >
-                                  <div className="truncate pr-2">
-                                    <p className="font-medium text-foreground truncate">{f.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">{f.mimeType}</p>
-                                  </div>
-                                  {selectedDriveFile?.id === f.id && <Badge className="bg-gold text-black text-[9px]">Selected</Badge>}
+                  {/* ── SUB-VIEW 1: PERFORMANCE SHOWCASE ── */}
+                  {projectReportsTab === 'performance' && (
+                    <div className="space-y-4">
+                      {selectedPerfReport ? (
+                        <div className="space-y-4">
+                          {/* Viewer Header */}
+                          <div className="p-3 rounded-xl bg-card border border-border flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedPerfReport(null)}
+                                className="h-8 text-xs gap-1.5 border-border"
+                              >
+                                <ArrowLeft className="h-3.5 w-3.5" /> Back to Reports
+                              </Button>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-bold text-sm text-foreground">{selectedPerfReport.report_name}</h3>
+                                  <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-[10px] font-semibold uppercase">
+                                    {selectedPerfReport.platform}
+                                  </Badge>
                                 </div>
-                              ))}
+                                <p className="text-[11px] text-muted-foreground">
+                                  {selectedPerfReport.period_start && selectedPerfReport.period_end ? (
+                                    <span>Period: {selectedPerfReport.period_start} → {selectedPerfReport.period_end}</span>
+                                  ) : (
+                                    <span>Uploaded on {formatDate(selectedPerfReport.created_at)}</span>
+                                  )}
+                                  {detailProject.client && (
+                                    <span className="ml-2 font-medium text-gold/90">• {detailProject.client}</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Publication toggle */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleTogglePublishPerf(selectedPerfReport.id, selectedPerfReport.published_to_client, selectedPerfReport.report_name)}
+                                className={`h-8 text-xs font-semibold gap-1.5 ${
+                                  selectedPerfReport.published_to_client
+                                    ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10'
+                                    : 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10'
+                                }`}
+                              >
+                                {selectedPerfReport.published_to_client ? (
+                                  <>
+                                    <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                                    <span>Published to Client</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Internal Only</span>
+                                  </>
+                                )}
+                              </Button>
+
+                              {/* Download raw file */}
+                              <a
+                                href={`/api/ads/reports/${selectedPerfReport.id}/download`}
+                                download
+                                title="Download raw Excel/CSV"
+                              >
+                                <Button variant="outline" size="sm" className="h-8 text-xs border-border gap-1.5">
+                                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span>Download Raw</span>
+                                </Button>
+                              </a>
+
+                              {/* Replace file */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setReplacePerfTarget({
+                                    id: selectedPerfReport.id,
+                                    name: selectedPerfReport.report_name,
+                                    clientId: selectedPerfReport.client_id
+                                  })
+                                  setShowUploadPerfModal(true)
+                                }}
+                                className="h-8 text-xs border-border gap-1.5"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>Replace</span>
+                              </Button>
+
+                              {/* Delete report */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setDeletePerfTarget(selectedPerfReport)}
+                                className="h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete</span>
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Full Interactive Ads Dashboard */}
+                          <div className="rounded-xl border border-border bg-card p-4">
+                            <AdsDashboard
+                              reportData={selectedPerfReport.parsed_data}
+                              reportTitle={selectedPerfReport.report_name}
+                              clientName={detailProject.client}
+                              reportId={selectedPerfReport.id}
+                              downloadUrl={`/api/ads/reports/${selectedPerfReport.id}/download`}
+                            />
+                          </div>
+                        </div>
+                      ) : showSampleMode && sampleReportData ? (
+                        <div className="space-y-4">
+                          <div className="p-3 rounded-xl bg-card border border-cyan-500/30 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowSampleMode(false)}
+                                className="h-8 text-xs gap-1.5 border-border"
+                              >
+                                <ArrowLeft className="h-3.5 w-3.5" /> Exit Sample Demo
+                              </Button>
+                              <div>
+                                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                                  <span>Sample Meta Campaign Performance Showcase</span>
+                                  <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 text-[10px]">Demo Mode</Badge>
+                                </h3>
+                                <p className="text-[11px] text-muted-foreground">Demonstrating full breakdown, interactive funnels, audience matrix and creative intelligence</p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="gold"
+                              size="sm"
+                              onClick={() => {
+                                setShowSampleMode(false)
+                                setShowUploadPerfModal(true)
+                              }}
+                              className="h-8 text-xs font-bold gap-1.5"
+                            >
+                              <Upload className="h-3.5 w-3.5" /> Upload Real Project Report
+                            </Button>
+                          </div>
+
+                          <div className="rounded-xl border border-border bg-card p-4">
+                            <AdsDashboard
+                              reportData={sampleReportData}
+                              reportTitle="Sample Campaign Performance Export"
+                              isSample={true}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {/* Performance Reports Filter & Action Bar */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 rounded-xl bg-card border border-border">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-muted-foreground">Scope:</span>
+                              <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-[#0d1829] border border-border/60 shadow-inner">
+                                <button
+                                  type="button"
+                                  onClick={() => setPerfReportScope('all')}
+                                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                    perfReportScope === 'all'
+                                      ? 'bg-[#15233b] text-cyan-300 border border-cyan-500/30 shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  All Reports ({perfReports.length})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPerfReportScope('client')}
+                                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                                    perfReportScope === 'client'
+                                      ? 'bg-[#15233b] text-cyan-300 border border-cyan-500/30 shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  This Client ({clientMatchedReports.length})
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => fetchPerfReports()}
+                                disabled={loadingPerfReports}
+                                className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground border border-border/60"
+                                title="Sync latest reports from database"
+                              >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loadingPerfReports ? 'animate-spin text-cyan-400' : ''}`} />
+                                <span>Sync Reports</span>
+                              </Button>
+                            </div>
+                          </div>
+
+                          {loadingPerfReports ? (
+                            <div className="p-12 text-center flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                              <Loader2 className="h-6 w-6 animate-spin text-cyan-400" />
+                              <p className="text-xs">Loading performance reports...</p>
+                            </div>
+                          ) : projectPerfReports.length === 0 ? (
+                            <Card className="bg-card border-border p-8 text-center space-y-4">
+                              <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                                <BarChart3 className="h-8 w-8" />
+                              </div>
+                              <div className="max-w-md mx-auto space-y-1">
+                                <h4 className="text-base font-bold text-foreground">
+                                  {perfReports.length > 0
+                                    ? `No Reports Linked to ${detailProject.client || 'This Client'}`
+                                    : 'No Performance Showcase Reports Yet'}
+                                </h4>
+                                <p className="text-xs text-muted-foreground">
+                                  {perfReports.length > 0
+                                    ? `There are ${perfReports.length} uploaded report(s) in the system for other clients. You can switch scope to "All Reports" or upload a new performance report for ${detailProject.client || 'this client'}.`
+                                    : 'Upload Meta or Google Ads CSV / Excel exports to generate real-time KPI cards, interactive recalculating funnels, audience heatmaps, and creative ROI rankings for this project.'}
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-center gap-3 pt-2">
+                                {perfReports.length > 0 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPerfReportScope('all')}
+                                    className="h-8 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 gap-1.5"
+                                  >
+                                    <BarChart3 className="h-3.5 w-3.5" /> View All Reports ({perfReports.length})
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleOpenSampleMode}
+                                  className="h-8 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 gap-1.5"
+                                >
+                                  <Sparkles className="h-3.5 w-3.5" /> Explore Sample Demo
+                                </Button>
+                                <Button
+                                  variant="gold"
+                                  size="sm"
+                                  onClick={() => {
+                                    setReplacePerfTarget(null)
+                                    setShowUploadPerfModal(true)
+                                  }}
+                                  className="h-8 text-xs font-bold gap-1.5"
+                                >
+                                  <Upload className="h-3.5 w-3.5" /> Upload Performance Report
+                                </Button>
+                              </div>
+                            </Card>
+                          ) : (
+                            <div className="border border-border rounded-xl overflow-hidden bg-card">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs min-w-[760px]">
+                                  <thead>
+                                    <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
+                                      <th className="text-left py-2.5 px-3 font-semibold">Report Name</th>
+                                      <th className="text-left py-2.5 px-3 font-semibold">Platform</th>
+                                      <th className="text-left py-2.5 px-3 font-semibold">Period</th>
+                                      <th className="text-right py-2.5 px-3 font-semibold">Spend</th>
+                                      <th className="text-right py-2.5 px-3 font-semibold">Clicks / CTR</th>
+                                      <th className="text-right py-2.5 px-3 font-semibold">Leads / Results</th>
+                                      <th className="text-left py-2.5 px-3 font-semibold">Client Visibility</th>
+                                      <th className="text-right py-2.5 px-3 font-semibold">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {projectPerfReports.map((r) => {
+                                      const metrics = r.summary_metrics || {}
+                                      const spend = metrics.spend || 0
+                                      const clicks = metrics.clicks || 0
+                                      const ctr = metrics.ctr || 0
+                                      const leads = metrics.leads || metrics.results || 0
+                                      return (
+                                        <tr key={r.id} className="border-b border-border hover:bg-[#11241c]/10 transition-colors">
+                                          <td className="py-2.5 px-3 font-semibold text-foreground max-w-[240px]">
+                                            <div className="truncate font-medium text-sm text-foreground" title={r.report_name}>
+                                              {r.report_name}
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
+                                              {r.client && (
+                                                <span className="font-semibold text-cyan-400">
+                                                  {r.client.name || r.client.business}
+                                                </span>
+                                              )}
+                                              {r.client && <span>•</span>}
+                                              <span>{r.file_name}</span>
+                                              <span>•</span>
+                                              <span>{formatDate(r.created_at)}</span>
+                                            </div>
+                                          </td>
+                                          <td className="py-2.5 px-3">
+                                            <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-[10px] uppercase font-semibold">
+                                              {r.platform}
+                                            </Badge>
+                                          </td>
+                                          <td className="py-2.5 px-3 text-muted-foreground text-[11px]">
+                                            {r.period_start && r.period_end ? (
+                                              <span>{r.period_start} → {r.period_end}</span>
+                                            ) : (
+                                              <span>—</span>
+                                            )}
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right font-semibold text-foreground">
+                                            {formatters.inr(spend, r.currency || '₹')}
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right">
+                                            <div className="font-medium text-foreground">{formatters.int(clicks)}</div>
+                                            <div className="text-[10px] text-muted-foreground">{ctr.toFixed(2)}% CTR</div>
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right">
+                                            <div className="font-semibold text-emerald-400">{formatters.int(leads)}</div>
+                                            {metrics.cpa ? (
+                                              <div className="text-[10px] text-muted-foreground">{formatters.inr(metrics.cpa, r.currency || '₹')} CPA</div>
+                                            ) : null}
+                                          </td>
+                                          <td className="py-2.5 px-3">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTogglePublishPerf(r.id, r.published_to_client, r.report_name)}
+                                              title="Click to toggle publication in Client Portal"
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors cursor-pointer border ${
+                                                r.published_to_client
+                                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                                                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25'
+                                              }`}
+                                            >
+                                              {r.published_to_client ? (
+                                                <>
+                                                  <Eye className="h-3 w-3 text-emerald-400" />
+                                                  <span>Published</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <EyeOff className="h-3 w-3 text-amber-400" />
+                                                  <span>Internal</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          </td>
+                                          <td className="py-2.5 px-3 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelectedPerfReport(r)}
+                                                className="h-7 text-[11px] border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-medium gap-1"
+                                                title="View Interactive Showcase"
+                                              >
+                                                <Eye className="h-3 w-3" /> View Showcase
+                                              </Button>
+                                              <a
+                                                href={`/api/ads/reports/${r.id}/download`}
+                                                download
+                                                title="Download Raw File"
+                                              >
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                >
+                                                  <Download className="h-3.5 w-3.5" />
+                                                </Button>
+                                              </a>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => {
+                                                  setReplacePerfTarget({
+                                                    id: r.id,
+                                                    name: r.report_name,
+                                                    clientId: r.client_id
+                                                  })
+                                                  setShowUploadPerfModal(true)
+                                                }}
+                                                title="Replace Report"
+                                                className="h-7 w-7 text-muted-foreground hover:text-gold"
+                                              >
+                                                <RefreshCw className="h-3.5 w-3.5" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => setDeletePerfTarget(r)}
+                                                title="Delete Report"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                              </Button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
                           )}
                         </div>
-                        <div className="space-y-1">
-                          <Label>Report Title *</Label>
-                          <Input placeholder="Report Title" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── SUB-VIEW 2: AUDIT & PROJECT REPORTS (MANUAL EXCEL / PDF / DRIVE) ── */}
+                  {projectReportsTab === 'manual' && (
+                    <div className="space-y-4">
+                      {/* Upload Reports form */}
+                      <Card className="bg-card border-border p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-gold uppercase">Upload Audit / Manual Excel & PDF Report</h4>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[11px] border-gold/30 text-gold hover:bg-gold/10 gap-1.5"
+                            onClick={() => handleOpenImportDriveDialog(detailProject.id)}
+                          >
+                            <ExternalLink className="h-3 w-3" /> Import from Google Drive
+                          </Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                           <div className="space-y-1">
-                            <Label>Type</Label>
+                            <Label>Report Title *</Label>
+                            <Input placeholder="e.g. SEO Audit Report - June 2026" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Report Type</Label>
                             <Select value={reportType} onValueChange={setReportType}>
                               <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                               <SelectContent>
@@ -2414,6 +2977,28 @@ function CampaignStrategyPageContent() {
                                 ))}
                               </SelectContent>
                             </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Select PDF / Excel File *</Label>
+                            <Input 
+                              type="file" 
+                              onChange={e => setUploadReportFile(e.target.files ? e.target.files[0] : null)} 
+                              className="h-8 p-0 flex items-center text-xs text-muted-foreground cursor-pointer bg-transparent border-input file:h-full file:bg-primary file:text-primary-foreground file:border-none file:px-3 file:mr-2 file:text-xs file:font-semibold file:cursor-pointer"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Storage Destination</Label>
+                            <Select value={reportDestination} onValueChange={(v: any) => setReportDestination(v)}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="internal">Netgain Portal Storage</SelectItem>
+                                <SelectItem value="google-drive">Google Drive Workspace</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Version</Label>
+                            <Input type="number" value={reportVersion} onChange={e => setReportVersion(e.target.value)} className="h-8" />
                           </div>
                           <div className="space-y-1">
                             <Label>Visibility</Label>
@@ -2426,16 +3011,162 @@ function CampaignStrategyPageContent() {
                               </SelectContent>
                             </Select>
                           </div>
+                          <div className="flex items-end sm:col-span-2">
+                            <Button 
+                              variant="gold" 
+                              className="w-full h-8 text-xs font-bold" 
+                              onClick={() => handleUploadReport(detailProject.id, detailProject.client)}
+                              disabled={uploadingReportState || !uploadReportFile || !reportTitle.trim()}
+                            >
+                              {uploadingReportState ? 'Uploading...' : 'Publish Report'}
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Reports List */}
+                      <div className="border border-border rounded-xl overflow-hidden bg-card">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs min-w-[700px]">
+                            <thead>
+                              <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-[10px] bg-black/10">
+                                <th className="text-left py-2 px-3 font-semibold">Report Title</th>
+                                <th className="text-left py-2 px-3 font-semibold">Type</th>
+                                <th className="text-left py-2 px-3 font-semibold">Version</th>
+                                <th className="text-left py-2 px-3 font-semibold">Date Uploaded</th>
+                                <th className="text-left py-2 px-3 font-semibold">Visibility</th>
+                                <th className="text-right py-2 px-3 font-semibold">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {workspaceReports.map((rep: any) => {
+                                const isDrive = rep.file_path?.includes('drive.google.com') || rep.file_path?.includes('googleapis.com')
+                                return (
+                                  <tr key={rep.id} className="border-b border-border hover:bg-[#11241c]/10">
+                                    <td className="py-2 px-3 font-semibold text-foreground truncate max-w-[220px]" title={rep.title}>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="truncate">{rep.title}</span>
+                                        {isDrive && (
+                                          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] px-1 py-0 shrink-0 font-medium">Drive</Badge>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3 text-muted-foreground">{rep.report_type}</td>
+                                    <td className="py-2 px-3 text-muted-foreground">V{rep.version}</td>
+                                    <td className="py-2 px-3 text-muted-foreground">{formatDate(rep.uploaded_at)}</td>
+                                    <td className="py-2 px-3">
+                                      <Select value={rep.visibility} onValueChange={v => handleUpdateReportVisibility(detailProject.id, rep.id, rep.title, v)}>
+                                        <SelectTrigger className="h-6 w-28 text-[10px] bg-black/30 border-border"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="Internal Only" className="text-[10px]">Internal Only</SelectItem>
+                                          <SelectItem value="Published to Client" className="text-[10px]">Published to Client</SelectItem>
+                                          <SelectItem value="Hidden" className="text-[10px]">Hidden</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                    <td className="py-2 px-3 text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        {isDrive && (
+                                          <a href={rep.file_path} target="_blank" rel="noopener noreferrer" title="Open in Google Drive">
+                                            <Button variant="ghost" size="icon" aria-label="Open in Google Drive" className="h-7 w-7 text-emerald-400 hover:bg-emerald-500/15"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                                          </a>
+                                        )}
+                                        <a href={rep.file_path} target="_blank" rel="noopener noreferrer" download title="Download file">
+                                          <Button variant="ghost" size="icon" aria-label="Download" className="h-7 w-7 text-gold hover:bg-gold/15"><Download className="h-3.5 w-3.5" /></Button>
+                                        </a>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          aria-label="Delete Report"
+                                          title="Delete Manual Report"
+                                          onClick={() => setDeleteManualReportTarget(rep)}
+                                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                              {workspaceReports.length === 0 && (
+                                <tr><td colSpan={6} className="text-center py-8 text-muted-foreground italic">No manual reports uploaded yet.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
-                      <DialogFooter className="gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setImportDriveOpen(false)}>Cancel</Button>
-                        <Button variant="gold" size="sm" onClick={() => handleImportDriveReport(detailProject.id, detailProject.client)} disabled={!selectedDriveFile || !reportTitle.trim() || uploadingReportState}>
-                          {uploadingReportState ? 'Publishing...' : 'Publish Selected Drive Report'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+
+                      {/* Import from Google Drive Dialog */}
+                      <Dialog open={importDriveOpen} onOpenChange={setImportDriveOpen}>
+                        <DialogContent className="max-w-md">
+                          <DialogHeader>
+                            <DialogTitle className="text-sm">Import Report from Google Drive</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-3 py-2 text-xs">
+                            <div className="space-y-1">
+                              <Label>Select File from Google Drive *</Label>
+                              {loadingDriveFilesForImport ? (
+                                <div className="p-4 flex items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading Drive files...</div>
+                              ) : driveFilesForImport.length === 0 ? (
+                                <div className="p-4 text-center text-muted-foreground border border-dashed border-border rounded-lg">No files found in Google Drive workspace. Make sure Google Drive workspace is linked.</div>
+                              ) : (
+                                <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                                  {driveFilesForImport.map((f: any) => (
+                                    <div
+                                      key={f.id}
+                                      onClick={() => { setSelectedDriveFile(f); if (!reportTitle) setReportTitle(f.name) }}
+                                      className={`p-2.5 flex items-center justify-between cursor-pointer transition-colors ${selectedDriveFile?.id === f.id ? 'bg-gold/15 border-gold/40' : 'hover:bg-muted/10'}`}
+                                    >
+                                      <div className="truncate pr-2">
+                                        <p className="font-medium text-foreground truncate">{f.name}</p>
+                                        <p className="text-[10px] text-muted-foreground">{f.mimeType}</p>
+                                      </div>
+                                      {selectedDriveFile?.id === f.id && <Badge className="bg-gold text-black text-[9px]">Selected</Badge>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Report Title *</Label>
+                              <Input placeholder="Report Title" value={reportTitle} onChange={e => setReportTitle(e.target.value)} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label>Type</Label>
+                                <Select value={reportType} onValueChange={setReportType}>
+                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {['Marketing Report', 'SEO Report', 'Google Ads Report', 'Meta Ads Report', 'Analytics Report', 'Performance Report', 'Custom Report'].map(t => (
+                                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Visibility</Label>
+                                <Select value={reportVisibility} onValueChange={setReportVisibility}>
+                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Internal Only">Internal Only</SelectItem>
+                                    <SelectItem value="Published to Client">Published to Client</SelectItem>
+                                    <SelectItem value="Hidden">Hidden</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+                          <DialogFooter className="gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setImportDriveOpen(false)}>Cancel</Button>
+                            <Button variant="gold" size="sm" onClick={() => handleImportDriveReport(detailProject.id, detailProject.client)} disabled={!selectedDriveFile || !reportTitle.trim() || uploadingReportState}>
+                              {uploadingReportState ? 'Publishing...' : 'Publish Selected Drive Report'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -3216,6 +3947,93 @@ function CampaignStrategyPageContent() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowManageTypes(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Performance Report Upload & Replace Modal */}
+      <UploadReportModal
+        open={showUploadPerfModal}
+        onOpenChange={setShowUploadPerfModal}
+        replaceReport={replacePerfTarget}
+        defaultClientId={matchedClient?.id || ''}
+        onSuccess={(newReport) => {
+          if (newReport) {
+            setPerfReports(prev => [newReport, ...prev.filter(r => r.id !== newReport.id)])
+          }
+          fetchPerfReports()
+          if (replacePerfTarget && selectedPerfReport && selectedPerfReport.id === replacePerfTarget.id) {
+            setSelectedPerfReport(newReport || null)
+          }
+        }}
+      />
+
+      {/* Delete Performance Report Dialog */}
+      <Dialog open={!!deletePerfTarget} onOpenChange={(open) => !open && setDeletePerfTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" /> Delete Performance Report
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold text-foreground">{deletePerfTarget?.report_name}</span>? This will permanently remove all parsed metrics and delete the original upload.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeletePerfTarget(null)}
+              disabled={deletingPerfReport}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeletePerfConfirm}
+              disabled={deletingPerfReport}
+              className="text-xs font-bold gap-1.5"
+            >
+              {deletingPerfReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Manual Report Dialog */}
+      <Dialog open={!!deleteManualReportTarget} onOpenChange={(open) => !open && setDeleteManualReportTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" /> Delete Manual Report
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold text-foreground">{deleteManualReportTarget?.title}</span>? This action cannot be undone.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteManualReportTarget(null)}
+              disabled={deletingManualReport}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleDeleteManualReport(deleteManualReportTarget.id, deleteManualReportTarget.title)}
+              disabled={deletingManualReport}
+              className="text-xs font-bold gap-1.5"
+            >
+              {deletingManualReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Confirm Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
